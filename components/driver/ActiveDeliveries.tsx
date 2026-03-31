@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -124,9 +124,9 @@ export function ActiveDeliveries({ driverId }: ActiveDeliveriesProps) {
   if (error) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Truck className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>Error loading deliveries</EmptyTitle>
         <EmptyDescription>Please try refreshing the page</EmptyDescription>
       </Empty>
@@ -136,9 +136,9 @@ export function ActiveDeliveries({ driverId }: ActiveDeliveriesProps) {
   if (!deliveries || deliveries.length === 0) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Truck className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>No active deliveries</EmptyTitle>
         <EmptyDescription>Claim a job from the Available tab to get started</EmptyDescription>
       </Empty>

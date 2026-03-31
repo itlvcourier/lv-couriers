@@ -9,6 +9,10 @@ export async function signOut() {
   redirect('/auth/login')
 }
 
+export function generateTemporaryPassword(): string {
+  return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase()
+}
+
 export async function getCurrentUser() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

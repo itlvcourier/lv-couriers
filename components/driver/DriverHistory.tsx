@@ -4,7 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { 
@@ -67,9 +67,9 @@ export function DriverHistory({ driverId }: DriverHistoryProps) {
   if (error) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <History className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>Error loading history</EmptyTitle>
         <EmptyDescription>Please try refreshing the page</EmptyDescription>
       </Empty>
@@ -79,9 +79,9 @@ export function DriverHistory({ driverId }: DriverHistoryProps) {
   if (!deliveries || deliveries.length === 0) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <History className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>No delivery history</EmptyTitle>
         <EmptyDescription>Completed deliveries will appear here</EmptyDescription>
       </Empty>

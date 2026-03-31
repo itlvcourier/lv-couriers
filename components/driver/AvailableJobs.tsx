@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { 
   MapPin, 
@@ -75,9 +75,9 @@ export function AvailableJobs({ driverId, onJobClaimed }: AvailableJobsProps) {
   if (error) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Package className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>Error loading jobs</EmptyTitle>
         <EmptyDescription>Please try refreshing the page</EmptyDescription>
       </Empty>
@@ -87,9 +87,9 @@ export function AvailableJobs({ driverId, onJobClaimed }: AvailableJobsProps) {
   if (!bundles || bundles.length === 0) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Package className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>No jobs available</EmptyTitle>
         <EmptyDescription>Check back soon for new delivery opportunities</EmptyDescription>
       </Empty>
