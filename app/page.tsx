@@ -1,16 +1,25 @@
+'use client'
+
+import { useApp } from '@/lib/context'
+import { RoleSwitcher } from '@/components/shared/RoleSwitcher'
+import { DriverView } from '@/components/driver/DriverView'
+import { BusinessView } from '@/components/business/BusinessView'
+import { AdminView } from '@/components/admin/AdminView'
+
 export default function Home() {
+  const { activeRole } = useApp()
+
   return (
-    <div className="flex min-h-screen items-center justify-center font-sans">
-      <main className="flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-16 text-center sm:items-start sm:text-left">
-        <div className="flex flex-col gap-4">
-          <h1 className="text-4xl font-bold tracking-tight">
-            LV Couriers
-          </h1>
-          <p className="max-w-md text-lg text-muted-foreground">
-            To get started, send a prompt or modify this page directly.
-          </p>
-        </div>
-      </main>
+    <div className="min-h-screen bg-[#0d0f14]">
+      {/* Role Switcher - floating in top right */}
+      <RoleSwitcher />
+
+      {/* Render the active role view with fade animation */}
+      <div key={activeRole} className="animate-fade-in">
+        {activeRole === 'driver' && <DriverView />}
+        {activeRole === 'business' && <BusinessView />}
+        {activeRole === 'admin' && <AdminView />}
+      </div>
     </div>
-  );
+  )
 }
