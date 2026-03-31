@@ -45,9 +45,6 @@ export default function LoginPage() {
         const role = data.user.user_metadata?.role || 'business'
         console.log('[v0] User role:', role, 'User metadata:', data.user.user_metadata)
         
-        // Small delay to ensure cookies are set
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
         let redirectPath = '/business'
         switch (role) {
           case 'driver':
@@ -64,8 +61,9 @@ export default function LoginPage() {
         
         console.log('[v0] Redirecting to:', redirectPath)
         
-        // Use window.location for a full page navigation to ensure cookies are sent
-        window.location.href = redirectPath
+        // Use router.push for client-side navigation, then refresh to trigger middleware
+        router.push(redirectPath)
+        router.refresh()
       }
     } catch (err) {
       console.log('[v0] Unexpected error:', err)
