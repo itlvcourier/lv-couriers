@@ -25,12 +25,17 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      console.log('[v0] Attempting login for:', email)
+      
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
+      console.log('[v0] Sign in response:', { user: data?.user?.id, error: signInError?.message })
+
       if (signInError) {
+        console.log('[v0] Sign in error:', signInError.message)
         setError(signInError.message)
         setIsLoading(false)
         return
@@ -38,22 +43,32 @@ export default function LoginPage() {
 
       if (data.user) {
         const role = data.user.user_metadata?.role || 'business'
+        console.log('[v0] User role:', role, 'User metadata:', data.user.user_metadata)
         
+        // Small delay to ensure cookies are set
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        let redirectPath = '/business'
         switch (role) {
           case 'driver':
-            router.push('/driver')
+            redirectPath = '/driver'
             break
           case 'admin':
-            router.push('/admin')
+            redirectPath = '/admin'
             break
           case 'business':
           default:
-            router.push('/business')
+            redirectPath = '/business'
             break
         }
-        router.refresh()
+        
+        console.log('[v0] Redirecting to:', redirectPath)
+        
+        // Use window.location for a full page navigation to ensure cookies are sent
+        window.location.href = redirectPath
       }
-    } catch {
+    } catch (err) {
+      console.log('[v0] Unexpected error:', err)
       setError('An unexpected error occurred')
       setIsLoading(false)
     }
