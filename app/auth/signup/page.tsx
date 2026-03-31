@@ -124,6 +124,14 @@ export default function SignupPage() {
                   </SelectContent>
                 </Select>
               </Field>
+              <div className="bg-muted/50 p-3 rounded-lg border border-border/50">
+                <p className="text-xs text-muted-foreground font-medium mb-2">Demo Accounts Available:</p>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p><strong>Business:</strong> business@demo.lvcouriers.com / Demo@123</p>
+                  <p><strong>Driver:</strong> driver@demo.lvcouriers.com / Demo@123</p>
+                  <p><strong>Admin:</strong> admin@demo.lvcouriers.com / Demo@123</p>
+                </div>
+              </div>
               {error && (
                 <FieldError>{error}</FieldError>
               )}

@@ -128,9 +128,15 @@ export default function LoginPage() {
               Create an account
             </Link>
           </div>
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            
-          </p>
+          <div className="mt-6 bg-muted/50 p-3 rounded-lg border border-border/50">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Demo Accounts:</p>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p><strong>Business:</strong> business@demo.lvcouriers.com</p>
+              <p><strong>Driver:</strong> driver@demo.lvcouriers.com</p>
+              <p><strong>Admin:</strong> admin@demo.lvcouriers.com</p>
+              <p className="mt-2"><strong>Password:</strong> Demo@123</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
