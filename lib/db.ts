@@ -11,11 +11,15 @@ import type {
   DeliveryBundle
 } from './types'
 
-const supabase = createClient()
+// Helper function to get client
+function getClient() {
+  return createClient()
+}
 
 // ============ DELIVERIES ============
 
 export async function getAvailableDeliveries() {
+  const supabase = getClient()
   const { data, error } = await supabase
     .from('deliveries')
     .select('*, business:businesses(*)')
