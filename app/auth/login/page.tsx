@@ -114,7 +114,7 @@ export default function LoginPage() {
             </Link>
           </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Drivers receive login credentials from administrators
+            
           </p>
         </CardContent>
       </Card>
