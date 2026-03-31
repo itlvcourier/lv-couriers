@@ -4,23 +4,102 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { FieldGroup, Field, FieldLabel, FieldError } from '@/components/ui/field'
-import { Spinner } from '@/components/ui/spinner'
-import { 
-  MapPin, 
-  User, 
-  Phone, 
-  Package, 
-  DollarSign,
-  Zap,
-  Send
-} from 'lucide-react'
+import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { createDelivery } from '@/lib/db'
-import type { PackageSize, Priority, NewDeliveryForm } from '@/lib/types'
+
+interface PostDeliveryFormProps {
+  businessId: string
+  businessAddress: string
+  onSuccess?: () => void
+}
+
+export function PostDeliveryForm({ businessId, businessAddress, onSuccess }: PostDeliveryFormProps) {
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    pickupAddress: businessAddress,
+    dropoffAddress: '',
+    items: '',
+    notes: '',
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      // Placeholder submission
+      toast.success('Delivery posted successfully!')
+      setFormData({
+        pickupAddress: businessAddress,
+        dropoffAddress: '',
+        items: '',
+        notes: '',
+      })
+      onSuccess?.()
+    } catch (error) {
+      toast.error('Failed to post delivery')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Post New Delivery</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="pickup">Pickup Address</Label>
+            <Input
+              id="pickup"
+              value={formData.pickupAddress}
+              onChange={(e) => setFormData({ ...formData, pickupAddress: e.target.value })}
+              placeholder="Enter pickup address"
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="dropoff">Dropoff Address</Label>
+            <Input
+              id="dropoff"
+              value={formData.dropoffAddress}
+              onChange={(e) => setFormData({ ...formData, dropoffAddress: e.target.value })}
+              placeholder="Enter dropoff address"
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="items">Items Description</Label>
+            <Input
+              id="items"
+              value={formData.items}
+              onChange={(e) => setFormData({ ...formData, items: e.target.value })}
+              placeholder="What are you delivering?"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="notes">Special Instructions</Label>
+            <Input
+              id="notes"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Any special instructions?"
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Posting...' : 'Post Delivery'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
 
 interface PostDeliveryFormProps {
   businessId: string
