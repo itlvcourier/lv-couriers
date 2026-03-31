@@ -1,26 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { PostDeliveryForm } from './PostDeliveryForm'
 import { MyDeliveries } from './MyDeliveries'
-import { BusinessHeader } from './BusinessHeader'
 import { Plus, Package, LogOut } from 'lucide-react'
 import { signOut } from '@/lib/auth-actions'
-import type { DbBusiness } from '@/lib/types'
+import { createClient } from '@/lib/supabase/client'
+import { Spinner } from '@/components/ui/spinner'
 
-interface BusinessViewProps {
-  business: DbBusiness
-}
-
-export function BusinessView({ business }: BusinessViewProps) {
+export function BusinessView() {
   const [activeTab, setActiveTab] = useState('deliveries')
+  const [businessId, setBusinessId] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const getBusiness = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          setBusinessId(user.id)
+        }
+      } catch (err) {
+        console.error('[v0] Error getting business:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    getBusiness()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spinner className="w-8 h-8" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background pb-4">
-      <BusinessHeader business={business} />
-      
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
           <TabsList className="w-full h-14 rounded-none bg-transparent p-0 grid grid-cols-2">
@@ -43,13 +64,13 @@ export function BusinessView({ business }: BusinessViewProps) {
 
         <div className="p-4 max-w-2xl mx-auto">
           <TabsContent value="deliveries" className="mt-0">
-            <MyDeliveries businessId={business.id} />
+            <MyDeliveries businessId={businessId} />
           </TabsContent>
           
           <TabsContent value="new" className="mt-0">
             <PostDeliveryForm 
-              businessId={business.id} 
-              businessAddress={business.address}
+              businessId={businessId} 
+              businessAddress=""
               onSuccess={() => setActiveTab('deliveries')}
             />
           </TabsContent>
