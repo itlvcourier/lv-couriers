@@ -1,14 +1,16 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { Toaster } from 'sonner'
+import { AppProvider } from '@/lib/context'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'LV Couriers - Delivery Operations Management',
+  description: 'Streamlined delivery management for drivers, businesses, and administrators',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -29,15 +31,36 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: '#0a0a0a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">
-        {children}
+    <html lang="en" className="dark">
+      <body className="font-sans antialiased bg-background text-foreground">
+        <AppProvider>
+          {children}
+        </AppProvider>
+        <Toaster 
+          theme="dark" 
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: '#1a1a1a',
+              border: '1px solid #262626',
+              color: '#fafafa',
+            },
+          }}
+        />
         <Analytics />
       </body>
     </html>
