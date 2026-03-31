@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { 
   Sheet, 
@@ -110,9 +110,9 @@ export function AdminDrivers() {
   if (error) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Users className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>Error loading drivers</EmptyTitle>
         <EmptyDescription>Please try refreshing the page</EmptyDescription>
       </Empty>
@@ -131,9 +131,9 @@ export function AdminDrivers() {
 
       {!drivers || drivers.length === 0 ? (
         <Empty>
-          <EmptyIcon>
+          <EmptyMedia>
             <Users className="w-10 h-10" />
-          </EmptyIcon>
+          </EmptyMedia>
           <EmptyTitle>No drivers yet</EmptyTitle>
           <EmptyDescription>Invite your first driver to get started</EmptyDescription>
         </Empty>

@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -119,9 +119,9 @@ export function MyDeliveries({ businessId }: MyDeliveriesProps) {
   if (error) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Package className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>Error loading deliveries</EmptyTitle>
         <EmptyDescription>Please try refreshing the page</EmptyDescription>
       </Empty>
@@ -151,9 +151,9 @@ export function MyDeliveries({ businessId }: MyDeliveriesProps) {
       {/* Deliveries list */}
       {filteredDeliveries.length === 0 ? (
         <Empty>
-          <EmptyIcon>
+          <EmptyMedia>
             <Package className="w-10 h-10" />
-          </EmptyIcon>
+          </EmptyMedia>
           <EmptyTitle>No {activeFilter === 'all' ? '' : activeFilter} deliveries</EmptyTitle>
           <EmptyDescription>
             {activeFilter === 'all' ? 'Post a delivery to get started' : 'Check other tabs'}

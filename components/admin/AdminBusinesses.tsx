@@ -3,7 +3,7 @@
 import useSWR from 'swr'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { 
   Building2, 
@@ -36,9 +36,9 @@ export function AdminBusinesses() {
   if (error) {
     return (
       <Empty>
-        <EmptyIcon>
+        <EmptyMedia>
           <Building2 className="w-10 h-10" />
-        </EmptyIcon>
+        </EmptyMedia>
         <EmptyTitle>Error loading businesses</EmptyTitle>
         <EmptyDescription>Please try refreshing the page</EmptyDescription>
       </Empty>
@@ -54,9 +54,9 @@ export function AdminBusinesses() {
 
       {!businesses || businesses.length === 0 ? (
         <Empty>
-          <EmptyIcon>
+          <EmptyMedia>
             <Building2 className="w-10 h-10" />
-          </EmptyIcon>
+          </EmptyMedia>
           <EmptyTitle>No businesses yet</EmptyTitle>
           <EmptyDescription>Businesses will appear here when they sign up</EmptyDescription>
         </Empty>
