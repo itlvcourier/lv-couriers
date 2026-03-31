@@ -1,64 +1,77 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp } from '@/lib/context'
-import { BottomNav, type NavItem } from '@/components/shared/BottomNav'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { AvailableJobs } from './AvailableJobs'
-import { ActiveDelivery } from './ActiveDelivery'
+import { ActiveDeliveries } from './ActiveDeliveries'
 import { DriverHistory } from './DriverHistory'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Truck, FolderOpen, Package, History } from 'lucide-react'
+import { DriverHeader } from './DriverHeader'
+import { Package, Truck, Clock, LogOut } from 'lucide-react'
+import { signOut } from '@/lib/auth-actions'
+import type { DbDriver } from '@/lib/types'
 
-type DriverTab = 'available' | 'active' | 'history'
+interface DriverViewProps {
+  driver: DbDriver
+}
 
-export function DriverView() {
-  const [activeTab, setActiveTab] = useState<DriverTab>('available')
-  const { deliveries, drivers, currentDriverId } = useApp()
-
-  const currentDriver = drivers.find(d => d.id === currentDriverId)
-
-  // Count available jobs
-  const availableCount = deliveries.filter(d => d.status === 'posted').length
-
-  const navItems: NavItem[] = [
-    { id: 'available', label: 'Available', icon: FolderOpen, badge: availableCount },
-    { id: 'active', label: 'Active', icon: Package },
-    { id: 'history', label: 'History', icon: History },
-  ]
+export function DriverView({ driver }: DriverViewProps) {
+  const [activeTab, setActiveTab] = useState('available')
 
   return (
-    <div className="flex flex-col h-screen bg-[#0d0f14]">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 h-16 bg-[#141720] border-b border-[#1f2535]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
-            <Truck className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-lg font-bold text-[#e8eaf0]">DOMS</span>
+    <div className="min-h-screen bg-background pb-4">
+      <DriverHeader driver={driver} />
+      
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
+          <TabsList className="w-full h-14 rounded-none bg-transparent p-0 grid grid-cols-3">
+            <TabsTrigger 
+              value="available" 
+              className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+            >
+              <Package className="w-4 h-4" />
+              <span className="hidden sm:inline">Available</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="active" 
+              className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+            >
+              <Truck className="w-4 h-4" />
+              <span className="hidden sm:inline">Active</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="history" 
+              className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+            >
+              <Clock className="w-4 h-4" />
+              <span className="hidden sm:inline">History</span>
+            </TabsTrigger>
+          </TabsList>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-[#6b7280] hidden sm:block">{currentDriver?.name}</span>
-          <Avatar className="w-8 h-8">
-            <AvatarFallback className="bg-orange-500/20 text-orange-500 text-xs font-semibold">
-              {currentDriver?.avatar || '?'}
-            </AvatarFallback>
-          </Avatar>
+
+        <div className="p-4 max-w-2xl mx-auto">
+          <TabsContent value="available" className="mt-0">
+            <AvailableJobs driverId={driver.id} onJobClaimed={() => setActiveTab('active')} />
+          </TabsContent>
+          
+          <TabsContent value="active" className="mt-0">
+            <ActiveDeliveries driverId={driver.id} />
+          </TabsContent>
+          
+          <TabsContent value="history" className="mt-0">
+            <DriverHistory driverId={driver.id} />
+          </TabsContent>
         </div>
-      </header>
+      </Tabs>
 
-      {/* Tab content */}
-      <main className="flex-1 overflow-hidden">
-        {activeTab === 'available' && <AvailableJobs />}
-        {activeTab === 'active' && <ActiveDelivery />}
-        {activeTab === 'history' && <DriverHistory />}
-      </main>
-
-      {/* Bottom navigation */}
-      <BottomNav
-        items={navItems}
-        activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab as DriverTab)}
-      />
+      <div className="fixed bottom-4 right-4">
+        <form action={signOut}>
+          <Button type="submit" variant="outline" size="sm" className="gap-2">
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </Button>
+        </form>
+      </div>
     </div>
   )
 }
