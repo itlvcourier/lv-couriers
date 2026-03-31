@@ -4,22 +4,16 @@ import type {
   DbDriver, 
   DbBusiness, 
   DbActivityEvent,
-  DbStatusHistory,
   DbDriverLocation,
   NewDeliveryForm,
   DeliveryStatus,
   DeliveryBundle
 } from './types'
 
-// Helper function to get client
-function getClient() {
-  return createClient()
-}
-
 // ============ DELIVERIES ============
 
 export async function getAvailableDeliveries() {
-  const supabase = getClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .select('*, business:businesses(*)')
@@ -33,7 +27,6 @@ export async function getAvailableDeliveries() {
 export async function getAvailableDeliveriesGrouped(): Promise<DeliveryBundle[]> {
   const deliveries = await getAvailableDeliveries()
   
-  // Group by bundle_id
   const bundleMap = new Map<string, DeliveryBundle>()
   
   for (const delivery of deliveries) {
@@ -58,6 +51,7 @@ export async function getAvailableDeliveriesGrouped(): Promise<DeliveryBundle[]>
 }
 
 export async function getDriverActiveDeliveries(driverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .select('*, business:businesses(*)')
@@ -70,6 +64,7 @@ export async function getDriverActiveDeliveries(driverId: string) {
 }
 
 export async function getDriverHistory(driverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .select('*, business:businesses(*)')
@@ -83,6 +78,7 @@ export async function getDriverHistory(driverId: string) {
 }
 
 export async function getBusinessDeliveries(businessId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .select('*, driver:drivers(*)')
@@ -94,6 +90,7 @@ export async function getBusinessDeliveries(businessId: string) {
 }
 
 export async function getAllDeliveries(status?: DeliveryStatus) {
+  const supabase = createClient()
   let query = supabase
     .from('deliveries')
     .select('*, business:businesses(*), driver:drivers(*)')
@@ -109,6 +106,7 @@ export async function getAllDeliveries(status?: DeliveryStatus) {
 }
 
 export async function getDelivery(deliveryId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .select('*, business:businesses(*), driver:drivers(*)')
@@ -120,6 +118,7 @@ export async function getDelivery(deliveryId: string) {
 }
 
 export async function createDelivery(businessId: string, form: NewDeliveryForm) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .insert({
@@ -133,7 +132,6 @@ export async function createDelivery(businessId: string, form: NewDeliveryForm) 
 
   if (error) throw error
   
-  // Create activity event
   const business = await getBusiness(businessId)
   await createActivityEvent({
     delivery_id: data.id,
@@ -147,6 +145,7 @@ export async function createDelivery(businessId: string, form: NewDeliveryForm) 
 }
 
 export async function claimDelivery(deliveryId: string, driverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .update({
@@ -161,10 +160,8 @@ export async function claimDelivery(deliveryId: string, driverId: string) {
 
   if (error) throw error
   
-  // Update driver status
   await updateDriverStatus(driverId, 'on_delivery')
   
-  // Create activity event
   await createActivityEvent({
     delivery_id: deliveryId,
     driver_id: driverId,
@@ -179,6 +176,7 @@ export async function claimDelivery(deliveryId: string, driverId: string) {
 }
 
 export async function claimBundle(bundleId: string, driverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .update({
@@ -192,10 +190,8 @@ export async function claimBundle(bundleId: string, driverId: string) {
 
   if (error) throw error
   
-  // Update driver status
   await updateDriverStatus(driverId, 'on_delivery')
   
-  // Create activity events for each delivery
   for (const delivery of data) {
     await createActivityEvent({
       delivery_id: delivery.id,
@@ -212,6 +208,7 @@ export async function claimBundle(bundleId: string, driverId: string) {
 }
 
 export async function startDelivery(deliveryId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .update({
@@ -238,6 +235,7 @@ export async function startDelivery(deliveryId: string) {
 }
 
 export async function completeDelivery(deliveryId: string, proofPhotoUrl?: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .update({
@@ -251,13 +249,11 @@ export async function completeDelivery(deliveryId: string, proofPhotoUrl?: strin
 
   if (error) throw error
   
-  // Check if driver has more active deliveries
   const activeDeliveries = await getDriverActiveDeliveries(data.driver_id!)
   if (activeDeliveries.length === 0) {
     await updateDriverStatus(data.driver_id!, 'available')
   }
   
-  // Increment driver delivery counts
   await incrementDriverDeliveries(data.driver_id!)
   
   await createActivityEvent({
@@ -274,6 +270,7 @@ export async function completeDelivery(deliveryId: string, proofPhotoUrl?: strin
 }
 
 export async function failDelivery(deliveryId: string, reason: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .update({
@@ -287,7 +284,6 @@ export async function failDelivery(deliveryId: string, reason: string) {
 
   if (error) throw error
   
-  // Check if driver has more active deliveries
   const activeDeliveries = await getDriverActiveDeliveries(data.driver_id!)
   if (activeDeliveries.length === 0) {
     await updateDriverStatus(data.driver_id!, 'available')
@@ -307,6 +303,7 @@ export async function failDelivery(deliveryId: string, reason: string) {
 }
 
 export async function reassignDelivery(deliveryId: string, newDriverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
     .update({
@@ -334,6 +331,7 @@ export async function reassignDelivery(deliveryId: string, newDriverId: string) 
 // ============ DRIVERS ============
 
 export async function getDrivers() {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('drivers')
     .select('*')
@@ -344,6 +342,7 @@ export async function getDrivers() {
 }
 
 export async function getAvailableDrivers() {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('drivers')
     .select('*')
@@ -355,6 +354,7 @@ export async function getAvailableDrivers() {
 }
 
 export async function getDriver(driverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('drivers')
     .select('*')
@@ -366,6 +366,7 @@ export async function getDriver(driverId: string) {
 }
 
 export async function getDriverByUserId(userId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('drivers')
     .select('*')
@@ -377,6 +378,7 @@ export async function getDriverByUserId(userId: string) {
 }
 
 export async function updateDriverStatus(driverId: string, status: DbDriver['status']) {
+  const supabase = createClient()
   const { error } = await supabase
     .from('drivers')
     .update({ status })
@@ -386,26 +388,23 @@ export async function updateDriverStatus(driverId: string, status: DbDriver['sta
 }
 
 export async function incrementDriverDeliveries(driverId: string) {
-  const { error } = await supabase.rpc('increment_driver_deliveries', {
-    driver_id_param: driverId,
-  })
-
-  // If RPC doesn't exist, do it manually
-  if (error) {
-    const driver = await getDriver(driverId)
-    await supabase
-      .from('drivers')
-      .update({
-        total_deliveries: driver.total_deliveries + 1,
-        today_deliveries: driver.today_deliveries + 1,
-      })
-      .eq('id', driverId)
-  }
+  const supabase = createClient()
+  const driver = await getDriver(driverId)
+  const { error } = await supabase
+    .from('drivers')
+    .update({
+      total_deliveries: (driver.total_deliveries || 0) + 1,
+      today_deliveries: (driver.today_deliveries || 0) + 1,
+    })
+    .eq('id', driverId)
+  
+  if (error) throw error
 }
 
 // ============ BUSINESSES ============
 
 export async function getBusinesses() {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('businesses')
     .select('*')
@@ -416,6 +415,7 @@ export async function getBusinesses() {
 }
 
 export async function getBusiness(businessId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('businesses')
     .select('*')
@@ -427,6 +427,7 @@ export async function getBusiness(businessId: string) {
 }
 
 export async function getBusinessByUserId(userId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('businesses')
     .select('*')
@@ -440,6 +441,7 @@ export async function getBusinessByUserId(userId: string) {
 // ============ ACTIVITY EVENTS ============
 
 export async function getActivityEvents(limit = 20) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('activity_events')
     .select('*')
@@ -451,6 +453,7 @@ export async function getActivityEvents(limit = 20) {
 }
 
 export async function createActivityEvent(event: Omit<DbActivityEvent, 'id' | 'created_at'>) {
+  const supabase = createClient()
   const { error } = await supabase
     .from('activity_events')
     .insert(event)
@@ -468,7 +471,7 @@ export async function updateDriverLocation(
   heading?: number,
   speed?: number
 ) {
-  // Upsert driver location
+  const supabase = createClient()
   const { error } = await supabase
     .from('driver_locations')
     .upsert({
@@ -484,7 +487,6 @@ export async function updateDriverLocation(
     })
 
   if (error) {
-    // If upsert fails (no unique constraint), try insert
     await supabase
       .from('driver_locations')
       .insert({
@@ -499,6 +501,7 @@ export async function updateDriverLocation(
 }
 
 export async function getDriverLocation(driverId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('driver_locations')
     .select('*')
@@ -520,6 +523,7 @@ export async function getDeliveryDriverLocation(deliveryId: string) {
 // ============ STATS ============
 
 export async function getDashboardStats() {
+  const supabase = createClient()
   const [
     { count: totalDeliveries },
     { count: activeDeliveries },
