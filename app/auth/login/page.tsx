@@ -12,6 +12,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Truck } from 'lucide-react'
 
 export default function LoginPage() {
+  console.log('[v0] LoginPage component rendering')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
