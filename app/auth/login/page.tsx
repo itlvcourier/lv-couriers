@@ -71,8 +71,13 @@ export default function LoginPage() {
         
         console.log('[v0] Redirecting to:', redirectPath)
         
-        // Immediately redirect without setTimeout - let Next.js handle navigation
-        window.location.href = redirectPath
+        // Use Next.js router for client-side navigation (no full page reload)
+        router.push(redirectPath)
+        
+        // Also store in session storage for immediate access
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('just_logged_in', 'true')
+        }
       }
     } catch (err) {
       console.log('[v0] Unexpected error:', err)
