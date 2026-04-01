@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { PostDeliveryForm } from './PostDeliveryForm'
 import { MyDeliveries } from './MyDeliveries'
 import { Plus, Package, LogOut } from 'lucide-react'
-import { signOut } from '@/lib/auth-actions'
 import { createClient } from '@/lib/supabase/client'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -14,6 +14,7 @@ export function BusinessView() {
   const [activeTab, setActiveTab] = useState('deliveries')
   const [businessId, setBusinessId] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     const getBusiness = async () => {
@@ -31,6 +32,24 @@ export function BusinessView() {
     }
     getBusiness()
   }, [])
+
+  const handleSignOut = async () => {
+    try {
+      // Clear localStorage
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_id')
+      localStorage.removeItem('user_role')
+      
+      // Sign out from Supabase
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      
+      // Redirect to login
+      router.push('/auth/login')
+    } catch (err) {
+      console.error('[v0] Sign out error:', err)
+    }
+  }
 
   if (loading) {
     return (
@@ -78,13 +97,12 @@ export function BusinessView() {
       </Tabs>
 
       <div className="fixed bottom-4 right-4">
-        <form action={signOut}>
-          <Button type="submit" variant="outline" size="sm" className="gap-2">
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </Button>
-        </form>
+        <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </Button>
       </div>
     </div>
   )
 }
+
