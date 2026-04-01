@@ -43,13 +43,15 @@ export default function LoginPage() {
 
       if (data.user && data.session) {
         const role = data.user.user_metadata?.role || 'business'
-        console.log('[v0] User role:', role, 'Session:', !!data.session)
+        console.log('[v0] Login successful. User role:', role)
         
-        // Explicitly set the session to ensure cookies are written
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        })
+        // Store session in localStorage as backup for persistence
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('auth_token', data.session.access_token)
+          localStorage.setItem('user_id', data.user.id)
+          localStorage.setItem('user_role', role)
+          console.log('[v0] Session stored in localStorage')
+        }
         
         let redirectPath = '/business'
         switch (role) {
@@ -67,10 +69,8 @@ export default function LoginPage() {
         
         console.log('[v0] Redirecting to:', redirectPath)
         
-        // Wait for cookies to be fully set, then do a full page navigation
-        setTimeout(() => {
-          window.location.href = redirectPath
-        }, 800)
+        // Immediately redirect without setTimeout - let Next.js handle navigation
+        window.location.href = redirectPath
       }
     } catch (err) {
       console.log('[v0] Unexpected error:', err)
