@@ -41,9 +41,9 @@ export default function LoginPage() {
         return
       }
 
-      if (data.user) {
+      if (data.user && data.session) {
         const role = data.user.user_metadata?.role || 'business'
-        console.log('[v0] User role:', role, 'User metadata:', data.user.user_metadata)
+        console.log('[v0] User role:', role, 'Session:', !!data.session)
         
         let redirectPath = '/business'
         switch (role) {
@@ -61,9 +61,10 @@ export default function LoginPage() {
         
         console.log('[v0] Redirecting to:', redirectPath)
         
-        // Use router.push for client-side navigation, then refresh to trigger middleware
-        router.push(redirectPath)
-        router.refresh()
+        // Wait for cookies to be set, then do a full page navigation
+        setTimeout(() => {
+          window.location.href = redirectPath
+        }, 500)
       }
     } catch (err) {
       console.log('[v0] Unexpected error:', err)

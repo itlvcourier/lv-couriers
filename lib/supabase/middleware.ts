@@ -34,9 +34,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
+  
+  console.log('[v0] Middleware:', { pathname, userId: user?.id, hasUser: !!user })
 
   // Public paths that don't require auth
-  const publicPaths = ['/auth/login', '/auth/signup', '/auth/signup-success', '/auth/error', '/auth/callback', '/auth/confirm']
+  const publicPaths = ['/auth/login', '/auth/signup', '/auth/signup-success', '/auth/error', '/auth/callback', '/auth/confirm', '/setup', '/test', '/api']
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
 
   // Protected paths
