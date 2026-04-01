@@ -14,7 +14,8 @@ import {
   Building2, 
   Package, 
   Truck,
-  LogOut 
+  LogOut,
+  Shield
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -33,68 +34,72 @@ export function AdminView() {
       await supabase.auth.signOut()
       router.push('/auth/login')
     } catch (err) {
-      console.error('[v0] Sign out error:', err)
+      console.error('Sign out error:', err)
     }
   }
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-card/50 border-b border-border p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Truck className="w-5 h-5 text-primary" />
+      <header className="sticky top-0 z-50 bg-card/95 backdrop-blur border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                <Shield className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div className="hidden sm:block">
+                <h1 className="font-semibold text-foreground">LV Couriers</h1>
+                <p className="text-xs text-muted-foreground">Admin Dashboard</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-semibold text-lg">LV Couriers</h1>
-              <p className="text-sm text-muted-foreground">Admin Dashboard</p>
-            </div>
+            <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
           </div>
-          <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </Button>
         </div>
       </header>
       
+      {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)} className="w-full">
-        <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
-          <div className="max-w-7xl mx-auto">
-            <TabsList className="w-full h-14 rounded-none bg-transparent p-0 grid grid-cols-4">
+        <div className="sticky top-16 z-40 bg-card/95 backdrop-blur border-b border-border">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <TabsList className="w-full h-12 rounded-none bg-transparent p-0 grid grid-cols-4 max-w-2xl">
               <TabsTrigger 
                 value="dashboard" 
-                className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary flex items-center justify-center gap-2 transition-colors"
               >
                 <LayoutDashboard className="w-4 h-4" />
-                <span className="hidden sm:inline">Dashboard</span>
+                <span className="hidden sm:inline font-medium">Dashboard</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="drivers" 
-                className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary flex items-center justify-center gap-2 transition-colors"
               >
                 <Users className="w-4 h-4" />
-                <span className="hidden sm:inline">Drivers</span>
+                <span className="hidden sm:inline font-medium">Drivers</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="businesses" 
-                className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary flex items-center justify-center gap-2 transition-colors"
               >
                 <Building2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Businesses</span>
+                <span className="hidden sm:inline font-medium">Businesses</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="deliveries" 
-                className="h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary flex items-center justify-center gap-2"
+                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary flex items-center justify-center gap-2 transition-colors"
               >
                 <Package className="w-4 h-4" />
-                <span className="hidden sm:inline">Deliveries</span>
+                <span className="hidden sm:inline font-medium">Deliveries</span>
               </TabsTrigger>
             </TabsList>
           </div>
         </div>
 
-        <div className="p-4 max-w-7xl mx-auto">
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <TabsContent value="dashboard" className="mt-0">
             <AdminDashboard />
           </TabsContent>
