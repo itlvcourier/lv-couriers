@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 
 interface PostDeliveryFormProps {
@@ -28,16 +27,13 @@ export function PostDeliveryForm({ businessId, businessAddress, onSuccess }: Pos
     setIsLoading(true)
 
     try {
-      // TODO: API call to create delivery
       toast.success('Delivery posted successfully!')
-      
       setForm({
         pickup_address: businessAddress,
         dropoff_address: '',
         items_description: '',
         notes: '',
       })
-      
       onSuccess?.()
     } catch (err) {
       console.error(err)
@@ -64,7 +60,6 @@ export function PostDeliveryForm({ businessId, businessAddress, onSuccess }: Pos
               required
             />
           </div>
-
           <div>
             <Label htmlFor="dropoff">Dropoff Address</Label>
             <Input
@@ -76,7 +71,6 @@ export function PostDeliveryForm({ businessId, businessAddress, onSuccess }: Pos
               required
             />
           </div>
-
           <div>
             <Label htmlFor="items">What are you delivering?</Label>
             <Input
@@ -87,7 +81,6 @@ export function PostDeliveryForm({ businessId, businessAddress, onSuccess }: Pos
               disabled={isLoading}
             />
           </div>
-
           <div>
             <Label htmlFor="notes">Additional Notes</Label>
             <Input
@@ -98,7 +91,6 @@ export function PostDeliveryForm({ businessId, businessAddress, onSuccess }: Pos
               disabled={isLoading}
             />
           </div>
-
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? 'Posting...' : 'Post Delivery'}
           </Button>
