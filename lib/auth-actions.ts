@@ -9,7 +9,7 @@ export async function signOut() {
   redirect('/auth/login')
 }
 
-export function generateTemporaryPassword(): string {
+export async function generateTemporaryPassword(): Promise<string> {
   return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase()
 }
 
