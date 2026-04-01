@@ -11,19 +11,21 @@ export default function BusinessPage() {
   const router = useRouter()
 
   useEffect(() => {
+    console.log('[v0] Business page useEffect running')
     const checkAuth = async () => {
       // First check localStorage for session persistence
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
       const userId = typeof window !== 'undefined' ? localStorage.getItem('user_id') : null
       
-      console.log('[v0] Business page check:', { hasToken: !!token, hasUserId: !!userId })
+      console.log('[v0] Business page check:', { hasToken: !!token, hasUserId: !!userId, tokenValue: token?.substring(0, 20) })
       
       if (token && userId) {
-        console.log('[v0] Session found in localStorage')
+        console.log('[v0] Session found in localStorage, setting ready')
         setIsReady(true)
         return
       }
       
+      console.log('[v0] No localStorage token, checking Supabase')
       // Fallback: check Supabase auth
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
