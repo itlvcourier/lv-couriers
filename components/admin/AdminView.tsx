@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { AdminDashboard } from './AdminDashboard'
@@ -15,12 +16,26 @@ import {
   Truck,
   LogOut 
 } from 'lucide-react'
-import { signOut } from '@/lib/auth-actions'
+import { createClient } from '@/lib/supabase/client'
 
 type AdminTab = 'dashboard' | 'drivers' | 'businesses' | 'deliveries'
 
 export function AdminView() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    try {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_id')
+      localStorage.removeItem('user_role')
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push('/auth/login')
+    } catch (err) {
+      console.error('[v0] Sign out error:', err)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,12 +51,10 @@ export function AdminView() {
               <p className="text-sm text-muted-foreground">Admin Dashboard</p>
             </div>
           </div>
-          <form action={signOut}>
-            <Button type="submit" variant="outline" size="sm" className="gap-2">
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
-          </form>
+          <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </Button>
         </div>
       </header>
       

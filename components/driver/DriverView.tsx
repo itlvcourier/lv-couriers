@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { AvailableJobs } from './AvailableJobs'
@@ -8,7 +9,6 @@ import { ActiveDeliveries } from './ActiveDeliveries'
 import { DriverHistory } from './DriverHistory'
 import { DriverHeader } from './DriverHeader'
 import { Package, Truck, Clock, LogOut } from 'lucide-react'
-import { signOut } from '@/lib/auth-actions'
 import { createClient } from '@/lib/supabase/client'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -16,6 +16,7 @@ export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
   const [driverId, setDriverId] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     const getDriver = async () => {
@@ -33,6 +34,19 @@ export function DriverView() {
     }
     getDriver()
   }, [])
+
+  const handleSignOut = async () => {
+    try {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_id')
+      localStorage.removeItem('user_role')
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push('/auth/login')
+    } catch (err) {
+      console.error('[v0] Sign out error:', err)
+    }
+  }
 
   if (loading) {
     return (
@@ -87,12 +101,10 @@ export function DriverView() {
       </Tabs>
 
       <div className="fixed bottom-4 right-4">
-        <form action={signOut}>
-          <Button type="submit" variant="outline" size="sm" className="gap-2">
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </Button>
-        </form>
+        <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </Button>
       </div>
     </div>
   )

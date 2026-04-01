@@ -11,6 +11,25 @@ export default function Home() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      // Check localStorage first
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null
+
+      if (token && role) {
+        // Redirect based on localStorage role
+        if (role === 'driver') {
+          router.replace('/driver')
+        } else if (role === 'business') {
+          router.replace('/business')
+        } else if (role === 'admin') {
+          router.replace('/admin')
+        } else {
+          router.replace('/auth/login')
+        }
+        return
+      }
+
+      // Fallback to Supabase auth
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
 
@@ -19,13 +38,13 @@ export default function Home() {
         return
       }
 
-      const role = user.user_metadata?.role || 'driver'
+      const userRole = user.user_metadata?.role || 'driver'
       
-      if (role === 'driver') {
+      if (userRole === 'driver') {
         router.replace('/driver')
-      } else if (role === 'business') {
+      } else if (userRole === 'business') {
         router.replace('/business')
-      } else if (role === 'admin') {
+      } else if (userRole === 'admin') {
         router.replace('/admin')
       } else {
         router.replace('/auth/login')
