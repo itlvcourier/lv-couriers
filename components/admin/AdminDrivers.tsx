@@ -30,7 +30,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDrivers } from '@/lib/db'
-import { inviteDriver } from '@/lib/auth-actions'
+import { inviteDriver } from '@/lib/server-auth'
 import type { DbDriver, VehicleType } from '@/lib/types'
 
 export function AdminDrivers() {
