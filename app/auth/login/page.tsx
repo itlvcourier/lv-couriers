@@ -45,6 +45,12 @@ export default function LoginPage() {
         const role = data.user.user_metadata?.role || 'business'
         console.log('[v0] User role:', role, 'Session:', !!data.session)
         
+        // Explicitly set the session to ensure cookies are written
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
+        
         let redirectPath = '/business'
         switch (role) {
           case 'driver':
@@ -61,10 +67,10 @@ export default function LoginPage() {
         
         console.log('[v0] Redirecting to:', redirectPath)
         
-        // Wait for cookies to be set, then do a full page navigation
+        // Wait for cookies to be fully set, then do a full page navigation
         setTimeout(() => {
           window.location.href = redirectPath
-        }, 500)
+        }, 800)
       }
     } catch (err) {
       console.log('[v0] Unexpected error:', err)
