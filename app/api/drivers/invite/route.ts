@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { generateTemporaryPassword } from '@/lib/auth-actions'
+import { generateTemporaryPassword } from '@/lib/server-auth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate temporary password
-    const tempPassword = generateTemporaryPassword()
+    const tempPassword = await generateTemporaryPassword()
 
     // Create auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
