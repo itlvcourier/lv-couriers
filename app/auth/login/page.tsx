@@ -21,6 +21,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('[v0] Form submitted - handleLogin called')
     setError(null)
     setIsLoading(true)
 
