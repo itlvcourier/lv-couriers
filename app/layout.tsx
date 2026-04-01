@@ -11,7 +11,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'LV Couriers - Delivery Operations Management',
   description: 'Streamlined delivery management for drivers, businesses, and administrators',
-  generator: 'v0.app',
+  generator: 'v0',
   icons: {
     icon: [
       {
