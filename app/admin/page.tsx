@@ -1,51 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useApp } from '@/lib/context'
 import { AdminView } from '@/components/admin/AdminView'
 import { Spinner } from '@/components/ui/spinner'
+import { Shield } from 'lucide-react'
 
 export default function AdminPage() {
-  const [isReady, setIsReady] = useState(false)
+  const { currentUser, isLoading } = useApp()
   const router = useRouter()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // First check localStorage for session persistence
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-      const userId = typeof window !== 'undefined' ? localStorage.getItem('user_id') : null
-      
-      console.log('[v0] Admin page check:', { hasToken: !!token, hasUserId: !!userId })
-      
-      if (token && userId) {
-        console.log('[v0] Session found in localStorage')
-        setIsReady(true)
-        return
-      }
-      
-      // Fallback: check Supabase auth
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      console.log('[v0] Supabase auth check:', { hasUser: !!user })
-      
-      if (!user) {
-        console.log('[v0] No auth found, redirecting to login')
-        router.push('/auth/login')
-        return
-      }
-      
-      setIsReady(true)
+    if (!isLoading && !currentUser) {
+      router.replace('/login')
     }
+    if (!isLoading && currentUser && currentUser.role !== 'admin') {
+      router.replace(`/${currentUser.role}`)
+    }
+  }, [currentUser, isLoading, router])
 
-    checkAuth()
-  }, [router])
-
-  if (!isReady) {
+  if (isLoading || !currentUser) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Spinner className="w-8 h-8" />
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Shield className="w-8 h-8 text-primary animate-pulse" />
+          </div>
+          <Spinner className="w-6 h-6" />
+        </div>
       </div>
     )
   }
