@@ -32,18 +32,22 @@ export interface MockUser {
 
 export interface Driver {
   id: string
+  userId: string | null // Links to auth.users
   name: string
   phone: string
   email: string
   status: DriverStatus
   maxJobsOverride: number | null
+  // Cached stats (updated by trigger on delivery completion)
   totalDeliveries: number
   todayDeliveries: number
   monthDeliveries: number
-  averageTime: string
-  rushSlaRate: number
+  averageTime: string // avg_delivery_mins converted to string for display
+  rushSlaRate: number // percentage 0-100
   monthlyAdjustments: number
   inviteStatus: InviteStatus
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface SavedAddress {
@@ -116,29 +120,60 @@ export interface Delivery {
   businessName: string
   driverId: string | null
   driverName: string | null
+  tripId: string | null
+  // Addresses
   pickupAddress: string
   pickupArea: string
+  pickupLat: number | null
+  pickupLng: number | null
   dropoffAddress: string
   dropoffArea: string
+  dropoffLat: number | null
+  dropoffLng: number | null
   recipientPhone: string | null
+  // Manifest items
   manifest: ManifestItem[]
+  // Delivery flags
   isUrgent: boolean
   isOutOfTown: boolean
+  isRush: boolean
+  // Status
   status: DeliveryStatus
+  retryCount: number
+  // Timestamps
   postedAt: string
   claimedAt: string | null
+  pickupArrivedAt: string | null
   pickedUpAt: string | null
   deliveredAt: string | null
-  duration: string | null
+  // Billing
+  rateCardId: string | null
+  calculatedRate: number | null
+  gstAmount: number | null
+  totalAmount: number | null
+  invoiceId: string | null
+  // Completion
+  durationMins: number | null
+  duration: string | null // Formatted for display
   proofPhotoUrl: string | null
   recipientNote: string | null
-  calculatedRate: number | null
+  // Tracking
+  trackingCode: string | null
+  trackingExpiresAt: string | null
+  // Cancellation
+  cancelledAt: string | null
+  cancellationStage: 'before_depart' | 'en_route_pickup' | 'after_pickup' | null
+  cancellationFee: number | null
+  cancellationReason: string | null
+  // Trip ordering
+  tripOrder: number | null
+  // Relations (for client-side convenience)
   flags: DeliveryFlag[]
   verifications: PickupVerification[]
   statusHistory: StatusEvent[]
-  trackingCode: string | null
-  tripId: string | null
-  retryCount: number
+  // Timestamps
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface SystemSettings {
@@ -209,17 +244,30 @@ export interface RateCard {
   businessId: string
   locationId: string
   effectiveDate: string
-  regular: number
-  bigDouble: number // 2+ big packages
-  outOfTownBig: number // 2+ big packages out of town
-  rush: number
-  rushOutOfTown: number
-  applyGst: boolean
-  cancellationBeforeDepart: number
-  cancellationEnRoute: number
+  // Five rates (matching schema columns)
+  rateRegular: number
+  rateBigDouble: number // 2+ big packages
+  rateOotBig: number | null // Out of town big (nullable = not set)
+  rateRush: number
+  rateRushOot: number
+  // Tax
+  gstApplicable: boolean
+  // Cancellation fees (overrides system_settings)
+  cancelBeforeDepart: number | null
+  cancelEnRoute: number | null
+  // Notification preferences
+  notifyDriverAssigned: boolean
+  notifyPickupConfirmed: boolean
+  notifyEnRoute: boolean
+  notifyDelivered: boolean
+  notifyFailed: boolean
+  notifyInvoiceSent: boolean
+  notifyPaymentReminder: boolean
+  notifyRecipientSms: boolean
+  // Billing info (from business_locations)
   billingEmail: string
   backupEmail: string
-  invoiceDueDays: number
+  // Billing notes
   contractNotes: string
   createdAt: string
   updatedAt: string
@@ -332,17 +380,16 @@ export interface SMSLogEntry {
   errorMessage: string | null
 }
 
+// Matches schema: notification_type enum
 export type AdminNotificationType = 
   | 'flag' 
   | 'timeout' 
-  | 'delivery_complete' 
-  | 'unclaimed_rush' 
-  | 'invoice_overdue' 
-  | 'qty_adjusted'
+  | 'completion'      // delivery_complete
+  | 'new_job'         // unclaimed_rush
+  | 'invoice'         // invoice_overdue
+  | 'qty_adjustment'  // qty_adjusted
   | 'driver_deactivated'
-  | 'tracking_opened'
-  | 'low_battery'
-  | 'email_bounced'
+  | 'sla_breach'      // rush SLA breached
 
 export interface AdminNotification {
   id: string
