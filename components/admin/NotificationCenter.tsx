@@ -15,41 +15,30 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  FileText,
-  RefreshCw,
-  Battery,
-  Mail,
-  Eye,
-  UserX
+  CreditCard,
+  Settings,
+  Package
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import type { AdminNotificationType } from '@/lib/types'
 
 const NOTIFICATION_ICONS: Record<AdminNotificationType, React.ElementType> = {
+  new_job: Package,
   flag: Flag,
-  timeout: Clock,
-  delivery_complete: CheckCircle,
-  unclaimed_rush: AlertTriangle,
-  invoice_overdue: FileText,
-  qty_adjusted: RefreshCw,
-  driver_deactivated: UserX,
-  tracking_opened: Eye,
-  low_battery: Battery,
-  email_bounced: Mail,
+  sla_breach: AlertTriangle,
+  driver_timeout: Clock,
+  payment_received: CreditCard,
+  system: Settings,
 }
 
 const NOTIFICATION_COLORS: Record<AdminNotificationType, string> = {
+  new_job: 'text-blue-400 bg-blue-500/10',
   flag: 'text-red-400 bg-red-500/10',
-  timeout: 'text-yellow-400 bg-yellow-500/10',
-  delivery_complete: 'text-green-400 bg-green-500/10',
-  unclaimed_rush: 'text-blue-400 bg-blue-500/10',
-  invoice_overdue: 'text-gray-400 bg-gray-500/10',
-  qty_adjusted: 'text-orange-400 bg-orange-500/10',
-  driver_deactivated: 'text-red-400 bg-red-500/10',
-  tracking_opened: 'text-blue-400 bg-blue-500/10',
-  low_battery: 'text-yellow-400 bg-yellow-500/10',
-  email_bounced: 'text-red-400 bg-red-500/10',
+  sla_breach: 'text-orange-400 bg-orange-500/10',
+  driver_timeout: 'text-yellow-400 bg-yellow-500/10',
+  payment_received: 'text-green-400 bg-green-500/10',
+  system: 'text-gray-400 bg-gray-500/10',
 }
 
 export function NotificationCenter() {
@@ -116,8 +105,8 @@ export function NotificationCenter() {
           ) : (
             <div className="divide-y divide-border">
               {adminNotifications.map(notification => {
-                const Icon = NOTIFICATION_ICONS[notification.type]
-                const colorClass = NOTIFICATION_COLORS[notification.type]
+                const Icon = NOTIFICATION_ICONS[notification.type] || Bell
+                const colorClass = NOTIFICATION_COLORS[notification.type] || 'text-gray-400 bg-gray-500/10'
                 
                 return (
                   <div

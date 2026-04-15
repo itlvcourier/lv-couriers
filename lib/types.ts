@@ -382,14 +382,12 @@ export interface SMSLogEntry {
 
 // Matches schema: notification_type enum
 export type AdminNotificationType = 
+  | 'new_job'
   | 'flag' 
-  | 'timeout' 
-  | 'completion'      // delivery_complete
-  | 'new_job'         // unclaimed_rush
-  | 'invoice'         // invoice_overdue
-  | 'qty_adjustment'  // qty_adjusted
-  | 'driver_deactivated'
-  | 'sla_breach'      // rush SLA breached
+  | 'sla_breach'
+  | 'driver_timeout'
+  | 'payment_received'
+  | 'system'
 
 export interface AdminNotification {
   id: string
