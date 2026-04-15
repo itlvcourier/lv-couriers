@@ -39,7 +39,7 @@ export default function LoginPage() {
     // Route based on role
     switch (result.role) {
       case 'admin':
-        router.push('/admin/dashboard')
+        router.push('/admin')
         break
       case 'driver':
         router.push('/driver')
