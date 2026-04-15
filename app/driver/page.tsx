@@ -1,51 +1,43 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useApp } from '@/lib/context'
 import { DriverView } from '@/components/driver/DriverView'
 import { Spinner } from '@/components/ui/spinner'
+import { Truck } from 'lucide-react'
 
 export default function DriverPage() {
-  const [isReady, setIsReady] = useState(false)
   const router = useRouter()
+  const { currentUser, activeRole } = useApp()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // First check localStorage for session persistence
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-      const userId = typeof window !== 'undefined' ? localStorage.getItem('user_id') : null
-      
-      console.log('[v0] Driver page check:', { hasToken: !!token, hasUserId: !!userId })
-      
-      if (token && userId) {
-        console.log('[v0] Session found in localStorage')
-        setIsReady(true)
-        return
-      }
-      
-      // Fallback: check Supabase auth
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      console.log('[v0] Supabase auth check:', { hasUser: !!user })
-      
-      if (!user) {
-        console.log('[v0] No auth found, redirecting to login')
-        router.push('/auth/login')
-        return
-      }
-      
-      setIsReady(true)
+    if (!currentUser) {
+      router.replace('/login')
+      return
     }
 
-    checkAuth()
-  }, [router])
+    if (activeRole !== 'driver') {
+      // Redirect to correct role page
+      if (activeRole === 'admin') {
+        router.replace('/admin/dashboard')
+      } else if (activeRole === 'business') {
+        router.replace('/business')
+      } else {
+        router.replace('/login')
+      }
+    }
+  }, [currentUser, activeRole, router])
 
-  if (!isReady) {
+  if (!currentUser || activeRole !== 'driver') {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Spinner className="w-8 h-8" />
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-[var(--accent-orange)]/10 flex items-center justify-center">
+            <Truck className="w-8 h-8 text-[var(--accent-orange)] animate-pulse" />
+          </div>
+          <Spinner className="w-6 h-6 text-[var(--accent-orange)]" />
+        </div>
       </div>
     )
   }

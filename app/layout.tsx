@@ -1,16 +1,15 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { AppProvider } from '@/lib/context'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'LV Couriers - Delivery Operations Management',
-  description: 'Streamlined delivery management for drivers, businesses, and administrators',
+  title: 'DOMS - Delivery Operations Management System',
+  description: 'LV Courier Inc. - Delivery management for drivers, businesses, and administrators',
   generator: 'v0',
   icons: {
     icon: [
@@ -32,7 +31,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0a',
+  themeColor: '#0d0f14',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -45,8 +44,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="font-sans antialiased bg-background text-foreground">
+    <html lang="en" className={`${inter.className} bg-background`}>
+      <body className="font-sans antialiased bg-background text-foreground min-h-screen">
         <AppProvider>
           {children}
         </AppProvider>
@@ -55,9 +54,9 @@ export default function RootLayout({
           position="top-center"
           toastOptions={{
             style: {
-              background: '#1a1a1a',
-              border: '1px solid #262626',
-              color: '#fafafa',
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              color: 'var(--foreground)',
             },
           }}
         />

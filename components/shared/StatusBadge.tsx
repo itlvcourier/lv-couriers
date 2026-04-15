@@ -15,7 +15,10 @@ const statusStyles: Record<DeliveryStatus, string> = {
   picked_up: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
   en_route_dropoff: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   delivered: 'bg-green-500/10 text-green-400 border-green-500/20',
-  failed: 'bg-red-500/10 text-red-400 border-red-500/20',
+  failed_retry: 'bg-red-500/10 text-red-400 border-red-500/20',
+  failed_permanent: 'bg-red-500/10 text-red-400 border-red-500/20',
+  flagged: 'bg-red-500/10 text-red-400 border-red-500/20',
+  cancelled: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
 }
 
 const statusLabels: Record<DeliveryStatus, string> = {
@@ -25,14 +28,17 @@ const statusLabels: Record<DeliveryStatus, string> = {
   picked_up: 'Picked Up',
   en_route_dropoff: 'En Route to Drop-off',
   delivered: 'Delivered',
-  failed: 'Failed',
+  failed_retry: 'Failed',
+  failed_permanent: 'Failed',
+  flagged: 'Flagged',
+  cancelled: 'Cancelled',
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border transition-all duration-200',
+        'inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border transition-all duration-200',
         statusStyles[status],
         className
       )}

@@ -1,134 +1,110 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
+import { useApp } from '@/lib/context'
+import { BottomNav } from '@/components/shared/BottomNav'
 import { AvailableJobs } from './AvailableJobs'
-import { ActiveDeliveries } from './ActiveDeliveries'
+import { ActiveDelivery } from './ActiveDelivery'
 import { DriverHistory } from './DriverHistory'
-import { Package, Truck, Clock, LogOut } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
-import { Spinner } from '@/components/ui/spinner'
+import { DriverSettings } from './DriverSettings'
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { FolderOpen, Package, Clock, Settings, LogOut } from 'lucide-react'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
-  const [driverId, setDriverId] = useState<string>('')
-  const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const { currentUser, logout, deliveries } = useApp()
 
-  useEffect(() => {
-    const getDriver = async () => {
-      try {
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          setDriverId(user.id)
-        }
-      } catch (err) {
-        console.error('Error getting driver:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    getDriver()
-  }, [])
+  // Get driver's available and active job counts
+  const driverId = currentUser?.driverId || ''
+  const availableJobs = deliveries.filter(d => d.status === 'posted')
+  const activeJobs = deliveries.filter(
+    d => d.driverId === driverId && !['delivered', 'failed_permanent', 'cancelled'].includes(d.status)
+  )
 
-  const handleSignOut = async () => {
-    try {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_id')
-      localStorage.removeItem('user_role')
-      const supabase = createClient()
-      await supabase.auth.signOut()
-      router.push('/auth/login')
-    } catch (err) {
-      console.error('Sign out error:', err)
-    }
+  const handleSignOut = () => {
+    logout()
+    router.push('/login')
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-accent/20 flex items-center justify-center">
-            <Truck className="w-8 h-8 text-accent animate-pulse" />
-          </div>
-          <Spinner className="w-6 h-6 text-accent" />
-        </div>
-      </div>
-    )
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase()
   }
+
+  const navItems = [
+    { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
+    { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
+    { id: 'history', label: 'History', icon: Clock },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ]
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[var(--bg-primary)] pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card/95 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
-                <Truck className="w-5 h-5 text-accent-foreground" />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="font-semibold text-foreground">LV Couriers</h1>
-                <p className="text-xs text-muted-foreground">Driver Portal</p>
-              </div>
-            </div>
-            <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </Button>
+      <header className="sticky top-0 z-50 bg-[var(--bg-card)] border-b border-[var(--border-color)]">
+        <div className="flex items-center justify-between h-14 px-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
           </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 tap-target">
+                <span className="text-sm text-foreground hidden sm:block">{currentUser?.name}</span>
+                <div className="w-9 h-9 rounded-full bg-[var(--accent-orange)] flex items-center justify-center">
+                  <span className="text-sm font-semibold text-white">
+                    {getInitials(currentUser?.name || 'D')}
+                  </span>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-[var(--bg-card)] border-[var(--border-color)]">
+              <div className="px-3 py-2">
+                <p className="text-sm font-medium text-foreground">{currentUser?.name}</p>
+                <p className="text-xs text-muted-foreground">Driver</p>
+              </div>
+              <DropdownMenuSeparator className="bg-[var(--border-color)]" />
+              <DropdownMenuItem 
+                onClick={handleSignOut}
+                className="text-[var(--accent-red)] focus:text-[var(--accent-red)] cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
-      {/* Tabs Navigation */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="sticky top-16 z-40 bg-card/95 backdrop-blur border-b border-border">
-          <div className="max-w-7xl mx-auto">
-            <TabsList className="w-full h-12 rounded-none bg-transparent p-0 grid grid-cols-3 max-w-lg mx-auto">
-              <TabsTrigger 
-                value="available" 
-                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent flex items-center justify-center gap-2 transition-colors"
-              >
-                <Package className="w-4 h-4" />
-                <span className="font-medium hidden sm:inline">Available</span>
-                <span className="font-medium sm:hidden">Jobs</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="active" 
-                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent flex items-center justify-center gap-2 transition-colors"
-              >
-                <Truck className="w-4 h-4" />
-                <span className="font-medium">Active</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="history" 
-                className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent flex items-center justify-center gap-2 transition-colors"
-              >
-                <Clock className="w-4 h-4" />
-                <span className="font-medium">History</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
-        </div>
+      {/* Content */}
+      <main className="px-4 py-4">
+        {activeTab === 'available' && (
+          <AvailableJobs onJobClaimed={() => setActiveTab('active')} />
+        )}
+        {activeTab === 'active' && (
+          <ActiveDelivery />
+        )}
+        {activeTab === 'history' && (
+          <DriverHistory />
+        )}
+        {activeTab === 'settings' && (
+          <DriverSettings />
+        )}
+      </main>
 
-        {/* Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <TabsContent value="available" className="mt-0">
-            <AvailableJobs driverId={driverId} onJobClaimed={() => setActiveTab('active')} />
-          </TabsContent>
-          
-          <TabsContent value="active" className="mt-0">
-            <ActiveDeliveries driverId={driverId} />
-          </TabsContent>
-          
-          <TabsContent value="history" className="mt-0">
-            <DriverHistory driverId={driverId} />
-          </TabsContent>
-        </div>
-      </Tabs>
+      {/* Bottom Navigation */}
+      <BottomNav 
+        items={navItems}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
     </div>
   )
 }

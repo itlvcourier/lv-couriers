@@ -1,154 +1,203 @@
-// Delivery status progression
+// DOMS - Delivery Operations Management System Types
+
 export type DeliveryStatus =
   | 'posted'
   | 'claimed'
-  | 'in_transit'
+  | 'en_route_pickup'
+  | 'picked_up'
+  | 'en_route_dropoff'
   | 'delivered'
-  | 'failed'
+  | 'failed_retry'
+  | 'failed_permanent'
+  | 'flagged'
+  | 'cancelled'
 
-export type PackageSize = 'small' | 'medium' | 'large'
+export type ManifestItemType = 'small_package' | 'big_package' | 'out_of_town' | 'rush'
 
-export type Priority = 'standard' | 'rush'
+export type DriverStatus = 'available' | 'on_delivery' | 'off_duty'
 
-export type DriverStatus = 'available' | 'on_delivery' | 'offline'
+export type UserRole = 'admin' | 'driver' | 'business'
 
-export type UserRole = 'driver' | 'business' | 'admin'
+export type InviteStatus = 'active' | 'pending' | 'deactivated'
 
-export type VehicleType = 'car' | 'van' | 'bike' | 'truck'
+export interface MockUser {
+  email: string
+  password: string
+  role: UserRole
+  name: string
+  driverId?: string
+  businessId?: string
+  locationId?: string
+}
 
-// Database types matching Supabase schema
-export interface DbBusiness {
+export interface Driver {
   id: string
-  user_id: string | null
+  name: string
+  phone: string
+  email: string
+  status: DriverStatus
+  maxJobsOverride: number | null
+  totalDeliveries: number
+  todayDeliveries: number
+  monthDeliveries: number
+  averageTime: string
+  rushSlaRate: number
+  monthlyAdjustments: number
+  inviteStatus: InviteStatus
+}
+
+export interface SavedAddress {
+  id: string
+  label: string
+  address: string
+  area: string
+  postalCode: string
+  phone?: string
+}
+
+export interface BusinessLocation {
+  id: string
+  businessId: string
   name: string
   address: string
-  phone: string | null
-  email: string | null
-  logo_url: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface DbDriver {
-  id: string
-  user_id: string | null
-  name: string
-  email: string | null
-  phone: string | null
-  avatar: string | null
-  status: DriverStatus
-  vehicle_type: VehicleType
-  license_plate: string | null
-  total_deliveries: number
-  today_deliveries: number
-  rating: number
-  created_at: string
-  updated_at: string
-}
-
-export interface DbDelivery {
-  id: string
-  business_id: string
-  driver_id: string | null
-  bundle_id: string | null
-  pickup_address: string
-  pickup_contact: string
-  pickup_phone: string | null
-  pickup_notes: string | null
-  pickup_lat: number | null
-  pickup_lng: number | null
-  dropoff_address: string
-  dropoff_contact: string
-  dropoff_phone: string | null
-  dropoff_notes: string | null
-  dropoff_lat: number | null
-  dropoff_lng: number | null
-  package_size: PackageSize
-  package_description: string | null
-  payout: number
-  distance: string | null
-  status: DeliveryStatus
-  priority: Priority
-  posted_at: string
-  claimed_at: string | null
-  picked_up_at: string | null
-  delivered_at: string | null
-  duration: string | null
-  proof_photo_url: string | null
-  fail_reason: string | null
-  created_at: string
-  updated_at: string
-  // Joined fields
-  business?: DbBusiness
-  driver?: DbDriver
-}
-
-export interface DbStatusHistory {
-  id: string
-  delivery_id: string
-  status: DeliveryStatus
-  note: string | null
-  timestamp: string
-}
-
-export interface DbActivityEvent {
-  id: string
-  delivery_id: string
-  driver_id: string | null
-  business_id: string | null
-  driver_name: string | null
-  business_name: string | null
-  action: string
-  status: DeliveryStatus
-  created_at: string
-}
-
-export interface DbDriverLocation {
-  id: string
-  driver_id: string
-  delivery_id: string | null
-  latitude: number
-  longitude: number
-  heading: number | null
-  speed: number | null
-  updated_at: string
-}
-
-// Form types
-export interface NewDeliveryForm {
-  pickup_address: string
-  pickup_contact: string
-  pickup_phone: string
-  pickup_notes: string
-  dropoff_address: string
-  dropoff_contact: string
-  dropoff_phone: string
-  dropoff_notes: string
-  package_size: PackageSize
-  package_description: string
-  payout: number
-  priority: Priority
-}
-
-export interface InviteDriverForm {
-  name: string
-  email: string
+  billingEmail: string
+  backupEmail: string
+  contactName: string
   phone: string
-  vehicle_type: VehicleType
+  savedAddresses: SavedAddress[]
 }
+
+export interface Business {
+  id: string
+  name: string
+  locations: BusinessLocation[]
+  invoiceFormat: 'combined' | 'separate' | 'combined_breakdown'
+  inviteStatus: InviteStatus
+}
+
+export interface ManifestItem {
+  id: string
+  type: ManifestItemType
+  postedQty: number
+  confirmedQty: number | null
+  verificationPhotoUrl: string | null
+  notes: string
+}
+
+export interface PickupVerification {
+  itemId: string
+  confirmedQty: number
+  photoUrl: string | null
+  outOfTown: boolean
+}
+
+export interface DeliveryFlag {
+  id: string
+  type: 'wrong_items' | 'qty_adjusted' | 'location_override' | 'access_issue' | 'other'
+  driverNote: string
+  photoUrl: string | null
+  status: 'open' | 'resolved'
+  resolution: string | null
+  createdAt: string
+}
+
+export interface StatusEvent {
+  status: DeliveryStatus
+  timestamp: string
+  note: string | null
+  gpsLat: number | null
+  gpsLng: number | null
+}
+
+export interface Delivery {
+  id: string
+  businessId: string
+  locationId: string
+  businessName: string
+  driverId: string | null
+  driverName: string | null
+  pickupAddress: string
+  pickupArea: string
+  dropoffAddress: string
+  dropoffArea: string
+  recipientPhone: string | null
+  manifest: ManifestItem[]
+  isUrgent: boolean
+  isOutOfTown: boolean
+  status: DeliveryStatus
+  postedAt: string
+  claimedAt: string | null
+  pickedUpAt: string | null
+  deliveredAt: string | null
+  duration: string | null
+  proofPhotoUrl: string | null
+  recipientNote: string | null
+  calculatedRate: number | null
+  flags: DeliveryFlag[]
+  verifications: PickupVerification[]
+  statusHistory: StatusEvent[]
+  trackingCode: string | null
+  tripId: string | null
+  retryCount: number
+}
+
+export interface SystemSettings {
+  globalMaxJobs: number
+  rushSlaMins: number
+  intownTimeoutMins: number
+  outOfTownTimeoutMins: number
+  autoGenerateInvoices: boolean
+  invoiceDueDays: number
+  autoSendInvoices: boolean
+  reminderDay1: number
+  overdueDay: number
+  escalationDay: number
+  cancellationBeforeDepart: number
+  cancellationEnRoute: number
+}
+
+export interface Notification {
+  id: string
+  type: 'flag' | 'timeout' | 'deactivation' | 'rate_card' | 'email_bounce' | 'qty_mismatch'
+  title: string
+  message: string
+  deliveryId?: string
+  driverId?: string
+  businessId?: string
+  createdAt: string
+  read: boolean
+}
+
+export type FlagType = DeliveryFlag['type']
 
 export type FailReason =
-  | 'No one home'
-  | 'Wrong address'
-  | 'Package refused'
-  | 'Unable to access location'
-  | 'Other'
+  | 'no_one_home'
+  | 'wrong_address'
+  | 'package_refused'
+  | 'access_issue'
+  | 'other'
 
-// Bundle type for grouped deliveries
-export interface DeliveryBundle {
-  bundle_id: string
-  pickup_address: string
-  business_name: string
-  deliveries: DbDelivery[]
-  total_payout: number
+// Calgary mock addresses for autocomplete
+export const CALGARY_ADDRESSES = [
+  { address: '3009 14 St SW, Calgary, AB', area: 'Beltline', postalCode: 'T2T 3V6' },
+  { address: '1111 Centre St N, Calgary, AB', area: 'Crescent Heights', postalCode: 'T2E 2R2' },
+  { address: '7015 Macleod Trail SW, Calgary, AB', area: 'Chinook', postalCode: 'T2H 2K6' },
+  { address: '4820 Northland Dr NW, Calgary, AB', area: 'Dalhousie', postalCode: 'T2L 2L4' },
+  { address: '250 Shawville Blvd SE, Calgary, AB', area: 'Shawnessy', postalCode: 'T2Y 3Z1' },
+  { address: '901 64 Ave NE, Calgary, AB', area: 'Marlborough', postalCode: 'T2E 7P4' },
+  { address: '5149 Country Hills Blvd NW, Calgary, AB', area: 'Country Hills', postalCode: 'T3A 5K8' },
+  { address: '2525 36 St NE, Calgary, AB', area: 'Franklin', postalCode: 'T1Y 5T4' },
+  { address: '8180 11 St SE, Calgary, AB', area: 'Shepard', postalCode: 'T2H 2S9' },
+  { address: '130 Crowfoot Crescent NW, Calgary, AB', area: 'Crowfoot', postalCode: 'T3G 3P5' },
+]
+
+// Rate calculations
+export const RATES = {
+  regular: 9,
+  bigPackage1: 9,
+  bigPackage2Plus: 18,
+  rush: 20,
+  rushOutOfTown: 30,
+  outOfTown: 15,
+  gst: 0.05,
 }
