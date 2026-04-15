@@ -5,6 +5,7 @@ import { useApp } from '@/lib/context'
 import { StatCard } from '@/components/shared/StatCard'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ActivityFeed } from '@/components/shared/ActivityFeed'
+import { LiveDriversMap } from './LiveDriversMap'
 import { Package, Truck, CheckCircle2, Users, Clock, AlertCircle } from 'lucide-react'
 import { getTimeElapsed, isCompletedStatus } from '@/lib/delivery-utils'
 import { cn } from '@/lib/utils'
@@ -71,6 +72,9 @@ export function Dashboard({ onViewDelivery }: DashboardProps) {
           iconColor="text-purple-500"
         />
       </div>
+
+      {/* Live Drivers Map */}
+      <LiveDriversMap />
 
       {/* Two column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

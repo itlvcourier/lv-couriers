@@ -1,24 +1,44 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { useApp, type ActivityEvent } from '@/lib/context'
+import { useApp } from '@/lib/context'
 import { formatRelativeTime } from '@/lib/delivery-utils'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
+import { 
+  MapPin, 
+  Smartphone, 
+  Battery, 
+  Clock, 
+  Mail, 
+  Eye, 
+  Package, 
+  CheckCircle 
+} from 'lucide-react'
+import type { ActivityFeedItem } from '@/lib/types'
 
 interface ActivityFeedProps {
   maxItems?: number
   className?: string
 }
 
-const statusColors: Record<string, string> = {
-  posted: 'bg-gray-500',
-  claimed: 'bg-blue-500',
-  en_route_pickup: 'bg-yellow-500',
-  picked_up: 'bg-orange-500',
-  en_route_dropoff: 'bg-purple-500',
-  delivered: 'bg-green-500',
-  failed: 'bg-red-500',
+const typeColors: Record<ActivityFeedItem['type'], string> = {
+  status_change: 'bg-blue-500/20 text-blue-400',
+  gps_update: 'bg-orange-500/20 text-orange-400',
+  sms_sent: 'bg-green-500/20 text-green-400',
+  battery_warning: 'bg-yellow-500/20 text-yellow-400',
+  timeout_warning: 'bg-red-500/20 text-red-400',
+  email_bounced: 'bg-red-500/20 text-red-400',
+  tracking_opened: 'bg-purple-500/20 text-purple-400',
+}
+
+const typeIcons: Record<ActivityFeedItem['type'], React.ElementType> = {
+  status_change: Package,
+  gps_update: MapPin,
+  sms_sent: Smartphone,
+  battery_warning: Battery,
+  timeout_warning: Clock,
+  email_bounced: Mail,
+  tracking_opened: Eye,
 }
 
 export function ActivityFeed({ maxItems = 10, className }: ActivityFeedProps) {
@@ -35,28 +55,29 @@ export function ActivityFeed({ maxItems = 10, className }: ActivityFeedProps) {
 
   return (
     <div className={cn('space-y-0', className)}>
-      {items.map((event, index) => (
-        <div key={event.id}>
-          <div className="flex items-start gap-3 py-3">
-            <Avatar className="w-8 h-8 flex-shrink-0">
-              <AvatarFallback className={cn('text-xs text-white', statusColors[event.status])}>
-                {event.driverAvatar || '?'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-[#e8eaf0]">
-                <span className="font-medium">{event.driverName || 'System'}</span>
-                {' '}{event.action}{' '}
-                <span className="text-[#6b7280]">{event.businessName}</span>
-              </p>
-              <p className="text-xs text-[#6b7280] mt-0.5">
-                {formatRelativeTime(event.timestamp)}
-              </p>
+      {items.map((event, index) => {
+        const Icon = typeIcons[event.type] || Package
+        const colorClass = typeColors[event.type] || 'bg-gray-500/20 text-gray-400'
+        
+        return (
+          <div key={event.id}>
+            <div className="flex items-start gap-3 py-3">
+              <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0', colorClass)}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-[#e8eaf0]">
+                  {event.message}
+                </p>
+                <p className="text-xs text-[#6b7280] mt-0.5">
+                  {formatRelativeTime(event.timestamp)}
+                </p>
+              </div>
             </div>
+            {index < items.length - 1 && <Separator className="bg-[#1f2535]" />}
           </div>
-          {index < items.length - 1 && <Separator className="bg-[#1f2535]" />}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

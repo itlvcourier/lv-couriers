@@ -1,6 +1,6 @@
 'use client'
 
-import { X, MapPin, Flag, Phone, ExternalLink, Package } from 'lucide-react'
+import { X, MapPin, Flag, Phone, ExternalLink, Package, Copy, Link } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Delivery } from '@/lib/types'
 import { StatusBadge } from './StatusBadge'
@@ -110,6 +110,33 @@ export function DeliveryDetailPanel({ delivery, open, onClose }: DeliveryDetailP
               <p className="text-sm text-[#e8eaf0] italic bg-[#1a1e2a] rounded-xl p-3">
                 {delivery.notes}
               </p>
+            </div>
+          )}
+
+          {/* Tracking Link - show after pickup */}
+          {delivery.trackingCode && (
+            <div>
+              <h4 className="text-sm font-medium text-[#6b7280] mb-2">Tracking Link</h4>
+              <div className="bg-[#1a1e2a] rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Link className="w-4 h-4 text-orange-400" />
+                  <span className="text-sm font-mono text-[#e8eaf0]">
+                    lvcourier.ca/track/{delivery.trackingCode}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`lvcourier.ca/track/${delivery.trackingCode}`)
+                    toast.success('Link copied to clipboard')
+                  }}
+                  className="h-8 text-xs border-[#1f2535] hover:bg-[#1f2535] text-[#e8eaf0]"
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  Copy Link
+                </Button>
+              </div>
             </div>
           )}
 

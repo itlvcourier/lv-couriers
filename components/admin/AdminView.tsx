@@ -11,6 +11,8 @@ import { AdminOrders } from './AdminOrders'
 import { AdminRateCards } from './AdminRateCards'
 import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
+import { AdminCommunications } from './AdminCommunications'
+import { NotificationCenter } from './NotificationCenter'
 import { cn } from '@/lib/utils'
 import { 
   LayoutDashboard, 
@@ -24,10 +26,11 @@ import {
   Shield,
   Menu,
   X,
-  Bell
+  Bell,
+  MessageSquare
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'settings'
+type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'settings'
 
 const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -36,6 +39,7 @@ const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Orders', icon: Package },
   { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
   { id: 'invoices', label: 'Invoices', icon: FileText },
+  { id: 'communications', label: 'Communications', icon: MessageSquare },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -59,6 +63,7 @@ export function AdminView() {
       case 'orders': return <AdminOrders />
       case 'rate_cards': return <AdminRateCards />
       case 'invoices': return <AdminInvoices />
+      case 'communications': return <AdminCommunications />
       case 'settings': return <AdminSettings />
       default: return <AdminDashboard />
     }
@@ -162,10 +167,7 @@ export function AdminView() {
             <h2 className="text-lg font-semibold capitalize">{activePage}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-            </Button>
+            <NotificationCenter />
             <Avatar className="w-9 h-9 lg:hidden">
               <AvatarImage src={admin?.avatar} />
               <AvatarFallback className="bg-primary/10 text-primary text-sm">

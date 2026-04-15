@@ -305,3 +305,87 @@ export interface PaymentDetails {
   reference: string
   amountReceived: number
 }
+
+// ===== PHASE 3: LIVE TRACKING & NOTIFICATIONS TYPES =====
+
+export type SMSType = 
+  | 'pickup_alert' 
+  | 'tracking_link' 
+  | 'delivery_confirm' 
+  | 'failed_attempt' 
+  | 'invoice_reminder' 
+  | 'overdue_notice'
+
+export type SMSStatus = 'sent' | 'delivered' | 'failed' | 'bounced'
+
+export interface SMSLogEntry {
+  id: string
+  deliveryId: string | null
+  invoiceId: string | null
+  recipientName: string
+  recipientPhone: string
+  type: SMSType
+  message: string
+  status: SMSStatus
+  sentAt: string
+  deliveredAt: string | null
+  errorMessage: string | null
+}
+
+export type AdminNotificationType = 
+  | 'flag' 
+  | 'timeout' 
+  | 'delivery_complete' 
+  | 'unclaimed_rush' 
+  | 'invoice_overdue' 
+  | 'qty_adjusted'
+  | 'driver_deactivated'
+  | 'tracking_opened'
+  | 'low_battery'
+  | 'email_bounced'
+
+export interface AdminNotification {
+  id: string
+  type: AdminNotificationType
+  title: string
+  message: string
+  deliveryId: string | null
+  driverId: string | null
+  businessId: string | null
+  invoiceId: string | null
+  createdAt: string
+  read: boolean
+  priority: 'high' | 'medium' | 'low'
+}
+
+export interface DriverGPS {
+  driverId: string
+  lat: number
+  lng: number
+  heading: number
+  speed: number
+  battery: number
+  lastUpdate: string
+}
+
+export interface NotificationSettings {
+  driverAssigned: { email: boolean; sms: boolean }
+  pickupConfirmed: { email: boolean; sms: boolean }
+  enRouteDropoff: { email: boolean; sms: boolean }
+  deliveryConfirmed: { email: boolean; sms: boolean }
+  failedDelivery: { email: boolean; sms: boolean }
+  invoiceSent: { email: boolean; sms: boolean }
+  paymentReminder: { email: boolean; sms: boolean }
+  sendTrackingLink: boolean
+}
+
+export interface ActivityFeedItem {
+  id: string
+  type: 'status_change' | 'gps_update' | 'sms_sent' | 'battery_warning' | 'timeout_warning' | 'email_bounced' | 'tracking_opened'
+  message: string
+  icon: string
+  deliveryId: string | null
+  driverId: string | null
+  businessId: string | null
+  timestamp: string
+}

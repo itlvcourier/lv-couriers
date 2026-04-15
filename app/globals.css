@@ -169,3 +169,26 @@
 .status-failed_permanent { @apply bg-red-500/10 text-red-400 border-red-500/20; }
 .status-flagged { @apply bg-red-500/10 text-red-400 border-red-500/20; }
 .status-cancelled { @apply bg-gray-500/10 text-gray-400 border-gray-500/20; }
+
+/* Driver tracking animation */
+@keyframes driver-move {
+  0% {
+    transform: translate(120px, 100px);
+  }
+  25% {
+    transform: translate(180px, 130px);
+  }
+  50% {
+    transform: translate(220px, 160px);
+  }
+  75% {
+    transform: translate(260px, 190px);
+  }
+  100% {
+    transform: translate(285px, 210px);
+  }
+}
+
+.animate-driver-move {
+  animation: driver-move 8s ease-in-out infinite alternate;
+}

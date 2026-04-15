@@ -19,6 +19,10 @@ import type {
   UnmatchedPayment,
   PaymentDetails,
   InvoiceLine,
+  SMSLogEntry,
+  AdminNotification,
+  DriverGPS,
+  ActivityFeedItem,
 } from './types'
 import {
   mockUsers,
@@ -30,6 +34,10 @@ import {
   initialInvoices,
   initialDisputes,
   initialUnmatchedPayments,
+  initialSMSLog,
+  initialAdminNotifications,
+  initialDriverGPS,
+  initialActivityFeed,
 } from './data'
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber } from './billing'
 
@@ -90,6 +98,18 @@ interface AppContextType {
   resolveDispute: (disputeId: string, action: 'accept' | 'reject', adminNote: string, creditAmount?: number) => void
   matchPayment: (paymentId: string, invoiceId: string) => void
   
+  // Phase 3: Tracking & Notifications
+  smsLog: SMSLogEntry[]
+  adminNotifications: AdminNotification[]
+  driverGPS: DriverGPS[]
+  activityFeed: ActivityFeedItem[]
+  generateTrackingLink: (deliveryId: string) => string
+  sendTrackingSMS: (deliveryId: string, recipientPhone: string) => void
+  markAdminNotificationRead: (notificationId: string) => void
+  markAllAdminNotificationsRead: () => void
+  retrySMS: (smsLogId: string) => void
+  getDeliveryByTrackingCode: (code: string) => Delivery | null
+  
   // Helpers
   getDriverActiveJobs: (driverId: string) => number
   getDriverMaxJobs: (driverId: string) => number
@@ -111,6 +131,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices)
   const [disputes, setDisputes] = useState<Dispute[]>(initialDisputes)
   const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPayment[]>(initialUnmatchedPayments)
+  const [smsLog, setSMSLog] = useState<SMSLogEntry[]>(initialSMSLog)
+  const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>(initialAdminNotifications)
+  const [driverGPS, setDriverGPS] = useState<DriverGPS[]>(initialDriverGPS)
+  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>(initialActivityFeed)
 
   // Auth functions
   const login = useCallback((email: string, password: string) => {
@@ -801,6 +825,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [unmatchedPayments, markInvoicePaid])
 
+  // Phase 3: Tracking & Notification functions
+  const generateTrackingLink = useCallback((deliveryId: string): string => {
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (delivery?.trackingCode) {
+      return delivery.trackingCode
+    }
+    // Generate a new tracking code
+    const code = `LVC-${deliveryId.split('-')[1]}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+    setDeliveries(prev => prev.map(d => {
+      if (d.id === deliveryId) {
+        return { ...d, trackingCode: code }
+      }
+      return d
+    }))
+    return code
+  }, [deliveries])
+
+  const sendTrackingSMS = useCallback((deliveryId: string, recipientPhone: string) => {
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (!delivery) return
+
+    const trackingCode = delivery.trackingCode || generateTrackingLink(deliveryId)
+    
+    const newSMS: SMSLogEntry = {
+      id: `sms-${Date.now()}`,
+      deliveryId,
+      invoiceId: null,
+      recipientName: 'Recipient',
+      recipientPhone,
+      type: 'tracking_link',
+      message: `Your LV Courier delivery is on the way! Track: lvcourier.ca/track/${trackingCode}`,
+      status: 'sent',
+      sentAt: new Date().toISOString(),
+      deliveredAt: null,
+      errorMessage: null,
+    }
+    
+    setSMSLog(prev => [newSMS, ...prev])
+
+    // Add to activity feed
+    const feedItem: ActivityFeedItem = {
+      id: `feed-${Date.now()}`,
+      type: 'sms_sent',
+      message: `Tracking SMS sent to ${recipientPhone}`,
+      icon: 'smartphone',
+      deliveryId,
+      driverId: null,
+      businessId: null,
+      timestamp: new Date().toISOString(),
+    }
+    setActivityFeed(prev => [feedItem, ...prev])
+  }, [deliveries, generateTrackingLink])
+
+  const markAdminNotificationRead = useCallback((notificationId: string) => {
+    setAdminNotifications(prev => prev.map(n => {
+      if (n.id === notificationId) {
+        return { ...n, read: true }
+      }
+      return n
+    }))
+  }, [])
+
+  const markAllAdminNotificationsRead = useCallback(() => {
+    setAdminNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }, [])
+
+  const retrySMS = useCallback((smsLogId: string) => {
+    setSMSLog(prev => prev.map(sms => {
+      if (sms.id === smsLogId) {
+        return {
+          ...sms,
+          status: 'sent' as const,
+          sentAt: new Date().toISOString(),
+          errorMessage: null,
+        }
+      }
+      return sms
+    }))
+  }, [])
+
+  const getDeliveryByTrackingCode = useCallback((code: string): Delivery | null => {
+    return deliveries.find(d => d.trackingCode === code) || null
+  }, [deliveries])
+
   return (
     <AppContext.Provider
       value={{
@@ -842,6 +950,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         disputeLineItem,
         resolveDispute,
         matchPayment,
+        smsLog,
+        adminNotifications,
+        driverGPS,
+        activityFeed,
+        generateTrackingLink,
+        sendTrackingSMS,
+        markAdminNotificationRead,
+        markAllAdminNotificationsRead,
+        retrySMS,
+        getDeliveryByTrackingCode,
         getDriverActiveJobs,
         getDriverMaxJobs,
         canDriverClaimJob,

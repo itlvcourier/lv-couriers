@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { X, Package, Camera, AlertCircle } from 'lucide-react'
+import { X, Package, Camera, AlertCircle, CheckCircle, Copy, Navigation } from 'lucide-react'
 import type { Delivery, PickupVerification as VerificationType } from '@/lib/types'
 
 interface PickupVerificationProps {
@@ -16,7 +16,9 @@ interface PickupVerificationProps {
 }
 
 export function PickupVerification({ delivery, onClose }: PickupVerificationProps) {
-  const { verifyPickup } = useApp()
+  const { verifyPickup, generateTrackingLink, sendTrackingSMS } = useApp()
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [trackingCode, setTrackingCode] = useState<string | null>(null)
   const [verifications, setVerifications] = useState<Record<string, { qty: number; photo: string | null; outOfTown: boolean }>>(
     () => {
       const initial: Record<string, { qty: number; photo: string | null; outOfTown: boolean }> = {}
@@ -68,7 +70,29 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     }))
 
     verifyPickup(delivery.id, pickupVerifications)
-    toast.success('Pickup verified successfully')
+    
+    // Generate tracking link and show confirmation
+    const code = generateTrackingLink(delivery.id)
+    setTrackingCode(code)
+    
+    // Send SMS if recipient phone exists
+    if (delivery.recipientPhone) {
+      sendTrackingSMS(delivery.id, delivery.recipientPhone)
+    }
+    
+    setShowConfirmation(true)
+  }
+  
+  const handleCopyLink = () => {
+    if (trackingCode) {
+      navigator.clipboard.writeText(`lvcourier.ca/track/${trackingCode}`)
+      toast.success('Link copied to clipboard')
+    }
+  }
+  
+  const handleOpenMaps = () => {
+    const encoded = encodeURIComponent(delivery.dropoffAddress)
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank')
     onClose()
   }
 
@@ -78,6 +102,53 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     if (item.type === 'big_package' && !v?.photo) return false
     return v?.qty !== undefined && v.qty >= 0
   })
+
+  // Show confirmation screen after pickup verified
+  if (showConfirmation) {
+    return (
+      <Sheet open onOpenChange={onClose}>
+        <SheetContent side="bottom" className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl">
+          <div className="py-8 text-center">
+            {/* Success icon */}
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[var(--accent-green)]/10 flex items-center justify-center">
+              <CheckCircle className="w-10 h-10 text-[var(--accent-green)]" />
+            </div>
+            
+            <h2 className="text-xl font-semibold text-foreground mb-2">Pickup Confirmed!</h2>
+            <p className="text-muted-foreground mb-6">
+              {delivery.recipientPhone ? 'Tracking link sent to recipient' : 'Tracking link generated'}
+            </p>
+            
+            {/* Tracking link */}
+            {trackingCode && (
+              <div className="mb-6 p-4 rounded-xl bg-[var(--bg-card-2)] border border-[var(--border-color)]">
+                <p className="text-xs text-muted-foreground mb-2">Tracking Link</p>
+                <p className="text-sm font-mono text-foreground mb-3">lvcourier.ca/track/{trackingCode}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyLink}
+                  className="gap-2 border-[var(--border-color)]"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Link
+                </Button>
+              </div>
+            )}
+            
+            {/* Open Maps button */}
+            <Button
+              onClick={handleOpenMaps}
+              className="w-full h-12 rounded-xl tap-target bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white font-medium"
+            >
+              <Navigation className="w-4 h-4 mr-2" />
+              Open Maps to Drop-off
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    )
+  }
 
   return (
     <Sheet open onOpenChange={onClose}>

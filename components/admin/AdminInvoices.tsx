@@ -420,37 +420,55 @@ function InvoiceDetail({
         </Card>
       )}
 
-      {/* Email Log */}
+      {/* Email Log Timeline */}
       <Card className="bg-muted/30">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Mail className="h-4 w-4" />
-            Email Log
+            Email Activity Timeline
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {invoice.emailLog.map(event => (
-              <div key={event.id} className="flex items-start gap-3 text-sm">
-                <EmailEventIcon type={event.type} />
-                <div>
-                  <p>
-                    {event.type === 'generated' && 'Generated'}
-                    {event.type === 'sent' && `Sent to ${event.email}`}
-                    {event.type === 'opened' && 'Opened'}
-                    {event.type === 'reminder' && event.note}
-                    {event.type === 'due_reminder' && event.note}
-                    {event.type === 'overdue' && 'Overdue notice sent'}
-                    {event.type === 'escalated' && 'ESCALATED'}
-                    {event.type === 'bounced' && 'Bounced'}
-                    {event.type === 'resent' && 'Resent'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(event.timestamp).toLocaleString()}
-                  </p>
+          <div className="relative pl-6 space-y-4">
+            {/* Vertical line */}
+            <div className="absolute left-2 top-2 bottom-2 w-px bg-border" />
+            
+            {invoice.emailLog.map((event, index) => {
+              const isBounced = event.type === 'bounced'
+              const eventLabel = getEventLabel(event)
+              
+              return (
+                <div key={event.id} className="relative flex items-start gap-3">
+                  {/* Timeline dot */}
+                  <div className="absolute -left-6 mt-1">
+                    <EmailEventIcon type={event.type} />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${isBounced ? 'text-red-400' : 'text-foreground'}`}>
+                      {eventLabel}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatEmailTimestamp(event.timestamp)}
+                    </p>
+                    
+                    {/* Bounced email action */}
+                    {isBounced && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          placeholder="Enter new email address"
+                          className="h-8 text-xs max-w-[200px]"
+                        />
+                        <Button variant="outline" size="sm" className="h-8 text-xs">
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Resend
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </CardContent>
       </Card>
