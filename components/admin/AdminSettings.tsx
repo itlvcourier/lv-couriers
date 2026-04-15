@@ -8,89 +8,314 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { toast } from 'sonner'
 import { 
-  User,
-  Mail,
-  Phone,
   Shield,
   Bell,
   Moon,
   Lock,
-  Database,
-  RefreshCw,
-  Trash2,
-  LogOut
+  LogOut,
+  Clock,
+  Users,
+  Zap,
+  X,
+  Save,
 } from 'lucide-react'
 
 export function AdminSettings() {
-  const { currentUser, admins, logout } = useApp()
-  const [isEditing, setIsEditing] = useState(false)
+  const { currentUser, logout, settings, updateSettings, drivers, updateDriverCapacity } = useApp()
   
-  const admin = admins.find(a => a.id === currentUser?.id)
+  const [localSettings, setLocalSettings] = useState({
+    globalMaxJobs: settings.globalMaxJobs,
+    rushSlaMins: settings.rushSlaMins,
+    intownTimeoutMins: settings.intownTimeoutMins,
+    outOfTownTimeoutMins: settings.outOfTownTimeoutMins,
+    invoiceDueDays: settings.invoiceDueDays,
+    reminderDay1: settings.reminderDay1,
+    overdueDay: settings.overdueDay,
+    escalationDay: settings.escalationDay,
+    autoGenerateInvoices: settings.autoGenerateInvoices,
+    autoSendInvoices: settings.autoSendInvoices,
+  })
+  
+  const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>(() => {
+    const overrides: Record<string, string> = {}
+    drivers.forEach(d => {
+      overrides[d.id] = d.maxJobsOverride?.toString() || ''
+    })
+    return overrides
+  })
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const handleSaveSettings = () => {
+    updateSettings(localSettings)
+    toast.success('Settings saved')
+  }
+  
+  const handleSaveCapacity = () => {
+    drivers.forEach(d => {
+      const override = driverOverrides[d.id]
+      const value = override === '' ? null : parseInt(override)
+      if (value !== d.maxJobsOverride) {
+        updateDriverCapacity(d.id, value)
+      }
+    })
+    toast.success('Capacity settings saved')
+  }
+  
+  const clearOverride = (driverId: string) => {
+    setDriverOverrides(prev => ({ ...prev, [driverId]: '' }))
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Profile Section */}
-      <Card>
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Driver Capacity Section */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
-          <CardTitle className="text-lg">Profile</CardTitle>
-          <CardDescription>Your admin account information</CardDescription>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Users className="w-5 h-5" />
+            Driver Capacity
+          </CardTitle>
+          <CardDescription>Configure maximum concurrent jobs per driver</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Avatar className="w-20 h-20">
-              <AvatarImage src={admin?.avatar} />
-              <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                {admin?.name ? getInitials(admin.name) : 'A'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold">{admin?.name || 'Admin'}</h3>
-              <p className="text-sm text-muted-foreground">{admin?.email}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant="default" className="bg-primary">
-                  <Shield className="w-3 h-3 mr-1" />
-                  {admin?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                </Badge>
-              </div>
+          {/* Global Max */}
+          <div className="space-y-2">
+            <Label className="text-foreground">Global Max Jobs</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={localSettings.globalMaxJobs}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, globalMaxJobs: parseInt(e.target.value) || 3 }))}
+                className="w-24 bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+              <span className="text-sm text-muted-foreground">
+                Applies to all drivers unless individually overridden
+              </span>
             </div>
           </div>
-
-          <Separator />
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                <Mail className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p className="text-sm">{admin?.email}</p>
-              </div>
+          
+          <Separator className="bg-[var(--border-color)]" />
+          
+          {/* Per Driver Overrides */}
+          <div className="space-y-3">
+            <Label className="text-foreground">Per Driver Overrides</Label>
+            <div className="rounded-lg border border-[var(--border-color)] overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-[var(--bg-card-2)]">
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Driver</th>
+                    <th className="text-center p-3 text-sm font-medium text-muted-foreground">Global Default</th>
+                    <th className="text-center p-3 text-sm font-medium text-muted-foreground">Override</th>
+                    <th className="text-center p-3 text-sm font-medium text-muted-foreground">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers.map((driver) => (
+                    <tr key={driver.id} className="border-t border-[var(--border-color)]">
+                      <td className="p-3 text-foreground">{driver.name}</td>
+                      <td className="p-3 text-center text-muted-foreground">{localSettings.globalMaxJobs}</td>
+                      <td className="p-3">
+                        <div className="flex items-center justify-center gap-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            max="10"
+                            placeholder="-"
+                            value={driverOverrides[driver.id]}
+                            onChange={(e) => setDriverOverrides(prev => ({ 
+                              ...prev, 
+                              [driver.id]: e.target.value 
+                            }))}
+                            className="w-16 text-center bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                          />
+                          {driverOverrides[driver.id] && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => clearOverride(driver.id)}
+                              className="h-8 w-8"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-center">
+                        <Badge variant="outline" className={driverOverrides[driver.id] ? 'text-[var(--accent-orange)]' : 'text-muted-foreground'}>
+                          {driverOverrides[driver.id] ? 'Custom' : 'Using global'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                <Phone className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground">Phone</p>
-                <p className="text-sm">{admin?.phone || 'Not set'}</p>
-              </div>
+          </div>
+          
+          <Button 
+            onClick={handleSaveCapacity}
+            className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Capacity Settings
+          </Button>
+          
+          <p className="text-xs text-muted-foreground">
+            Changes apply to future claims only. Drivers currently over the new limit keep existing jobs.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Rush SLA & Timeouts */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Zap className="w-5 h-5" />
+            Rush SLA & Timeouts
+          </CardTitle>
+          <CardDescription>Configure time-based alerts and SLA requirements</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-foreground">Rush SLA (mins)</Label>
+              <Input
+                type="number"
+                min="15"
+                max="120"
+                value={localSettings.rushSlaMins}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, rushSlaMins: parseInt(e.target.value) || 45 }))}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+              <p className="text-xs text-muted-foreground">Pickup must occur within this time</p>
             </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">In-Town Timeout (mins)</Label>
+              <Input
+                type="number"
+                min="30"
+                max="300"
+                value={localSettings.intownTimeoutMins}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, intownTimeoutMins: parseInt(e.target.value) || 120 }))}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+              <p className="text-xs text-muted-foreground">Alert after no update</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-foreground">Out of Town Timeout (mins)</Label>
+            <Input
+              type="number"
+              min="60"
+              max="480"
+              value={localSettings.outOfTownTimeoutMins}
+              onChange={(e) => setLocalSettings(prev => ({ ...prev, outOfTownTimeoutMins: parseInt(e.target.value) || 240 }))}
+              className="w-1/2 bg-[var(--bg-card-2)] border-[var(--border-color)]"
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Notifications */}
-      <Card>
+      {/* Invoice Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Clock className="w-5 h-5" />
+            Invoice Settings
+          </CardTitle>
+          <CardDescription>Configure billing automation and reminders</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-foreground">Invoice Due Days</Label>
+              <Input
+                type="number"
+                min="7"
+                max="60"
+                value={localSettings.invoiceDueDays}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceDueDays: parseInt(e.target.value) || 15 }))}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">First Reminder (days before due)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="14"
+                value={localSettings.reminderDay1}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, reminderDay1: parseInt(e.target.value) || 7 }))}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-foreground">Overdue Reminder (days after due)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="30"
+                value={localSettings.overdueDay}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, overdueDay: parseInt(e.target.value) || 7 }))}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">Escalation (days after due)</Label>
+              <Input
+                type="number"
+                min="7"
+                max="60"
+                value={localSettings.escalationDay}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, escalationDay: parseInt(e.target.value) || 14 }))}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+            </div>
+          </div>
+          
+          <Separator className="bg-[var(--border-color)]" />
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Auto-generate Invoices</p>
+              <p className="text-xs text-muted-foreground">Automatically create invoices at month end</p>
+            </div>
+            <Switch 
+              checked={localSettings.autoGenerateInvoices}
+              onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, autoGenerateInvoices: c }))}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Auto-send Invoices</p>
+              <p className="text-xs text-muted-foreground">Automatically email invoices when generated</p>
+            </div>
+            <Switch 
+              checked={localSettings.autoSendInvoices}
+              onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, autoSendInvoices: c }))}
+            />
+          </div>
+          
+          <Button 
+            onClick={handleSaveSettings}
+            className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Settings
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Notifications */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
             <Bell className="w-5 h-5" />
             Notifications
           </CardTitle>
@@ -99,44 +324,24 @@ export function AdminSettings() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">New Order Alerts</p>
-              <p className="text-xs text-muted-foreground">Get notified when new orders are placed</p>
+              <p className="text-sm font-medium text-foreground">Rush Job Alerts</p>
+              <p className="text-xs text-muted-foreground">Get notified when rush jobs are posted</p>
             </div>
             <Switch defaultChecked />
           </div>
-          <Separator />
+          <Separator className="bg-[var(--border-color)]" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Driver Activity</p>
-              <p className="text-xs text-muted-foreground">Updates when drivers go online/offline</p>
+              <p className="text-sm font-medium text-foreground">Timeout Warnings</p>
+              <p className="text-xs text-muted-foreground">Alerts when drivers have no updates</p>
             </div>
             <Switch defaultChecked />
           </div>
-          <Separator />
+          <Separator className="bg-[var(--border-color)]" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">System Alerts</p>
-              <p className="text-xs text-muted-foreground">Important system notifications</p>
-            </div>
-            <Switch defaultChecked />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Appearance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Moon className="w-5 h-5" />
-            Appearance
-          </CardTitle>
-          <CardDescription>Customize the look and feel</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Dark Mode</p>
-              <p className="text-xs text-muted-foreground">Use dark theme</p>
+              <p className="text-sm font-medium text-foreground">Flag Notifications</p>
+              <p className="text-xs text-muted-foreground">Alerts when drivers raise flags</p>
             </div>
             <Switch defaultChecked />
           </div>
@@ -144,9 +349,9 @@ export function AdminSettings() {
       </Card>
 
       {/* Security */}
-      <Card>
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
             <Lock className="w-5 h-5" />
             Security
           </CardTitle>
@@ -160,27 +365,6 @@ export function AdminSettings() {
           <Button variant="outline" className="w-full justify-start gap-2">
             <Shield className="w-4 h-4" />
             Two-Factor Authentication
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Data Management */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Database className="w-5 h-5" />
-            Data Management
-          </CardTitle>
-          <CardDescription>Manage application data</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button variant="outline" className="w-full justify-start gap-2">
-            <RefreshCw className="w-4 h-4" />
-            Refresh Mock Data
-          </Button>
-          <Button variant="outline" className="w-full justify-start gap-2 text-destructive hover:text-destructive">
-            <Trash2 className="w-4 h-4" />
-            Clear All Data
           </Button>
         </CardContent>
       </Card>

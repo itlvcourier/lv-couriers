@@ -12,6 +12,7 @@ import { AdminRateCards } from './AdminRateCards'
 import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
 import { AdminCommunications } from './AdminCommunications'
+import { AdminDriverReports } from './AdminDriverReports'
 import { NotificationCenter } from './NotificationCenter'
 import { cn } from '@/lib/utils'
 import { 
@@ -27,10 +28,11 @@ import {
   Menu,
   X,
   Bell,
-  MessageSquare
+  MessageSquare,
+  BarChart3,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'settings'
+type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'settings'
 
 const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,6 +42,7 @@ const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'communications', label: 'Communications', icon: MessageSquare },
+  { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -64,6 +67,7 @@ export function AdminView() {
       case 'rate_cards': return <AdminRateCards />
       case 'invoices': return <AdminInvoices />
       case 'communications': return <AdminCommunications />
+      case 'reports': return <AdminDriverReports />
       case 'settings': return <AdminSettings />
       default: return <AdminDashboard />
     }

@@ -23,6 +23,10 @@ import type {
   AdminNotification,
   DriverGPS,
   ActivityFeedItem,
+  Trip,
+  DriverMonthlyReport,
+  TimeoutWarning,
+  ManifestItem,
 } from './types'
 import {
   mockUsers,
@@ -38,6 +42,9 @@ import {
   initialAdminNotifications,
   initialDriverGPS,
   initialActivityFeed,
+  initialTrips,
+  initialDriverReports,
+  initialTimeoutWarnings,
 } from './data'
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber } from './billing'
 
@@ -110,6 +117,21 @@ interface AppContextType {
   retrySMS: (smsLogId: string) => void
   getDeliveryByTrackingCode: (code: string) => Delivery | null
   
+  // Phase 4: Multi-Stop & Advanced
+  trips: Trip[]
+  driverReports: DriverMonthlyReport[]
+  timeoutWarnings: TimeoutWarning[]
+  claimMultiple: (deliveryIds: string[], driverId: string) => void
+  addJobToTrip: (tripId: string, deliveryId: string) => void
+  reorderTrip: (tripId: string, newOrder: string[]) => void
+  retryDelivery: (deliveryId: string) => void
+  escalateDelivery: (deliveryId: string) => void
+  checkDuplicateAddress: (dropoffAddress: string, businessId: string, locationId: string) => Delivery | null
+  combineDeliveries: (existingDeliveryId: string, newManifestItems: ManifestItem[]) => void
+  dismissTimeout: (timeoutId: string) => void
+  updateDriverCapacity: (driverId: string, maxJobs: number | null) => void
+  getDriverTrip: (driverId: string) => Trip | null
+  
   // Helpers
   getDriverActiveJobs: (driverId: string) => number
   getDriverMaxJobs: (driverId: string) => number
@@ -135,6 +157,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>(initialAdminNotifications)
   const [driverGPS, setDriverGPS] = useState<DriverGPS[]>(initialDriverGPS)
   const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>(initialActivityFeed)
+  const [trips, setTrips] = useState<Trip[]>(initialTrips)
+  const [driverReports] = useState<DriverMonthlyReport[]>(initialDriverReports)
+  const [timeoutWarnings, setTimeoutWarnings] = useState<TimeoutWarning[]>(initialTimeoutWarnings)
 
   // Auth functions
   const login = useCallback((email: string, password: string) => {
@@ -909,6 +934,252 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return deliveries.find(d => d.trackingCode === code) || null
   }, [deliveries])
 
+  // Phase 4: Multi-Stop & Advanced functions
+  const claimMultiple = useCallback((deliveryIds: string[], driverId: string) => {
+    const driver = drivers.find(d => d.id === driverId)
+    if (!driver) return
+
+    // Create a new trip
+    const newTrip: Trip = {
+      id: `trip-${Date.now()}`,
+      driverId,
+      deliveryIds,
+      status: 'active',
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      order: deliveryIds,
+    }
+
+    setTrips(prev => [...prev, newTrip])
+
+    // Claim all deliveries
+    setDeliveries(prev => prev.map(d => {
+      if (deliveryIds.includes(d.id)) {
+        return {
+          ...d,
+          driverId,
+          driverName: driver.name,
+          status: 'claimed' as DeliveryStatus,
+          claimedAt: new Date().toISOString(),
+          tripId: newTrip.id,
+          statusHistory: [
+            ...d.statusHistory,
+            {
+              status: 'claimed' as DeliveryStatus,
+              timestamp: new Date().toISOString(),
+              note: `Claimed by ${driver.name} (multi-stop trip)`,
+              gpsLat: null,
+              gpsLng: null,
+            },
+          ],
+        }
+      }
+      return d
+    }))
+  }, [drivers])
+
+  const addJobToTrip = useCallback((tripId: string, deliveryId: string) => {
+    const trip = trips.find(t => t.id === tripId)
+    if (!trip) return
+
+    const driver = drivers.find(d => d.id === trip.driverId)
+    if (!driver) return
+
+    setTrips(prev => prev.map(t => {
+      if (t.id === tripId) {
+        return {
+          ...t,
+          deliveryIds: [...t.deliveryIds, deliveryId],
+          order: [...t.order, deliveryId],
+        }
+      }
+      return t
+    }))
+
+    setDeliveries(prev => prev.map(d => {
+      if (d.id === deliveryId) {
+        return {
+          ...d,
+          driverId: trip.driverId,
+          driverName: driver.name,
+          status: 'claimed' as DeliveryStatus,
+          claimedAt: new Date().toISOString(),
+          tripId,
+          statusHistory: [
+            ...d.statusHistory,
+            {
+              status: 'claimed' as DeliveryStatus,
+              timestamp: new Date().toISOString(),
+              note: `Added to trip by ${driver.name}`,
+              gpsLat: null,
+              gpsLng: null,
+            },
+          ],
+        }
+      }
+      return d
+    }))
+  }, [trips, drivers])
+
+  const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
+    setTrips(prev => prev.map(t => {
+      if (t.id === tripId) {
+        return { ...t, order: newOrder }
+      }
+      return t
+    }))
+  }, [])
+
+  const retryDelivery = useCallback((deliveryId: string) => {
+    setDeliveries(prev => prev.map(d => {
+      if (d.id === deliveryId) {
+        return {
+          ...d,
+          status: 'claimed' as DeliveryStatus,
+          statusHistory: [
+            ...d.statusHistory,
+            {
+              status: 'claimed' as DeliveryStatus,
+              timestamp: new Date().toISOString(),
+              note: 'Retry initiated',
+              gpsLat: null,
+              gpsLng: null,
+            },
+          ],
+        }
+      }
+      return d
+    }))
+  }, [])
+
+  const escalateDelivery = useCallback((deliveryId: string) => {
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    
+    setDeliveries(prev => prev.map(d => {
+      if (d.id === deliveryId) {
+        return {
+          ...d,
+          status: 'failed_permanent' as DeliveryStatus,
+          driverId: null,
+          driverName: null,
+          tripId: null,
+          statusHistory: [
+            ...d.statusHistory,
+            {
+              status: 'failed_permanent' as DeliveryStatus,
+              timestamp: new Date().toISOString(),
+              note: 'Escalated after 2 failed attempts',
+              gpsLat: null,
+              gpsLng: null,
+            },
+          ],
+        }
+      }
+      return d
+    }))
+
+    // Remove from trip if in one
+    if (delivery?.tripId) {
+      setTrips(prev => prev.map(t => {
+        if (t.id === delivery.tripId) {
+          return {
+            ...t,
+            deliveryIds: t.deliveryIds.filter(id => id !== deliveryId),
+            order: t.order.filter(id => id !== deliveryId),
+          }
+        }
+        return t
+      }))
+    }
+
+    // Add admin notification
+    const newNotification: AdminNotification = {
+      id: `notif-${Date.now()}`,
+      type: 'flag',
+      title: 'Delivery Escalated',
+      message: `Delivery #${deliveryId.split('-')[1]} - 2 failed attempts - action required`,
+      deliveryId,
+      driverId: delivery?.driverId || null,
+      businessId: delivery?.businessId || null,
+      invoiceId: null,
+      createdAt: new Date().toISOString(),
+      read: false,
+      priority: 'high',
+    }
+    setAdminNotifications(prev => [newNotification, ...prev])
+  }, [deliveries])
+
+  const checkDuplicateAddress = useCallback((dropoffAddress: string, businessId: string, locationId: string): Delivery | null => {
+    const today = new Date().toISOString().split('T')[0]
+    return deliveries.find(d => 
+      d.dropoffAddress === dropoffAddress &&
+      d.businessId === businessId &&
+      d.locationId === locationId &&
+      d.postedAt.startsWith(today) &&
+      ['posted', 'claimed'].includes(d.status)
+    ) || null
+  }, [deliveries])
+
+  const combineDeliveries = useCallback((existingDeliveryId: string, newManifestItems: ManifestItem[]) => {
+    setDeliveries(prev => prev.map(d => {
+      if (d.id === existingDeliveryId) {
+        return {
+          ...d,
+          manifest: [...d.manifest, ...newManifestItems],
+          statusHistory: [
+            ...d.statusHistory,
+            {
+              status: d.status,
+              timestamp: new Date().toISOString(),
+              note: `${newManifestItems.length} items added to delivery`,
+              gpsLat: null,
+              gpsLng: null,
+            },
+          ],
+        }
+      }
+      return d
+    }))
+
+    // Notify driver if assigned
+    const delivery = deliveries.find(d => d.id === existingDeliveryId)
+    if (delivery?.driverId) {
+      const feedItem: ActivityFeedItem = {
+        id: `feed-${Date.now()}`,
+        type: 'status_change',
+        message: `Items added to delivery for ${delivery.businessName}`,
+        icon: 'package',
+        deliveryId: existingDeliveryId,
+        driverId: delivery.driverId,
+        businessId: delivery.businessId,
+        timestamp: new Date().toISOString(),
+      }
+      setActivityFeed(prev => [feedItem, ...prev])
+    }
+  }, [deliveries])
+
+  const dismissTimeout = useCallback((timeoutId: string) => {
+    setTimeoutWarnings(prev => prev.map(t => {
+      if (t.id === timeoutId) {
+        return { ...t, dismissed: true }
+      }
+      return t
+    }))
+  }, [])
+
+  const updateDriverCapacity = useCallback((driverId: string, maxJobs: number | null) => {
+    setDrivers(prev => prev.map(d => {
+      if (d.id === driverId) {
+        return { ...d, maxJobsOverride: maxJobs }
+      }
+      return d
+    }))
+  }, [])
+
+  const getDriverTrip = useCallback((driverId: string): Trip | null => {
+    return trips.find(t => t.driverId === driverId && t.status === 'active') || null
+  }, [trips])
+
   return (
     <AppContext.Provider
       value={{
@@ -960,6 +1231,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         markAllAdminNotificationsRead,
         retrySMS,
         getDeliveryByTrackingCode,
+        trips,
+        driverReports,
+        timeoutWarnings,
+        claimMultiple,
+        addJobToTrip,
+        reorderTrip,
+        retryDelivery,
+        escalateDelivery,
+        checkDuplicateAddress,
+        combineDeliveries,
+        dismissTimeout,
+        updateDriverCapacity,
+        getDriverTrip,
         getDriverActiveJobs,
         getDriverMaxJobs,
         canDriverClaimJob,

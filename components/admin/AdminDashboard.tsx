@@ -3,61 +3,198 @@
 import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { StatusBadge } from '@/components/shared/StatusBadge'
+import { Button } from '@/components/ui/button'
 import { 
   Package, 
   Truck, 
   Building2, 
   CheckCircle,
   Clock,
-  TrendingUp,
   DollarSign,
   AlertTriangle,
-  Users,
-  Activity
+  Activity,
+  Zap,
+  Phone,
+  RefreshCw,
+  X,
 } from 'lucide-react'
-import { format, isToday, subHours } from 'date-fns'
+import { toast } from 'sonner'
 
 export function AdminDashboard() {
-  const { orders, drivers, businesses, activityLogs } = useApp()
+  const { 
+    deliveries, 
+    drivers, 
+    businesses, 
+    activityFeed, 
+    timeoutWarnings, 
+    dismissTimeout,
+    reassignDriver,
+  } = useApp()
 
   // Calculate stats
-  const totalOrders = orders.length
-  const activeOrders = orders.filter(o => ['pending', 'assigned', 'picked_up', 'in_transit'].includes(o.status)).length
-  const completedToday = orders.filter(o => o.status === 'delivered' && o.deliveredAt && isToday(new Date(o.deliveredAt))).length
-  const cancelledOrders = orders.filter(o => o.status === 'cancelled').length
+  const totalDeliveries = deliveries.length
+  const activeDeliveries = deliveries.filter(d => 
+    !['delivered', 'failed_permanent', 'cancelled'].includes(d.status)
+  ).length
+  const completedToday = deliveries.filter(d => {
+    if (!d.deliveredAt) return false
+    const delivered = new Date(d.deliveredAt)
+    const today = new Date()
+    return delivered.toDateString() === today.toDateString()
+  }).length
+  const postedDeliveries = deliveries.filter(d => d.status === 'posted').length
   
   const totalDrivers = drivers.length
-  const activeDrivers = drivers.filter(d => d.status === 'available' || d.status === 'busy').length
-  const verifiedDrivers = drivers.filter(d => d.isVerified).length
+  const activeDrivers = drivers.filter(d => d.status === 'available' || d.status === 'on_delivery').length
   
   const totalBusinesses = businesses.length
-  const activeBusinesses = businesses.filter(b => b.status === 'active').length
   
-  const totalRevenue = orders
-    .filter(o => o.status === 'delivered')
-    .reduce((sum, o) => sum + o.price, 0)
+  const totalRevenue = deliveries
+    .filter(d => d.status === 'delivered' && d.calculatedRate)
+    .reduce((sum, d) => sum + (d.calculatedRate || 0), 0)
+  
+  // Unclaimed rush jobs
+  const unclaimedRush = deliveries.filter(d => d.status === 'posted' && d.isUrgent)
+  
+  // Active timeout warnings (not dismissed)
+  const activeTimeouts = timeoutWarnings.filter(t => !t.dismissed)
+  
+  // Recent activity (last 8 items)
+  const recentActivity = activityFeed.slice(0, 8)
+  
+  // Posted deliveries awaiting claim
+  const pendingDeliveries = deliveries.filter(d => d.status === 'posted').slice(0, 5)
 
-  // Recent activity (last 24 hours)
-  const recentActivity = activityLogs
-    .filter(log => new Date(log.timestamp) > subHours(new Date(), 24))
-    .slice(0, 10)
-
-  // Pending orders (need attention)
-  const pendingOrders = orders.filter(o => o.status === 'pending').slice(0, 5)
+  const handleCallDriver = (phone: string, name: string) => {
+    toast.info(`Call ${name}: ${phone}`)
+  }
+  
+  const availableDrivers = drivers.filter(d => d.status === 'available' && d.inviteStatus === 'active')
 
   return (
     <div className="space-y-6">
+      {/* Timeout Warnings Section */}
+      {activeTimeouts.length > 0 && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-yellow-400">
+              <Clock className="w-4 h-4" />
+              Timeout Warnings ({activeTimeouts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {activeTimeouts.map((warning) => (
+                <div key={warning.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-card)]">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {warning.driverName} - #{warning.deliveryId.split('-')[1]}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {warning.businessName} - {warning.lastUpdateMinutes}m since last update
+                    </p>
+                    <Badge variant="outline" className="mt-1 text-xs capitalize">
+                      {warning.timeoutType.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const driver = drivers.find(d => d.id === warning.driverId)
+                        if (driver) handleCallDriver(driver.phone, driver.name)
+                      }}
+                      className="h-8"
+                    >
+                      <Phone className="w-3 h-3 mr-1" />
+                      Call
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toast.info('Select a driver to reassign')}
+                      className="h-8"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Reassign
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        dismissTimeout(warning.id)
+                        toast.success('Warning dismissed')
+                      }}
+                      className="h-8"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Unclaimed Rush Jobs Warning */}
+      {unclaimedRush.length > 0 && (
+        <Card className="border-red-500/30 bg-red-500/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-red-400">
+              <Zap className="w-4 h-4" />
+              Unclaimed Rush Jobs ({unclaimedRush.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {unclaimedRush.map((delivery) => {
+                // Calculate time since posted
+                const posted = new Date(delivery.postedAt)
+                const now = new Date()
+                const minsAgo = Math.floor((now.getTime() - posted.getTime()) / 60000)
+                const slaMins = 45
+                const remaining = slaMins - minsAgo
+                const breached = remaining <= 0
+                
+                return (
+                  <div key={delivery.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-card)]">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{delivery.businessName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {delivery.pickupArea} → {delivery.dropoffArea}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {breached ? (
+                        <Badge variant="destructive" className="animate-pulse">
+                          SLA BREACHED - {Math.abs(remaining)}m ago
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className={remaining < 15 ? 'text-red-400 border-red-400' : 'text-orange-400 border-orange-400'}>
+                          {remaining}m remaining
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Total Orders</p>
-                <p className="text-2xl font-bold">{totalOrders}</p>
+                <p className="text-xs text-muted-foreground mb-1">Total Deliveries</p>
+                <p className="text-2xl font-bold">{totalDeliveries}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  <span className="text-success">{completedToday} today</span>
+                  <span className="text-green-400">{completedToday} today</span>
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -67,52 +204,52 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-warning/5 border-warning/20">
+        <Card className="bg-yellow-500/5 border-yellow-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Active Orders</p>
-                <p className="text-2xl font-bold text-warning">{activeOrders}</p>
+                <p className="text-xs text-muted-foreground mb-1">Active</p>
+                <p className="text-2xl font-bold text-yellow-400">{activeDeliveries}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {orders.filter(o => o.status === 'pending').length} pending
+                  {postedDeliveries} awaiting claim
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-warning" />
+              <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                <Clock className="w-6 h-6 text-yellow-400" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-success/5 border-success/20">
+        <Card className="bg-green-500/5 border-green-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Active Drivers</p>
-                <p className="text-2xl font-bold text-success">{activeDrivers}</p>
+                <p className="text-2xl font-bold text-green-400">{activeDrivers}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   of {totalDrivers} total
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <Truck className="w-6 h-6 text-success" />
+              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <Truck className="w-6 h-6 text-green-400" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-info/5 border-info/20">
+        <Card className="bg-blue-500/5 border-blue-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Total Revenue</p>
-                <p className="text-2xl font-bold text-info">${totalRevenue.toFixed(0)}</p>
+                <p className="text-xs text-muted-foreground mb-1">Revenue</p>
+                <p className="text-2xl font-bold text-blue-400">${totalRevenue.toFixed(0)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   all time
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-info" />
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                <DollarSign className="w-6 h-6 text-blue-400" />
               </div>
             </div>
           </CardContent>
@@ -129,33 +266,33 @@ export function AdminDashboard() {
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-success">{activeBusinesses}</p>
+            <p className="text-lg font-bold text-green-400">{businesses.filter(b => b.inviteStatus === 'active').length}</p>
             <p className="text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold">{verifiedDrivers}</p>
+            <p className="text-lg font-bold">{drivers.filter(d => d.inviteStatus === 'active').length}</p>
             <p className="text-xs text-muted-foreground">Verified</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-destructive">{cancelledOrders}</p>
-            <p className="text-xs text-muted-foreground">Cancelled</p>
+            <p className="text-lg font-bold text-red-400">{deliveries.filter(d => d.status === 'failed_permanent').length}</p>
+            <p className="text-xs text-muted-foreground">Failed</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold">{orders.filter(o => o.status === 'delivered').length}</p>
+            <p className="text-lg font-bold">{deliveries.filter(d => d.status === 'delivered').length}</p>
             <p className="text-xs text-muted-foreground">Delivered</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
             <p className="text-lg font-bold">
-              {orders.filter(o => o.status === 'delivered').length > 0 
-                ? ((orders.filter(o => o.status === 'delivered').length / totalOrders) * 100).toFixed(0)
+              {deliveries.filter(d => d.status === 'delivered').length > 0 
+                ? ((deliveries.filter(d => d.status === 'delivered').length / totalDeliveries) * 100).toFixed(0)
                 : 0}%
             </p>
             <p className="text-xs text-muted-foreground">Success</p>
@@ -164,41 +301,40 @@ export function AdminDashboard() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Pending Orders */}
+        {/* Pending Deliveries */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              Pending Orders
-              {pendingOrders.length > 0 && (
-                <Badge variant="secondary" className="ml-auto">{pendingOrders.length}</Badge>
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+              Awaiting Claim
+              {pendingDeliveries.length > 0 && (
+                <Badge variant="secondary" className="ml-auto">{pendingDeliveries.length}</Badge>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {pendingOrders.length === 0 ? (
+            {pendingDeliveries.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                No pending orders
+                No pending deliveries
               </p>
             ) : (
               <div className="space-y-3">
-                {pendingOrders.map((order) => {
-                  const business = businesses.find(b => b.id === order.businessId)
-                  return (
-                    <div key={order.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="text-sm font-medium">#{order.id.slice(-6).toUpperCase()}</p>
-                        <p className="text-xs text-muted-foreground">{business?.name || 'Unknown'}</p>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant="outline" className="capitalize text-xs">{order.priority}</Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(order.createdAt), 'h:mm a')}
-                        </p>
-                      </div>
+                {pendingDeliveries.map((delivery) => (
+                  <div key={delivery.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="text-sm font-medium">{delivery.businessName}</p>
+                      <p className="text-xs text-muted-foreground">{delivery.pickupArea} → {delivery.dropoffArea}</p>
                     </div>
-                  )
-                })}
+                    <div className="text-right">
+                      {delivery.isUrgent && (
+                        <Badge variant="destructive" className="text-xs mb-1">Rush</Badge>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(delivery.postedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -219,19 +355,20 @@ export function AdminDashboard() {
               </p>
             ) : (
               <div className="space-y-3">
-                {recentActivity.map((log) => (
-                  <div key={log.id} className="flex items-start gap-3">
+                {recentActivity.map((item) => (
+                  <div key={item.id} className="flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                      log.action.includes('delivered') ? 'bg-success' :
-                      log.action.includes('cancelled') ? 'bg-destructive' :
-                      log.action.includes('picked') ? 'bg-info' :
-                      log.action.includes('accepted') ? 'bg-primary' :
+                      item.type === 'status_change' ? 'bg-green-400' :
+                      item.type === 'sms_sent' ? 'bg-blue-400' :
+                      item.type === 'battery_warning' ? 'bg-yellow-400' :
+                      item.type === 'timeout_warning' ? 'bg-red-400' :
+                      item.type === 'email_bounced' ? 'bg-red-400' :
                       'bg-muted-foreground'
                     }`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm">{log.action}</p>
+                      <p className="text-sm">{item.message}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(log.timestamp), 'h:mm a')}
+                        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>

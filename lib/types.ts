@@ -389,3 +389,42 @@ export interface ActivityFeedItem {
   businessId: string | null
   timestamp: string
 }
+
+// ===== PHASE 4: MULTI-STOP & ADVANCED TYPES =====
+
+export type TripStatus = 'active' | 'completed'
+
+export interface Trip {
+  id: string
+  driverId: string
+  deliveryIds: string[]
+  status: TripStatus
+  startedAt: string
+  completedAt: string | null
+  order: string[] // Ordered deliveryIds for display order
+}
+
+export interface DriverMonthlyReport {
+  driverId: string
+  driverName: string
+  month: string
+  totalDeliveries: number
+  completedDeliveries: number
+  failedDeliveries: number
+  averageTime: string
+  rushSlaRate: number
+  adjustments: number
+  weeklyBreakdown: number[] // deliveries per week [w1, w2, w3, w4]
+}
+
+export interface TimeoutWarning {
+  id: string
+  deliveryId: string
+  driverId: string
+  driverName: string
+  businessName: string
+  timeoutType: 'intown' | 'rush' | 'out_of_town'
+  lastUpdateMinutes: number
+  createdAt: string
+  dismissed: boolean
+}

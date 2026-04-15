@@ -14,6 +14,9 @@ import type {
   AdminNotification,
   DriverGPS,
   ActivityFeedItem,
+  Trip,
+  DriverMonthlyReport,
+  TimeoutWarning,
 } from './types'
 
 // Helper to generate timestamps
@@ -1165,5 +1168,98 @@ export const initialActivityFeed: ActivityFeedItem[] = [
     driverId: 'driver-3',
     businessId: 'business-1',
     timestamp: minsAgo(45),
+  },
+]
+
+// ===== PHASE 4: MULTI-STOP & ADVANCED MOCK DATA =====
+
+// Mock Trips (Jenna has an active trip with 2 deliveries)
+export const initialTrips: Trip[] = [
+  {
+    id: 'trip-1',
+    driverId: 'driver-2',
+    deliveryIds: ['del-004', 'del-006'],
+    status: 'active',
+    startedAt: minsAgo(35),
+    completedAt: null,
+    order: ['del-004', 'del-006'],
+  },
+]
+
+// Mock Driver Monthly Reports
+export const initialDriverReports: DriverMonthlyReport[] = [
+  {
+    driverId: 'driver-1',
+    driverName: 'Marcus Reid',
+    month: '2026-04',
+    totalDeliveries: 23,
+    completedDeliveries: 22,
+    failedDeliveries: 1,
+    averageTime: '22 min',
+    rushSlaRate: 94,
+    adjustments: 2,
+    weeklyBreakdown: [6, 5, 7, 5],
+  },
+  {
+    driverId: 'driver-2',
+    driverName: 'Jenna Cole',
+    month: '2026-04',
+    totalDeliveries: 41,
+    completedDeliveries: 40,
+    failedDeliveries: 1,
+    averageTime: '18 min',
+    rushSlaRate: 97,
+    adjustments: 1,
+    weeklyBreakdown: [10, 11, 12, 8],
+  },
+  {
+    driverId: 'driver-3',
+    driverName: 'Tariq Hassan',
+    month: '2026-04',
+    totalDeliveries: 28,
+    completedDeliveries: 25,
+    failedDeliveries: 3,
+    averageTime: '31 min',
+    rushSlaRate: 88,
+    adjustments: 4,
+    weeklyBreakdown: [7, 6, 8, 7],
+  },
+  {
+    driverId: 'driver-4',
+    driverName: 'Sasha Kim',
+    month: '2026-04',
+    totalDeliveries: 19,
+    completedDeliveries: 19,
+    failedDeliveries: 0,
+    averageTime: '24 min',
+    rushSlaRate: 91,
+    adjustments: 0,
+    weeklyBreakdown: [5, 4, 6, 4],
+  },
+]
+
+// Mock Timeout Warnings
+export const initialTimeoutWarnings: TimeoutWarning[] = [
+  {
+    id: 'timeout-1',
+    deliveryId: 'del-005',
+    driverId: 'driver-3',
+    driverName: 'Tariq Hassan',
+    businessName: 'FreshMart Grocery',
+    timeoutType: 'intown',
+    lastUpdateMinutes: 112,
+    createdAt: minsAgo(22),
+    dismissed: false,
+  },
+  {
+    id: 'timeout-2',
+    deliveryId: 'del-006',
+    driverId: 'driver-2',
+    driverName: 'Jenna Cole',
+    businessName: 'HomeGoods Plus',
+    timeoutType: 'out_of_town',
+    lastUpdateMinutes: 95,
+    createdAt: minsAgo(15),
+    dismissed: false,
   },
 ]
