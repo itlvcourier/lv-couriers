@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp } from '@/lib/context'
+import useSWR, { mutate } from 'swr'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Switch } from '@/components/ui/switch'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Spinner } from '@/components/ui/spinner'
 import { 
   Sheet, 
   SheetContent, 
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/sheet'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
 import { 
   Building2, 
   Plus, 
@@ -25,13 +26,10 @@ import {
   MapPin,
   Search,
   Filter,
-  Shield,
   MoreVertical,
   Edit,
-  Trash2,
   Ban,
   Package,
-  DollarSign
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -39,57 +37,114 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { Business, BusinessType, BusinessStatus } from '@/lib/types'
+import { getBusinesses, getAllDeliveries, type DbBusiness, type DbLocation, type DbDelivery } from '@/lib/db'
+import { createClient } from '@/lib/supabase/client'
+
+type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
-  const { businesses, orders, updateBusiness, deleteBusiness, addBusiness } = useApp()
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<BusinessStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<DbBusiness['status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
-  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null)
+  const [selectedBusiness, setSelectedBusiness] = useState<BusinessWithLocations | null>(null)
+
+  // Fetch businesses from Supabase
+  const { data: businesses = [], isLoading } = useSWR('all-businesses', getBusinesses, {
+    refreshInterval: 30000,
+  })
+
+  // Fetch all deliveries for stats
+  const { data: deliveries = [] } = useSWR('all-deliveries', () => getAllDeliveries(), {
+    refreshInterval: 60000,
+  })
 
   const [form, setForm] = useState({
     name: '',
-    email: '',
-    phone: '',
-    address: '',
-    businessType: 'restaurant' as BusinessType,
+    billing_email: '',
+    contact_name: '',
+    contact_phone: '',
   })
 
   // Filter businesses
-  const filteredBusinesses = businesses.filter(b => {
+  const filteredBusinesses = businesses.filter((b: BusinessWithLocations) => {
     const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.email.toLowerCase().includes(search.toLowerCase()) ||
-      b.address.toLowerCase().includes(search.toLowerCase())
+      b.billing_email.toLowerCase().includes(search.toLowerCase()) ||
+      (b.contact_name?.toLowerCase().includes(search.toLowerCase()))
     const matchesStatus = statusFilter === 'all' || b.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  const handleAddBusiness = () => {
-    if (!form.name || !form.email || !form.address) return
+  const handleAddBusiness = async () => {
+    if (!form.name || !form.billing_email) {
+      toast.error('Please fill in required fields')
+      return
+    }
     
-    addBusiness({
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      address: form.address,
-      businessType: form.businessType,
-      isVerified: false,
-      status: 'active',
-    })
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('businesses')
+      .insert({
+        name: form.name,
+        billing_email: form.billing_email,
+        contact_name: form.contact_name || null,
+        contact_phone: form.contact_phone || null,
+        invoice_format: 'combined',
+        status: 'pending',
+      })
     
-    setForm({ name: '', email: '', phone: '', address: '', businessType: 'restaurant' })
+    if (error) {
+      toast.error('Failed to create business')
+      console.error(error)
+      return
+    }
+    
+    mutate('all-businesses')
+    setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '' })
     setShowAddSheet(false)
+    toast.success('Business created successfully')
   }
 
-  const handleToggleVerified = (business: Business) => {
-    updateBusiness(business.id, { isVerified: !business.isVerified })
+  const handleToggleStatus = async (business: BusinessWithLocations) => {
+    const supabase = createClient()
+    const newStatus = business.status === 'active' ? 'suspended' : 'active'
+    
+    const { error } = await supabase
+      .from('businesses')
+      .update({ status: newStatus })
+      .eq('id', business.id)
+    
+    if (error) {
+      toast.error('Failed to update status')
+      return
+    }
+    
+    mutate('all-businesses')
+    toast.success(`Business ${newStatus === 'active' ? 'activated' : 'suspended'}`)
   }
 
-  const handleToggleStatus = (business: Business) => {
-    updateBusiness(business.id, { 
-      status: business.status === 'active' ? 'suspended' : 'active' 
-    })
+  const handleUpdateBusiness = async () => {
+    if (!selectedBusiness) return
+    
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        name: selectedBusiness.name,
+        billing_email: selectedBusiness.billing_email,
+        contact_name: selectedBusiness.contact_name,
+        contact_phone: selectedBusiness.contact_phone,
+        invoice_format: selectedBusiness.invoice_format,
+      })
+      .eq('id', selectedBusiness.id)
+    
+    if (error) {
+      toast.error('Failed to update business')
+      return
+    }
+    
+    mutate('all-businesses')
+    setSelectedBusiness(null)
+    toast.success('Business updated successfully')
   }
 
   const getInitials = (name: string) => {
@@ -97,18 +152,26 @@ export function AdminBusinesses() {
   }
 
   const getBusinessStats = (businessId: string) => {
-    const businessOrders = orders.filter(o => o.businessId === businessId)
-    const completed = businessOrders.filter(o => o.status === 'delivered').length
-    const totalSpent = businessOrders
-      .filter(o => o.status === 'delivered')
-      .reduce((sum, o) => sum + o.price, 0)
-    return { total: businessOrders.length, completed, totalSpent }
+    const businessDeliveries = deliveries.filter((d: DbDelivery) => d.business_id === businessId)
+    const completed = businessDeliveries.filter((d: DbDelivery) => d.status === 'delivered').length
+    const totalSpent = businessDeliveries
+      .filter((d: DbDelivery) => d.status === 'delivered' && d.total_amount)
+      .reduce((sum: number, d: DbDelivery) => sum + (d.total_amount || 0), 0)
+    return { total: businessDeliveries.length, completed, totalSpent }
   }
 
-  const statusColors: Record<BusinessStatus, string> = {
-    active: 'bg-success/10 text-success border-success/20',
-    inactive: 'bg-muted text-muted-foreground border-border',
-    suspended: 'bg-destructive/10 text-destructive border-destructive/20',
+  const statusColors: Record<DbBusiness['status'], string> = {
+    active: 'bg-green-500/10 text-green-400 border-green-500/20',
+    pending: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    suspended: 'bg-red-500/10 text-red-400 border-red-500/20',
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spinner className="w-8 h-8" />
+      </div>
+    )
   }
 
   return (
@@ -119,7 +182,7 @@ export function AdminBusinesses() {
           <h2 className="text-xl font-semibold">Businesses</h2>
           <p className="text-sm text-muted-foreground">{businesses.length} registered businesses</p>
         </div>
-        <Button onClick={() => setShowAddSheet(true)} className="gap-2">
+        <Button onClick={() => setShowAddSheet(true)} className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
           <Plus className="w-4 h-4" />
           Add Business
         </Button>
@@ -133,18 +196,18 @@ export function AdminBusinesses() {
             placeholder="Search businesses..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 bg-[var(--bg-card)] border-[var(--border-color)]"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as BusinessStatus | 'all')}>
-          <SelectTrigger className="w-full sm:w-40">
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['status'] | 'all')}>
+          <SelectTrigger className="w-full sm:w-40 bg-[var(--bg-card)] border-[var(--border-color)]">
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="suspended">Suspended</SelectItem>
           </SelectContent>
         </Select>
@@ -159,26 +222,20 @@ export function AdminBusinesses() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredBusinesses.map((business) => {
+          {filteredBusinesses.map((business: BusinessWithLocations) => {
             const stats = getBusinessStats(business.id)
             return (
-              <Card key={business.id} className="overflow-hidden">
+              <Card key={business.id} className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <Avatar className="w-12 h-12">
-                        <AvatarImage src={business.avatar} />
-                        <AvatarFallback className="bg-primary/10 text-primary">
+                        <AvatarFallback className="bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]">
                           {getInitials(business.name)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium">{business.name}</h3>
-                          {business.isVerified && (
-                            <Shield className="w-4 h-4 text-success" />
-                          )}
-                        </div>
+                        <h3 className="font-medium text-foreground">{business.name}</h3>
                         <Badge variant="outline" className={statusColors[business.status]}>
                           {business.status}
                         </Badge>
@@ -195,20 +252,9 @@ export function AdminBusinesses() {
                           <Edit className="w-4 h-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleToggleVerified(business)}>
-                          <Shield className="w-4 h-4 mr-2" />
-                          {business.isVerified ? 'Unverify' : 'Verify'}
-                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
                           <Ban className="w-4 h-4 mr-2" />
                           {business.status === 'active' ? 'Suspend' : 'Activate'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => deleteBusiness(business.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -216,31 +262,34 @@ export function AdminBusinesses() {
 
                   <div className="space-y-2 text-sm mb-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Badge variant="secondary" className="text-xs capitalize">
-                        {business.businessType}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
                       <Mail className="w-4 h-4" />
-                      <span className="truncate">{business.email}</span>
+                      <span className="truncate">{business.billing_email}</span>
                     </div>
+                    {business.contact_phone && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Phone className="w-4 h-4" />
+                        <span>{business.contact_phone}</span>
+                      </div>
+                    )}
+                    {business.locations.length > 0 && (
+                      <div className="flex items-start gap-2 text-muted-foreground">
+                        <MapPin className="w-4 h-4 mt-0.5" />
+                        <span className="line-clamp-2">{business.locations[0].address}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Phone className="w-4 h-4" />
-                      <span>{business.phone}</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-muted-foreground">
-                      <MapPin className="w-4 h-4 mt-0.5" />
-                      <span className="line-clamp-2">{business.address}</span>
+                      <Building2 className="w-4 h-4" />
+                      <span>{business.locations.length} location(s)</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                  <div className="flex items-center justify-between pt-3 border-t border-[var(--border-color)]">
                     <div className="flex items-center gap-1">
                       <Package className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{stats.total} orders</span>
+                      <span className="text-sm text-foreground">{stats.total} deliveries</span>
                     </div>
                     <span className="text-sm font-medium text-primary">
-                      ${stats.totalSpent.toFixed(0)} spent
+                      ${stats.totalSpent.toFixed(0)} billed
                     </span>
                   </div>
                 </CardContent>
@@ -252,9 +301,9 @@ export function AdminBusinesses() {
 
       {/* Add Business Sheet */}
       <Sheet open={showAddSheet} onOpenChange={setShowAddSheet}>
-        <SheetContent>
+        <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
           <SheetHeader>
-            <SheetTitle>Add New Business</SheetTitle>
+            <SheetTitle className="text-foreground">Add New Business</SheetTitle>
             <SheetDescription>
               Enter the business details below
             </SheetDescription>
@@ -262,57 +311,43 @@ export function AdminBusinesses() {
           
           <div className="mt-6 space-y-4">
             <div className="space-y-2">
-              <Label>Business Name</Label>
+              <Label className="text-foreground">Business Name *</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Acme Restaurant"
+                placeholder="FreshMart Groceries"
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
               />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label className="text-foreground">Billing Email *</Label>
               <Input
                 type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="business@example.com"
+                value={form.billing_email}
+                onChange={(e) => setForm({ ...form, billing_email: e.target.value })}
+                placeholder="billing@freshmart.ca"
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
               />
             </div>
             <div className="space-y-2">
-              <Label>Phone</Label>
+              <Label className="text-foreground">Contact Name</Label>
               <Input
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="702-555-0100"
+                value={form.contact_name}
+                onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
+                placeholder="John Smith"
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
               />
             </div>
             <div className="space-y-2">
-              <Label>Address</Label>
+              <Label className="text-foreground">Contact Phone</Label>
               <Input
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                placeholder="123 Main St, Las Vegas, NV"
+                value={form.contact_phone}
+                onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
+                placeholder="(403) 555-0100"
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Business Type</Label>
-              <Select 
-                value={form.businessType}
-                onValueChange={(v) => setForm({ ...form, businessType: v as BusinessType })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="restaurant">Restaurant</SelectItem>
-                  <SelectItem value="retail">Retail</SelectItem>
-                  <SelectItem value="pharmacy">Pharmacy</SelectItem>
-                  <SelectItem value="grocery">Grocery</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleAddBusiness} className="w-full">
+            <Button onClick={handleAddBusiness} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
               <Plus className="w-4 h-4 mr-2" />
               Add Business
             </Button>
@@ -322,9 +357,9 @@ export function AdminBusinesses() {
 
       {/* Edit Business Sheet */}
       <Sheet open={!!selectedBusiness} onOpenChange={() => setSelectedBusiness(null)}>
-        <SheetContent>
+        <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
           <SheetHeader>
-            <SheetTitle>Edit Business</SheetTitle>
+            <SheetTitle className="text-foreground">Edit Business</SheetTitle>
             <SheetDescription>
               Update business information
             </SheetDescription>
@@ -333,57 +368,57 @@ export function AdminBusinesses() {
           {selectedBusiness && (
             <div className="mt-6 space-y-4">
               <div className="space-y-2">
-                <Label>Business Name</Label>
+                <Label className="text-foreground">Business Name</Label>
                 <Input
                   value={selectedBusiness.name}
                   onChange={(e) => setSelectedBusiness({ ...selectedBusiness, name: e.target.value })}
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Phone</Label>
+                <Label className="text-foreground">Billing Email</Label>
                 <Input
-                  value={selectedBusiness.phone}
-                  onChange={(e) => setSelectedBusiness({ ...selectedBusiness, phone: e.target.value })}
+                  type="email"
+                  value={selectedBusiness.billing_email}
+                  onChange={(e) => setSelectedBusiness({ ...selectedBusiness, billing_email: e.target.value })}
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Address</Label>
+                <Label className="text-foreground">Contact Name</Label>
                 <Input
-                  value={selectedBusiness.address}
-                  onChange={(e) => setSelectedBusiness({ ...selectedBusiness, address: e.target.value })}
+                  value={selectedBusiness.contact_name || ''}
+                  onChange={(e) => setSelectedBusiness({ ...selectedBusiness, contact_name: e.target.value })}
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Business Type</Label>
+                <Label className="text-foreground">Contact Phone</Label>
+                <Input
+                  value={selectedBusiness.contact_phone || ''}
+                  onChange={(e) => setSelectedBusiness({ ...selectedBusiness, contact_phone: e.target.value })}
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Invoice Format</Label>
                 <Select 
-                  value={selectedBusiness.businessType}
-                  onValueChange={(v) => setSelectedBusiness({ ...selectedBusiness, businessType: v as BusinessType })}
+                  value={selectedBusiness.invoice_format}
+                  onValueChange={(v) => setSelectedBusiness({ ...selectedBusiness, invoice_format: v as DbBusiness['invoice_format'] })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="restaurant">Restaurant</SelectItem>
-                    <SelectItem value="retail">Retail</SelectItem>
-                    <SelectItem value="pharmacy">Pharmacy</SelectItem>
-                    <SelectItem value="grocery">Grocery</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="combined">Combined</SelectItem>
+                    <SelectItem value="separate">Separate</SelectItem>
+                    <SelectItem value="combined_breakdown">Combined with Breakdown</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between py-2">
-                <Label>Verified</Label>
-                <Switch 
-                  checked={selectedBusiness.isVerified}
-                  onCheckedChange={(c) => setSelectedBusiness({ ...selectedBusiness, isVerified: c })}
-                />
-              </div>
               <Button 
-                onClick={() => {
-                  updateBusiness(selectedBusiness.id, selectedBusiness)
-                  setSelectedBusiness(null)
-                }} 
-                className="w-full"
+                onClick={handleUpdateBusiness} 
+                className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
               >
                 Save Changes
               </Button>

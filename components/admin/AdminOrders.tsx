@@ -1,13 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp } from '@/lib/context'
+import useSWR from 'swr'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { StatusBadge } from '@/components/shared/StatusBadge'
-import { OrderDetailSheet } from '@/components/shared/OrderDetailSheet'
+import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   Package, 
@@ -17,95 +15,113 @@ import {
   Building2,
   Clock,
   ChevronRight,
-  MapPin
+  MapPin,
+  Zap,
+  Globe,
 } from 'lucide-react'
 import { format } from 'date-fns'
-import type { Order, OrderStatus } from '@/lib/types'
+import { getAllDeliveries, type DbDelivery } from '@/lib/db'
+import type { DeliveryStatus } from '@/lib/types'
 
 export function AdminOrders() {
-  const { deliveries, drivers, businesses } = useApp()
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all')
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [statusFilter, setStatusFilter] = useState<DeliveryStatus | 'all'>('all')
 
-  // Convert deliveries to orders format
-  const orders: Order[] = (deliveries || []).map(d => ({
-    id: d.id,
-    businessId: d.businessId,
-    businessName: d.businessName,
-    driverId: d.driverId,
-    status: d.status as Order['status'],
-    priority: d.isUrgent ? 'urgent' as const : 'standard' as const,
-    pickupAddress: d.pickupAddress,
-    dropoffAddress: d.dropoffAddress,
-    price: d.calculatedRate || 15,
-    createdAt: d.postedAt,
-  }))
+  // Fetch deliveries from Supabase
+  const { data: deliveries = [], isLoading } = useSWR('all-deliveries', () => getAllDeliveries(), {
+    refreshInterval: 15000,
+  })
 
-  // Filter orders
-  const filteredOrders = orders.filter(o => {
+  // Filter deliveries
+  const filteredDeliveries = deliveries.filter((d: DbDelivery) => {
     const matchesSearch = 
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.pickupAddress.toLowerCase().includes(search.toLowerCase()) ||
-      o.dropoffAddress.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || o.status === statusFilter
+      d.id.toLowerCase().includes(search.toLowerCase()) ||
+      d.pickup_address.toLowerCase().includes(search.toLowerCase()) ||
+      d.dropoff_address.toLowerCase().includes(search.toLowerCase()) ||
+      (d.tracking_code?.toLowerCase().includes(search.toLowerCase()))
+    const matchesStatus = statusFilter === 'all' || d.status === statusFilter
     return matchesSearch && matchesStatus
-  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }).sort((a: DbDelivery, b: DbDelivery) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-  const getDriver = (driverId?: string) => {
-    if (!driverId) return null
-    return drivers.find(d => d.id === driverId)
-  }
+  // Stats
+  const postedCount = deliveries.filter((d: DbDelivery) => d.status === 'posted').length
+  const activeCount = deliveries.filter((d: DbDelivery) => 
+    ['claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff'].includes(d.status)
+  ).length
+  const completedCount = deliveries.filter((d: DbDelivery) => d.status === 'delivered').length
+  const flaggedCount = deliveries.filter((d: DbDelivery) => d.status === 'flagged').length
 
-  const getBusiness = (businessId: string) => {
-    return businesses.find(b => b.id === businessId)
-  }
-
-  const handleCancelOrder = async (orderId: string) => {
-    if (confirm('Are you sure you want to cancel this order?')) {
-      // Note: cancelOrder will be added when needed
-      setSelectedOrder(null)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'posted': return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+      case 'claimed': return 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      case 'en_route_pickup': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+      case 'picked_up': return 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+      case 'en_route_dropoff': return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+      case 'delivered': return 'bg-green-500/10 text-green-400 border-green-500/20'
+      case 'flagged': return 'bg-red-500/10 text-red-400 border-red-500/20'
+      case 'failed_permanent': return 'bg-red-500/10 text-red-400 border-red-500/20'
+      case 'cancelled': return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+      default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
     }
   }
 
-  // Stats
-  const pendingCount = orders.filter(o => o.status === 'pending').length
-  const activeCount = orders.filter(o => ['assigned', 'picked_up', 'in_transit'].includes(o.status)).length
-  const completedCount = orders.filter(o => o.status === 'delivered').length
-  const cancelledCount = orders.filter(o => o.status === 'cancelled').length
+  const formatStatus = (status: string) => {
+    return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spinner className="w-8 h-8" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-semibold">Orders</h2>
-        <p className="text-sm text-muted-foreground">{orders.length} total orders</p>
+        <h2 className="text-xl font-semibold">Deliveries</h2>
+        <p className="text-sm text-muted-foreground">{deliveries.length} total deliveries</p>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <Card className="bg-warning/5 border-warning/20 cursor-pointer" onClick={() => setStatusFilter('pending')}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card 
+          className="bg-yellow-500/5 border-yellow-500/20 cursor-pointer hover:bg-yellow-500/10 transition-colors" 
+          onClick={() => setStatusFilter('posted')}
+        >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-warning">{pendingCount}</p>
-            <p className="text-xs text-muted-foreground">Pending</p>
+            <p className="text-2xl font-bold text-yellow-400">{postedCount}</p>
+            <p className="text-xs text-muted-foreground">Posted</p>
           </CardContent>
         </Card>
-        <Card className="bg-info/5 border-info/20 cursor-pointer" onClick={() => setStatusFilter('all')}>
+        <Card 
+          className="bg-blue-500/5 border-blue-500/20 cursor-pointer hover:bg-blue-500/10 transition-colors" 
+          onClick={() => setStatusFilter('all')}
+        >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-info">{activeCount}</p>
+            <p className="text-2xl font-bold text-blue-400">{activeCount}</p>
             <p className="text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
-        <Card className="bg-success/5 border-success/20 cursor-pointer" onClick={() => setStatusFilter('delivered')}>
+        <Card 
+          className="bg-green-500/5 border-green-500/20 cursor-pointer hover:bg-green-500/10 transition-colors" 
+          onClick={() => setStatusFilter('delivered')}
+        >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-success">{completedCount}</p>
+            <p className="text-2xl font-bold text-green-400">{completedCount}</p>
             <p className="text-xs text-muted-foreground">Delivered</p>
           </CardContent>
         </Card>
-        <Card className="bg-destructive/5 border-destructive/20 cursor-pointer" onClick={() => setStatusFilter('cancelled')}>
+        <Card 
+          className="bg-red-500/5 border-red-500/20 cursor-pointer hover:bg-red-500/10 transition-colors" 
+          onClick={() => setStatusFilter('flagged')}
+        >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-destructive">{cancelledCount}</p>
-            <p className="text-xs text-muted-foreground">Cancelled</p>
+            <p className="text-2xl font-bold text-red-400">{flaggedCount}</p>
+            <p className="text-xs text-muted-foreground">Flagged</p>
           </CardContent>
         </Card>
       </div>
@@ -115,111 +131,121 @@ export function AdminOrders() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by ID or address..."
+            placeholder="Search by ID, tracking code, or address..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 bg-[var(--bg-card)] border-[var(--border-color)]"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | 'all')}>
-          <SelectTrigger className="w-full sm:w-44">
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DeliveryStatus | 'all')}>
+          <SelectTrigger className="w-full sm:w-44 bg-[var(--bg-card)] border-[var(--border-color)]">
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="assigned">Assigned</SelectItem>
+            <SelectItem value="posted">Posted</SelectItem>
+            <SelectItem value="claimed">Claimed</SelectItem>
+            <SelectItem value="en_route_pickup">En Route Pickup</SelectItem>
             <SelectItem value="picked_up">Picked Up</SelectItem>
-            <SelectItem value="in_transit">In Transit</SelectItem>
+            <SelectItem value="en_route_dropoff">En Route Dropoff</SelectItem>
             <SelectItem value="delivered">Delivered</SelectItem>
+            <SelectItem value="flagged">Flagged</SelectItem>
+            <SelectItem value="failed_permanent">Failed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Orders List */}
-      {filteredOrders.length === 0 ? (
+      {/* Deliveries List */}
+      {filteredDeliveries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
           <Package className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-1">No orders found</h3>
+          <h3 className="text-lg font-medium mb-1">No deliveries found</h3>
           <p className="text-sm text-muted-foreground">Try adjusting your search or filters</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredOrders.map((order) => {
-            const driver = getDriver(order.driverId)
-            const business = getBusiness(order.businessId)
-            
-            return (
-              <Card 
-                key={order.id} 
-                className="cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => setSelectedOrder(order)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    {/* Order Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Package className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm font-mono">#{order.id.slice(-6).toUpperCase()}</span>
-                        <Badge variant="outline" className="capitalize text-xs">{order.priority}</Badge>
-                        <StatusBadge status={order.status} />
+          {filteredDeliveries.map((delivery: DbDelivery) => (
+            <Card 
+              key={delivery.id} 
+              className="bg-[var(--bg-card)] border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card-hover)] transition-colors"
+            >
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Delivery Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <Package className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-mono">
+                        {delivery.tracking_code || `#${delivery.id.slice(0, 8).toUpperCase()}`}
+                      </span>
+                      {delivery.is_rush && (
+                        <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-400 border-orange-500/20">
+                          <Zap className="w-3 h-3 mr-1" />
+                          Rush
+                        </Badge>
+                      )}
+                      {delivery.is_urgent && (
+                        <Badge variant="destructive" className="text-xs">
+                          Urgent
+                        </Badge>
+                      )}
+                      {delivery.is_out_of_town && (
+                        <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/20">
+                          <Globe className="w-3 h-3 mr-1" />
+                          OOT
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className={`text-xs ${getStatusColor(delivery.status)}`}>
+                        {formatStatus(delivery.status)}
+                      </Badge>
+                    </div>
+                    
+                    <div className="grid sm:grid-cols-2 gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="truncate">{delivery.business?.name || 'Unknown Business'}</span>
                       </div>
-                      
-                      <div className="grid sm:grid-cols-2 gap-2 text-sm">
+                      {delivery.driver ? (
                         <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span className="truncate">{business?.name || 'Unknown Business'}</span>
+                          <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="truncate">{delivery.driver.name}</span>
                         </div>
-                        {driver ? (
-                          <div className="flex items-center gap-2">
-                            <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <span className="truncate">{driver.name}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Clock className="w-4 h-4 shrink-0" />
-                            <span>Awaiting driver</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
-                        <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
-                        <span className="truncate">{order.pickupAddress} → {order.dropoffAddress}</span>
-                      </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Clock className="w-4 h-4 shrink-0" />
+                          <span>Awaiting driver</span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Price & Time */}
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
-                      <span className="text-lg font-semibold text-primary">${order.price.toFixed(2)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(order.createdAt), 'MMM d, h:mm a')}
+                    <div className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+                      <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                      <span className="truncate">
+                        <span className="text-foreground">{delivery.pickup_area}</span>
+                        {' → '}
+                        <span className="text-foreground">{delivery.dropoff_area}</span>
                       </span>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground hidden sm:block" />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+
+                  {/* Price & Time */}
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
+                    {delivery.calculated_rate && (
+                      <span className="text-lg font-semibold text-primary">${delivery.calculated_rate.toFixed(2)}</span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(delivery.posted_at), 'MMM d, h:mm a')}
+                    </span>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground hidden sm:block" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
-
-      {/* Order Detail Sheet */}
-      <OrderDetailSheet 
-        order={selectedOrder}
-        driver={selectedOrder?.driverId ? getDriver(selectedOrder.driverId) : undefined}
-        business={selectedOrder ? getBusiness(selectedOrder.businessId) : undefined}
-        onClose={() => setSelectedOrder(null)}
-        onCancel={selectedOrder && ['pending', 'assigned'].includes(selectedOrder.status) 
-          ? () => handleCancelOrder(selectedOrder.id) 
-          : undefined
-        }
-        viewType="admin"
-      />
     </div>
   )
 }
