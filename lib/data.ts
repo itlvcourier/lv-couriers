@@ -6,6 +6,10 @@ import type {
   SystemSettings,
   ManifestItem,
   StatusEvent,
+  RateCard,
+  Invoice,
+  Dispute,
+  UnmatchedPayment,
 } from './types'
 
 // Helper to generate timestamps
@@ -555,3 +559,239 @@ export const initialSettings: SystemSettings = {
   cancellationBeforeDepart: 0,
   cancellationEnRoute: 5,
 }
+
+// ===== PHASE 2: BILLING MOCK DATA =====
+
+// Helper for dates
+const daysAgo = (days: number): string => {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date.toISOString()
+}
+
+const daysFromNow = (days: number): string => {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date.toISOString()
+}
+
+// Mock Rate Cards
+export const initialRateCards: RateCard[] = [
+  {
+    id: 'rc-1',
+    businessId: 'business-1',
+    locationId: 'location-1',
+    effectiveDate: '2026-01-01',
+    regular: 9,
+    bigDouble: 18,
+    outOfTownBig: 28,
+    rush: 20,
+    rushOutOfTown: 30,
+    applyGst: true,
+    cancellationBeforeDepart: 0,
+    cancellationEnRoute: 5,
+    billingEmail: 'billing@freshmart.ca',
+    backupEmail: 'manager@freshmart.ca',
+    invoiceDueDays: 15,
+    contractNotes: 'Net 15 terms. Bulk discount applied.',
+    createdAt: daysAgo(90),
+    updatedAt: daysAgo(30),
+  },
+  {
+    id: 'rc-2',
+    businessId: 'business-1',
+    locationId: 'location-2',
+    effectiveDate: '2026-01-01',
+    regular: 9,
+    bigDouble: 18,
+    outOfTownBig: 28,
+    rush: 20,
+    rushOutOfTown: 30,
+    applyGst: true,
+    cancellationBeforeDepart: 0,
+    cancellationEnRoute: 5,
+    billingEmail: 'billing@freshmart.ca',
+    backupEmail: 'brentwood@freshmart.ca',
+    invoiceDueDays: 15,
+    contractNotes: '',
+    createdAt: daysAgo(90),
+    updatedAt: daysAgo(30),
+  },
+  {
+    id: 'rc-3',
+    businessId: 'business-2',
+    locationId: 'location-3',
+    effectiveDate: '2026-01-01',
+    regular: 12,
+    bigDouble: 24,
+    outOfTownBig: 35,
+    rush: 22,
+    rushOutOfTown: 32,
+    applyGst: true,
+    cancellationBeforeDepart: 0,
+    cancellationEnRoute: 5,
+    billingEmail: 'accounts@medsupply.ca',
+    backupEmail: 'admin@medsupply.ca',
+    invoiceDueDays: 15,
+    contractNotes: 'Priority medical deliveries. Rush SLA guaranteed.',
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(15),
+  },
+  {
+    id: 'rc-4',
+    businessId: 'business-3',
+    locationId: 'location-4',
+    effectiveDate: '2026-01-01',
+    regular: 9,
+    bigDouble: 18,
+    outOfTownBig: 25,
+    rush: 20,
+    rushOutOfTown: 30,
+    applyGst: true,
+    cancellationBeforeDepart: 0,
+    cancellationEnRoute: 5,
+    billingEmail: 'finance@homegoods.ca',
+    backupEmail: '',
+    invoiceDueDays: 15,
+    contractNotes: '',
+    createdAt: daysAgo(45),
+    updatedAt: daysAgo(45),
+  },
+]
+
+// Mock Invoices
+export const initialInvoices: Invoice[] = [
+  {
+    id: 'inv-798',
+    invoiceNumber: 'INV-798',
+    businessId: 'business-2',
+    businessName: 'MedSupply Co',
+    locationId: 'location-3',
+    locationName: 'Main Office',
+    locationAddress: '1111 Centre St N, Calgary, AB T2E 2R2',
+    billingEmail: 'accounts@medsupply.ca',
+    periodStart: '2026-03-01',
+    periodEnd: '2026-03-31',
+    lines: [
+      { id: 'line-1', description: 'Regular deliveries', deliveryType: 'regular', quantity: 28, rate: 12, total: 336, deliveryIds: [] },
+      { id: 'line-2', description: '2+ big packages', deliveryType: 'big_double', quantity: 12, rate: 24, total: 288, deliveryIds: [] },
+      { id: 'line-3', description: 'Rush deliveries', deliveryType: 'rush', quantity: 8, rate: 22, total: 176, deliveryIds: [] },
+    ],
+    subtotal: 800,
+    gstAmount: 40,
+    total: 840,
+    status: 'paid',
+    dueDate: '2026-04-15',
+    paidDate: '2026-04-12',
+    paymentMethod: 'e_transfer',
+    paymentReference: 'MedSupply March 2026',
+    amountReceived: 840,
+    emailLog: [
+      { id: 'e1', type: 'generated', timestamp: '2026-04-01T08:00:00Z' },
+      { id: 'e2', type: 'sent', timestamp: '2026-04-01T08:01:00Z', email: 'accounts@medsupply.ca' },
+      { id: 'e3', type: 'opened', timestamp: '2026-04-03T14:14:00Z' },
+    ],
+    createdAt: '2026-04-01T08:00:00Z',
+    updatedAt: '2026-04-12T10:30:00Z',
+  },
+  {
+    id: 'inv-799',
+    invoiceNumber: 'INV-799',
+    businessId: 'business-1',
+    businessName: 'FreshMart Grocery',
+    locationId: 'location-1',
+    locationName: 'Shawnessy',
+    locationAddress: '250 Shawville Blvd SE, Calgary, AB T2Y 3Z1',
+    billingEmail: 'billing@freshmart.ca',
+    periodStart: '2026-03-01',
+    periodEnd: '2026-03-31',
+    lines: [
+      { id: 'line-4', description: 'Regular deliveries', deliveryType: 'regular', quantity: 42, rate: 9, total: 378, deliveryIds: [] },
+      { id: 'line-5', description: '2+ big packages', deliveryType: 'big_double', quantity: 8, rate: 18, total: 144, deliveryIds: [] },
+      { id: 'line-6', description: 'Rush deliveries', deliveryType: 'rush', quantity: 4, rate: 20, total: 80, deliveryIds: [] },
+    ],
+    subtotal: 602,
+    gstAmount: 30.10,
+    total: 632.10,
+    status: 'overdue',
+    dueDate: '2026-04-01',
+    paidDate: null,
+    paymentMethod: null,
+    paymentReference: null,
+    amountReceived: null,
+    emailLog: [
+      { id: 'e4', type: 'generated', timestamp: '2026-03-15T08:00:00Z' },
+      { id: 'e5', type: 'sent', timestamp: '2026-03-15T08:01:00Z', email: 'billing@freshmart.ca' },
+      { id: 'e6', type: 'opened', timestamp: '2026-03-17T09:22:00Z' },
+      { id: 'e7', type: 'reminder', timestamp: '2026-03-25T08:00:00Z', note: 'Reminder 1 sent' },
+      { id: 'e8', type: 'due_reminder', timestamp: '2026-04-01T08:00:00Z', note: 'Due date reminder' },
+      { id: 'e9', type: 'overdue', timestamp: '2026-04-08T08:00:00Z', note: 'Overdue notice sent' },
+    ],
+    createdAt: '2026-03-15T08:00:00Z',
+    updatedAt: '2026-04-08T08:00:00Z',
+  },
+  {
+    id: 'inv-800',
+    invoiceNumber: 'INV-800',
+    businessId: 'business-3',
+    businessName: 'HomeGoods Plus',
+    locationId: 'location-4',
+    locationName: 'Downtown',
+    locationAddress: '3009 14 St SW, Calgary, AB T2T 3V6',
+    billingEmail: 'finance@homegoods.ca',
+    periodStart: '2026-03-01',
+    periodEnd: '2026-03-31',
+    lines: [
+      { id: 'line-7', description: 'Regular deliveries', deliveryType: 'regular', quantity: 35, rate: 9, total: 315, deliveryIds: [] },
+      { id: 'line-8', description: '2+ big packages', deliveryType: 'big_double', quantity: 5, rate: 18, total: 90, deliveryIds: [] },
+    ],
+    subtotal: 405,
+    gstAmount: 20.25,
+    total: 425.25,
+    status: 'sent',
+    dueDate: daysFromNow(2),
+    paidDate: null,
+    paymentMethod: null,
+    paymentReference: null,
+    amountReceived: null,
+    emailLog: [
+      { id: 'e10', type: 'generated', timestamp: daysAgo(10) },
+      { id: 'e11', type: 'sent', timestamp: daysAgo(10), email: 'finance@homegoods.ca' },
+      { id: 'e12', type: 'opened', timestamp: daysAgo(8) },
+    ],
+    createdAt: daysAgo(10),
+    updatedAt: daysAgo(10),
+  },
+]
+
+// Mock Disputes
+export const initialDisputes: Dispute[] = [
+  {
+    id: 'dispute-1',
+    invoiceId: 'inv-799',
+    invoiceNumber: 'INV-799',
+    lineItemId: 'line-5',
+    lineItemDescription: '2+ big packages',
+    businessId: 'business-1',
+    businessName: 'FreshMart Grocery',
+    claim: 'On March 15, we only sent 1 big package, not 2. Driver may have miscounted. Please review delivery del-015 photo.',
+    photoUrl: null,
+    status: 'open',
+    adminResponse: null,
+    creditAmount: null,
+    createdAt: daysAgo(5),
+    resolvedAt: null,
+  },
+]
+
+// Mock Unmatched Payments
+export const initialUnmatchedPayments: UnmatchedPayment[] = [
+  {
+    id: 'payment-1',
+    amount: 840,
+    dateReceived: daysAgo(3),
+    senderReference: "Remedy's",
+    matchedInvoiceId: null,
+    matchedAt: null,
+  },
+]

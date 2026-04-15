@@ -8,6 +8,8 @@ import { AdminDashboard } from './AdminDashboard'
 import { AdminDrivers } from './AdminDrivers'
 import { AdminBusinesses } from './AdminBusinesses'
 import { AdminOrders } from './AdminOrders'
+import { AdminRateCards } from './AdminRateCards'
+import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
 import { cn } from '@/lib/utils'
 import { 
@@ -15,6 +17,8 @@ import {
   Users, 
   Building2, 
   Package,
+  CreditCard,
+  FileText,
   Settings,
   LogOut,
   Shield,
@@ -23,22 +27,25 @@ import {
   Bell
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'settings'
+type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'settings'
 
 const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'businesses', label: 'Businesses', icon: Building2 },
   { id: 'orders', label: 'Orders', icon: Package },
+  { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
+  { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 export function AdminView() {
   const [activePage, setActivePage] = useState<AdminPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { logout, currentUser, admins } = useApp()
+  const { logout, currentUser } = useApp()
 
-  const admin = admins.find(a => a.id === currentUser?.id)
+  // For admin, just use currentUser info directly
+  const admin = currentUser ? { name: currentUser.name, email: currentUser.email, avatar: undefined } : null
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -50,6 +57,8 @@ export function AdminView() {
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />
+      case 'rate_cards': return <AdminRateCards />
+      case 'invoices': return <AdminInvoices />
       case 'settings': return <AdminSettings />
       default: return <AdminDashboard />
     }

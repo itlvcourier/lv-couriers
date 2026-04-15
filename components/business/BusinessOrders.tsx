@@ -29,7 +29,7 @@ export function BusinessOrders() {
   
   // Get orders for this business - convert deliveries to orders format
   const businessOrders = (deliveries || [])
-    .filter(d => d.businessId === currentUser?.id)
+    .filter(d => d.businessId === currentUser?.businessId)
     .map(d => ({
       id: d.id,
       businessId: d.businessId,

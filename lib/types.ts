@@ -191,7 +191,7 @@ export const CALGARY_ADDRESSES = [
   { address: '130 Crowfoot Crescent NW, Calgary, AB', area: 'Crowfoot', postalCode: 'T3G 3P5' },
 ]
 
-// Rate calculations
+// Rate calculations (default rates)
 export const RATES = {
   regular: 9,
   bigPackage1: 9,
@@ -200,4 +200,108 @@ export const RATES = {
   rushOutOfTown: 30,
   outOfTown: 15,
   gst: 0.05,
+}
+
+// ===== PHASE 2: BILLING & INVOICING TYPES =====
+
+export interface RateCard {
+  id: string
+  businessId: string
+  locationId: string
+  effectiveDate: string
+  regular: number
+  bigDouble: number // 2+ big packages
+  outOfTownBig: number // 2+ big packages out of town
+  rush: number
+  rushOutOfTown: number
+  applyGst: boolean
+  cancellationBeforeDepart: number
+  cancellationEnRoute: number
+  billingEmail: string
+  backupEmail: string
+  invoiceDueDays: number
+  contractNotes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'disputed' | 'escalated'
+
+export interface InvoiceLine {
+  id: string
+  description: string
+  deliveryType: 'regular' | 'big_double' | 'out_of_town_big' | 'rush' | 'rush_out_of_town' | 'cancellation'
+  quantity: number
+  rate: number
+  total: number
+  deliveryIds: string[] // IDs of deliveries included in this line
+}
+
+export interface InvoiceEmailEvent {
+  id: string
+  type: 'generated' | 'sent' | 'opened' | 'reminder' | 'due_reminder' | 'overdue' | 'escalated' | 'bounced' | 'resent'
+  timestamp: string
+  email?: string
+  note?: string
+}
+
+export interface Invoice {
+  id: string
+  invoiceNumber: string
+  businessId: string
+  businessName: string
+  locationId: string
+  locationName: string
+  locationAddress: string
+  billingEmail: string
+  periodStart: string
+  periodEnd: string
+  lines: InvoiceLine[]
+  subtotal: number
+  gstAmount: number
+  total: number
+  status: InvoiceStatus
+  dueDate: string
+  paidDate: string | null
+  paymentMethod: string | null
+  paymentReference: string | null
+  amountReceived: number | null
+  emailLog: InvoiceEmailEvent[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type DisputeStatus = 'open' | 'resolved_accepted' | 'resolved_rejected'
+
+export interface Dispute {
+  id: string
+  invoiceId: string
+  invoiceNumber: string
+  lineItemId: string
+  lineItemDescription: string
+  businessId: string
+  businessName: string
+  claim: string
+  photoUrl: string | null
+  status: DisputeStatus
+  adminResponse: string | null
+  creditAmount: number | null
+  createdAt: string
+  resolvedAt: string | null
+}
+
+export interface UnmatchedPayment {
+  id: string
+  amount: number
+  dateReceived: string
+  senderReference: string
+  matchedInvoiceId: string | null
+  matchedAt: string | null
+}
+
+export interface PaymentDetails {
+  method: 'e_transfer' | 'cheque' | 'bank_transfer' | 'cash' | 'other'
+  date: string
+  reference: string
+  amountReceived: number
 }

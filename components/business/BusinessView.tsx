@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { CreateOrderForm } from './CreateOrderForm'
 import { BusinessOrders } from './BusinessOrders'
+import { BusinessInvoices } from './BusinessInvoices'
 import { BusinessProfile } from './BusinessProfile'
 import { 
   Plus, 
   Package, 
   Building2,
-  User
+  User,
+  FileText
 } from 'lucide-react'
 
 export function BusinessView() {
@@ -61,6 +63,10 @@ export function BusinessView() {
             <TabsContent value="create" className="mt-0 m-0">
               <CreateOrderForm onSuccess={() => setActiveTab('orders')} />
             </TabsContent>
+
+            <TabsContent value="invoices" className="mt-0 m-0">
+              <BusinessInvoices />
+            </TabsContent>
             
             <TabsContent value="profile" className="mt-0 m-0">
               <BusinessProfile />
@@ -70,7 +76,7 @@ export function BusinessView() {
 
         {/* Bottom Navigation */}
         <div className="sticky bottom-0 bg-card border-t border-border safe-area-bottom">
-          <TabsList className="w-full h-16 rounded-none bg-transparent p-0 grid grid-cols-3 max-w-md mx-auto">
+          <TabsList className="w-full h-16 rounded-none bg-transparent p-0 grid grid-cols-4 max-w-lg mx-auto">
             <TabsTrigger 
               value="orders" 
               className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
@@ -86,6 +92,13 @@ export function BusinessView() {
                 <Plus className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xs font-medium -mt-1">Create</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="invoices" 
+              className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+            >
+              <FileText className="w-5 h-5" />
+              <span className="text-xs font-medium">Invoices</span>
             </TabsTrigger>
             <TabsTrigger 
               value="profile" 

@@ -13,6 +13,12 @@ import type {
   PickupVerification,
   DeliveryFlag,
   FailReason,
+  RateCard,
+  Invoice,
+  Dispute,
+  UnmatchedPayment,
+  PaymentDetails,
+  InvoiceLine,
 } from './types'
 import {
   mockUsers,
@@ -20,7 +26,12 @@ import {
   initialBusinesses,
   initialDeliveries,
   initialSettings,
+  initialRateCards,
+  initialInvoices,
+  initialDisputes,
+  initialUnmatchedPayments,
 } from './data'
+import { calculateInvoiceLines, calculateGST, generateInvoiceNumber } from './billing'
 
 interface AppContextType {
   // Auth state
@@ -34,6 +45,10 @@ interface AppContextType {
   businesses: Business[]
   settings: SystemSettings
   notifications: Notification[]
+  rateCards: RateCard[]
+  invoices: Invoice[]
+  disputes: Dispute[]
+  unmatchedPayments: UnmatchedPayment[]
   
   // Auth functions
   login: (email: string, password: string) => { success: boolean; role?: UserRole; error?: string }
@@ -66,6 +81,15 @@ interface AppContextType {
   // Notification functions
   markNotificationRead: (notificationId: string) => void
   
+  // Billing functions
+  saveRateCard: (locationId: string, rateCard: Partial<RateCard>) => void
+  getRateCardForLocation: (locationId: string) => RateCard | null
+  generateInvoice: (businessId: string, locationId: string, periodStart: string, periodEnd: string) => Invoice | null
+  markInvoicePaid: (invoiceId: string, paymentDetails: PaymentDetails) => void
+  disputeLineItem: (invoiceId: string, lineItemId: string, claim: string, photoUrl: string | null) => void
+  resolveDispute: (disputeId: string, action: 'accept' | 'reject', adminNote: string, creditAmount?: number) => void
+  matchPayment: (paymentId: string, invoiceId: string) => void
+  
   // Helpers
   getDriverActiveJobs: (driverId: string) => number
   getDriverMaxJobs: (driverId: string) => number
@@ -83,6 +107,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [businesses, setBusinesses] = useState<Business[]>(initialBusinesses)
   const [settings, setSettings] = useState<SystemSettings>(initialSettings)
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [rateCards, setRateCards] = useState<RateCard[]>(initialRateCards)
+  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices)
+  const [disputes, setDisputes] = useState<Dispute[]>(initialDisputes)
+  const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPayment[]>(initialUnmatchedPayments)
 
   // Auth functions
   const login = useCallback((email: string, password: string) => {
@@ -525,6 +553,254 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  // Billing functions
+  const saveRateCard = useCallback((locationId: string, rateCardData: Partial<RateCard>) => {
+    setRateCards(prev => {
+      const existingIndex = prev.findIndex(rc => rc.locationId === locationId)
+      if (existingIndex >= 0) {
+        // Update existing
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          ...rateCardData,
+          updatedAt: new Date().toISOString(),
+        }
+        return updated
+      } else {
+        // Create new
+        const business = businesses.flatMap(b => b.locations).find(l => l.id === locationId)
+        const newRateCard: RateCard = {
+          id: `rc-${Date.now()}`,
+          businessId: business?.businessId || '',
+          locationId,
+          effectiveDate: rateCardData.effectiveDate || new Date().toISOString().split('T')[0],
+          regular: rateCardData.regular ?? 9,
+          bigDouble: rateCardData.bigDouble ?? 18,
+          outOfTownBig: rateCardData.outOfTownBig ?? 0,
+          rush: rateCardData.rush ?? 20,
+          rushOutOfTown: rateCardData.rushOutOfTown ?? 30,
+          applyGst: rateCardData.applyGst ?? true,
+          cancellationBeforeDepart: rateCardData.cancellationBeforeDepart ?? 0,
+          cancellationEnRoute: rateCardData.cancellationEnRoute ?? 5,
+          billingEmail: rateCardData.billingEmail || '',
+          backupEmail: rateCardData.backupEmail || '',
+          invoiceDueDays: rateCardData.invoiceDueDays ?? 15,
+          contractNotes: rateCardData.contractNotes || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        return [...prev, newRateCard]
+      }
+    })
+  }, [businesses])
+
+  const getRateCardForLocation = useCallback((locationId: string): RateCard | null => {
+    return rateCards.find(rc => rc.locationId === locationId) || null
+  }, [rateCards])
+
+  const generateInvoice = useCallback((
+    businessId: string,
+    locationId: string,
+    periodStart: string,
+    periodEnd: string
+  ): Invoice | null => {
+    const rateCard = rateCards.find(rc => rc.locationId === locationId)
+    if (!rateCard) return null
+
+    const business = businesses.find(b => b.id === businessId)
+    const location = business?.locations.find(l => l.id === locationId)
+    if (!business || !location) return null
+
+    // Get deliveries for this location in the period
+    const periodDeliveries = deliveries.filter(d => 
+      d.locationId === locationId &&
+      d.status === 'delivered' &&
+      d.deliveredAt &&
+      d.deliveredAt >= periodStart &&
+      d.deliveredAt <= periodEnd
+    )
+
+    const lines = calculateInvoiceLines(periodDeliveries, rateCard)
+    const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
+    const gstAmount = calculateGST(subtotal, rateCard.applyGst)
+    const total = subtotal + gstAmount
+
+    const dueDate = new Date()
+    dueDate.setDate(dueDate.getDate() + rateCard.invoiceDueDays)
+
+    const newInvoice: Invoice = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: generateInvoiceNumber(invoices),
+      businessId,
+      businessName: business.name,
+      locationId,
+      locationName: location.name,
+      locationAddress: location.address,
+      billingEmail: rateCard.billingEmail,
+      periodStart,
+      periodEnd,
+      lines,
+      subtotal,
+      gstAmount,
+      total,
+      status: 'draft',
+      dueDate: dueDate.toISOString().split('T')[0],
+      paidDate: null,
+      paymentMethod: null,
+      paymentReference: null,
+      amountReceived: null,
+      emailLog: [
+        {
+          id: `e-${Date.now()}`,
+          type: 'generated',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    setInvoices(prev => [...prev, newInvoice])
+    return newInvoice
+  }, [rateCards, businesses, deliveries, invoices])
+
+  const markInvoicePaid = useCallback((invoiceId: string, paymentDetails: PaymentDetails) => {
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === invoiceId) {
+        return {
+          ...inv,
+          status: 'paid' as const,
+          paidDate: paymentDetails.date,
+          paymentMethod: paymentDetails.method,
+          paymentReference: paymentDetails.reference,
+          amountReceived: paymentDetails.amountReceived,
+          updatedAt: new Date().toISOString(),
+          emailLog: [
+            ...inv.emailLog,
+            {
+              id: `e-${Date.now()}`,
+              type: 'sent' as const,
+              timestamp: new Date().toISOString(),
+              note: `Marked as paid via ${paymentDetails.method}`,
+            },
+          ],
+        }
+      }
+      return inv
+    }))
+  }, [])
+
+  const disputeLineItem = useCallback((
+    invoiceId: string,
+    lineItemId: string,
+    claim: string,
+    photoUrl: string | null
+  ) => {
+    const invoice = invoices.find(i => i.id === invoiceId)
+    if (!invoice) return
+
+    const lineItem = invoice.lines.find(l => l.id === lineItemId)
+    if (!lineItem) return
+
+    const newDispute: Dispute = {
+      id: `dispute-${Date.now()}`,
+      invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      lineItemId,
+      lineItemDescription: lineItem.description,
+      businessId: invoice.businessId,
+      businessName: invoice.businessName,
+      claim,
+      photoUrl,
+      status: 'open',
+      adminResponse: null,
+      creditAmount: null,
+      createdAt: new Date().toISOString(),
+      resolvedAt: null,
+    }
+
+    setDisputes(prev => [...prev, newDispute])
+
+    // Update invoice status
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === invoiceId) {
+        return { ...inv, status: 'disputed' as const, updatedAt: new Date().toISOString() }
+      }
+      return inv
+    }))
+
+    // Add notification
+    const newNotification: Notification = {
+      id: `notif-${Date.now()}`,
+      type: 'flag',
+      title: 'Invoice Disputed',
+      message: `${invoice.businessName} disputed a charge on ${invoice.invoiceNumber}`,
+      businessId: invoice.businessId,
+      createdAt: new Date().toISOString(),
+      read: false,
+    }
+    setNotifications(prev => [newNotification, ...prev])
+  }, [invoices])
+
+  const resolveDispute = useCallback((
+    disputeId: string,
+    action: 'accept' | 'reject',
+    adminNote: string,
+    creditAmount?: number
+  ) => {
+    setDisputes(prev => prev.map(d => {
+      if (d.id === disputeId) {
+        return {
+          ...d,
+          status: action === 'accept' ? 'resolved_accepted' as const : 'resolved_rejected' as const,
+          adminResponse: adminNote,
+          creditAmount: action === 'accept' ? creditAmount || 0 : null,
+          resolvedAt: new Date().toISOString(),
+        }
+      }
+      return d
+    }))
+
+    // If accepted, update invoice status back to sent (reminders can resume)
+    const dispute = disputes.find(d => d.id === disputeId)
+    if (dispute) {
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id === dispute.invoiceId) {
+          return {
+            ...inv,
+            status: 'sent' as const,
+            updatedAt: new Date().toISOString(),
+          }
+        }
+        return inv
+      }))
+    }
+  }, [disputes])
+
+  const matchPayment = useCallback((paymentId: string, invoiceId: string) => {
+    setUnmatchedPayments(prev => prev.map(p => {
+      if (p.id === paymentId) {
+        return {
+          ...p,
+          matchedInvoiceId: invoiceId,
+          matchedAt: new Date().toISOString(),
+        }
+      }
+      return p
+    }))
+
+    // Mark invoice as paid
+    const payment = unmatchedPayments.find(p => p.id === paymentId)
+    if (payment) {
+      markInvoicePaid(invoiceId, {
+        method: 'e_transfer',
+        date: payment.dateReceived,
+        reference: payment.senderReference,
+        amountReceived: payment.amount,
+      })
+    }
+  }, [unmatchedPayments, markInvoicePaid])
+
   return (
     <AppContext.Provider
       value={{
@@ -555,6 +831,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addBusiness,
         updateSettings,
         markNotificationRead,
+        rateCards,
+        invoices,
+        disputes,
+        unmatchedPayments,
+        saveRateCard,
+        getRateCardForLocation,
+        generateInvoice,
+        markInvoicePaid,
+        disputeLineItem,
+        resolveDispute,
+        matchPayment,
         getDriverActiveJobs,
         getDriverMaxJobs,
         canDriverClaimJob,
