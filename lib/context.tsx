@@ -15,6 +15,7 @@ import type {
   FailReason,
   RateCard,
   Invoice,
+  InvoiceEmailEvent,
   Dispute,
   UnmatchedPayment,
   PaymentDetails,
@@ -120,6 +121,17 @@ interface AppContextType {
   disputeLineItem: (invoiceId: string, lineItemId: string, claim: string, photoUrl: string | null) => void
   resolveDispute: (disputeId: string, action: 'accept' | 'reject', adminNote: string, creditAmount?: number) => void
   matchPayment: (paymentId: string, invoiceId: string) => void
+  // Invoice sending / reminders
+  toggleAutoSend: () => void
+  updateInvoiceSettings: (settings: Partial<SystemSettings>) => void
+  sendSingleInvoice: (invoiceId: string, opts?: { backupEmail?: string }) => { ok: boolean; reason?: string }
+  sendAllDraftInvoices: () => { sent: Invoice[]; skipped: Invoice[] }
+  pauseReminders: (invoiceId: string) => void
+  resumeReminders: (invoiceId: string) => void
+  skipNextReminder: (invoiceId: string) => void
+  updateInvoiceBillingEmail: (invoiceId: string, email: string) => void
+  updateInvoiceBackupEmail: (invoiceId: string, email: string) => void
+  resendBouncedInvoice: (invoiceId: string, newEmail: string) => void
   
   // Phase 3: Tracking & Notifications
   smsLog: SMSLogEntry[]
@@ -860,6 +872,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       paymentMethod: null,
       paymentReference: null,
       amountReceived: null,
+      sentAt: null,
+      openedAt: null,
+      remindersPaused: false,
+      remindersSkipCount: 0,
+      emailBounced: false,
+      backupBillingEmail: rateCard.backupEmail || null,
+      recipientPhone: null,
       emailLog: [
         {
           id: `e-${Date.now()}`,
@@ -878,6 +897,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markInvoicePaid = useCallback((invoiceId: string, paymentDetails: PaymentDetails) => {
     setInvoices(prev => prev.map(inv => {
       if (inv.id === invoiceId) {
+        // Strip out any future/scheduled reminder events - they're cancelled on payment
+        const logWithoutScheduled = inv.emailLog.filter(e => !e.isScheduled)
         return {
           ...inv,
           status: 'paid' as const,
@@ -885,19 +906,192 @@ export function AppProvider({ children }: { children: ReactNode }) {
           paymentMethod: paymentDetails.method,
           paymentReference: paymentDetails.reference,
           amountReceived: paymentDetails.amountReceived,
+          remindersPaused: false,
           updatedAt: new Date().toISOString(),
           emailLog: [
-            ...inv.emailLog,
+            ...logWithoutScheduled,
             {
               id: `e-${Date.now()}`,
-              type: 'sent' as const,
+              type: 'paid' as const,
               timestamp: new Date().toISOString(),
-              note: `Marked as paid via ${paymentDetails.method}`,
+              note: `Marked as paid via ${paymentDetails.method.replace('_', ' ')}${paymentDetails.reference ? ` (ref: ${paymentDetails.reference})` : ''}`,
             },
           ],
         }
       }
       return inv
+    }))
+  }, [])
+
+  // ===== Invoice sending & reminder controls =====
+
+  const toggleAutoSend = useCallback(() => {
+    setSettings(prev => ({ ...prev, autoSendInvoices: !prev.autoSendInvoices }))
+  }, [])
+
+  const updateInvoiceSettings = useCallback((next: Partial<SystemSettings>) => {
+    setSettings(prev => ({ ...prev, ...next }))
+  }, [])
+
+  const computeScheduledEvents = useCallback((sentAt: Date, due: Date, s: SystemSettings): InvoiceEmailEvent[] => {
+    const addDays = (d: Date, n: number) => {
+      const c = new Date(d)
+      c.setDate(c.getDate() + n)
+      return c
+    }
+    return [
+      { id: `e-${Date.now()}-r1`, type: 'reminder_1', timestamp: addDays(sentAt, s.reminderDay1).toISOString(), isScheduled: true },
+      { id: `e-${Date.now()}-r2`, type: 'reminder_2', timestamp: due.toISOString(), isScheduled: true },
+      { id: `e-${Date.now()}-od`, type: 'overdue_notice', timestamp: addDays(due, s.overdueDay).toISOString(), isScheduled: true },
+      { id: `e-${Date.now()}-esc`, type: 'escalated', timestamp: addDays(due, s.escalationDay).toISOString(), isScheduled: true, note: 'Escalation scheduled if unpaid' },
+    ]
+  }, [])
+
+  const sendSingleInvoice = useCallback((invoiceId: string, opts?: { backupEmail?: string }) => {
+    const invoice = invoices.find(i => i.id === invoiceId)
+    if (!invoice) return { ok: false, reason: 'Invoice not found' }
+    if (invoice.status !== 'draft') return { ok: false, reason: 'Invoice is not a draft' }
+    const primary = invoice.billingEmail?.trim()
+    if (!primary) return { ok: false, reason: 'No billing email set' }
+    if (invoice.emailBounced && !opts?.backupEmail) return { ok: false, reason: 'Primary email previously bounced — provide a new one' }
+
+    const sendTo = opts?.backupEmail || primary
+    const now = new Date()
+    const due = new Date(now)
+    due.setDate(due.getDate() + settings.invoiceDueDays)
+
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id !== invoiceId) return inv
+      const sentEvent: InvoiceEmailEvent = {
+        id: `e-${Date.now()}-sent`,
+        type: 'sent',
+        timestamp: now.toISOString(),
+        email: sendTo,
+      }
+      const scheduled = computeScheduledEvents(now, due, settings)
+      return {
+        ...inv,
+        status: 'sent' as const,
+        sentAt: now.toISOString(),
+        dueDate: due.toISOString().split('T')[0],
+        billingEmail: sendTo,
+        emailBounced: false,
+        updatedAt: now.toISOString(),
+        emailLog: [...inv.emailLog, sentEvent, ...scheduled],
+      }
+    }))
+    return { ok: true }
+  }, [invoices, settings, computeScheduledEvents])
+
+  const sendAllDraftInvoices = useCallback(() => {
+    const drafts = invoices.filter(i => i.status === 'draft')
+    const now = new Date()
+    const due = new Date(now)
+    due.setDate(due.getDate() + settings.invoiceDueDays)
+
+    const sent: Invoice[] = []
+    const skipped: Invoice[] = []
+
+    setInvoices(prev => prev.map(inv => {
+      if (inv.status !== 'draft') return inv
+      const email = inv.billingEmail?.trim()
+      if (!email || inv.emailBounced) {
+        skipped.push(inv)
+        return inv
+      }
+      const sentEvent: InvoiceEmailEvent = {
+        id: `e-${Date.now()}-${inv.id}-sent`,
+        type: 'sent',
+        timestamp: now.toISOString(),
+        email,
+      }
+      const scheduled = computeScheduledEvents(now, due, settings)
+      const next: Invoice = {
+        ...inv,
+        status: 'sent',
+        sentAt: now.toISOString(),
+        dueDate: due.toISOString().split('T')[0],
+        updatedAt: now.toISOString(),
+        emailLog: [...inv.emailLog, sentEvent, ...scheduled],
+      }
+      sent.push(next)
+      return next
+    }))
+
+    return { sent, skipped }
+  }, [invoices, settings, computeScheduledEvents])
+
+  const pauseReminders = useCallback((invoiceId: string) => {
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id !== invoiceId) return inv
+      return {
+        ...inv,
+        remindersPaused: true,
+        updatedAt: new Date().toISOString(),
+        emailLog: [
+          ...inv.emailLog,
+          { id: `e-${Date.now()}`, type: 'reminders_paused', timestamp: new Date().toISOString() },
+        ],
+      }
+    }))
+  }, [])
+
+  const resumeReminders = useCallback((invoiceId: string) => {
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id !== invoiceId) return inv
+      return {
+        ...inv,
+        remindersPaused: false,
+        updatedAt: new Date().toISOString(),
+        emailLog: [
+          ...inv.emailLog,
+          { id: `e-${Date.now()}`, type: 'reminders_resumed', timestamp: new Date().toISOString() },
+        ],
+      }
+    }))
+  }, [])
+
+  const skipNextReminder = useCallback((invoiceId: string) => {
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id !== invoiceId) return inv
+      // Remove the next scheduled reminder (first isScheduled reminder event in order)
+      const idx = inv.emailLog.findIndex(e => e.isScheduled && (e.type === 'reminder_1' || e.type === 'reminder_2' || e.type === 'overdue_notice'))
+      const nextLog = [...inv.emailLog]
+      if (idx >= 0) nextLog.splice(idx, 1)
+      nextLog.push({ id: `e-${Date.now()}`, type: 'skipped', timestamp: new Date().toISOString(), note: 'Admin skipped next reminder' })
+      return {
+        ...inv,
+        remindersSkipCount: inv.remindersSkipCount + 1,
+        updatedAt: new Date().toISOString(),
+        emailLog: nextLog,
+      }
+    }))
+  }, [])
+
+  const updateInvoiceBillingEmail = useCallback((invoiceId: string, email: string) => {
+    setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, billingEmail: email, emailBounced: false, updatedAt: new Date().toISOString() } : inv))
+  }, [])
+
+  const updateInvoiceBackupEmail = useCallback((invoiceId: string, email: string) => {
+    setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, backupBillingEmail: email || null, updatedAt: new Date().toISOString() } : inv))
+  }, [])
+
+  const resendBouncedInvoice = useCallback((invoiceId: string, newEmail: string) => {
+    const now = new Date()
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id !== invoiceId) return inv
+      return {
+        ...inv,
+        billingEmail: newEmail,
+        emailBounced: false,
+        sentAt: inv.sentAt || now.toISOString(),
+        status: inv.status === 'draft' ? 'sent' : inv.status,
+        updatedAt: now.toISOString(),
+        emailLog: [
+          ...inv.emailLog,
+          { id: `e-${Date.now()}`, type: 'resent', timestamp: now.toISOString(), email: newEmail, note: `Resent after bounce to ${newEmail}` },
+        ],
+      }
     }))
   }, [])
 
@@ -1388,6 +1582,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         disputeLineItem,
         resolveDispute,
         matchPayment,
+        toggleAutoSend,
+        updateInvoiceSettings,
+        sendSingleInvoice,
+        sendAllDraftInvoices,
+        pauseReminders,
+        resumeReminders,
+        skipNextReminder,
+        updateInvoiceBillingEmail,
+        updateInvoiceBackupEmail,
+        resendBouncedInvoice,
         smsLog,
         adminNotifications,
         driverGPS,

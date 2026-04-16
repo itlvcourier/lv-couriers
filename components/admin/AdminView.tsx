@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/context'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -50,6 +50,15 @@ export function AdminView() {
   const [activePage, setActivePage] = useState<AdminPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { logout, currentUser } = useApp()
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<AdminPage>).detail
+      if (detail) setActivePage(detail)
+    }
+    window.addEventListener('doms:navigate-admin', handler)
+    return () => window.removeEventListener('doms:navigate-admin', handler)
+  }, [])
 
   // For admin, just use currentUser info directly
   const admin = currentUser ? { name: currentUser.name, email: currentUser.email, avatar: undefined } : null

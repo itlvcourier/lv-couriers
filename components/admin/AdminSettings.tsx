@@ -50,6 +50,9 @@ export function AdminSettings() {
     escalationDay: settings.escalationDay,
     autoGenerateInvoices: settings.autoGenerateInvoices,
     autoSendInvoices: settings.autoSendInvoices,
+    reviewReminderDays: settings.reviewReminderDays,
+    sendReminderEmail: settings.sendReminderEmail,
+    sendReminderSms: settings.sendReminderSms,
   })
   
   const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>(() => {
@@ -125,7 +128,7 @@ export function AdminSettings() {
 
   const handleSaveSettings = () => {
     updateSettings(localSettings)
-    toast.success('Settings saved')
+    toast.success('Invoice settings saved')
   }
   
   const handleSaveCapacity = () => {
@@ -296,94 +299,178 @@ export function AdminSettings() {
       </Card>
 
       {/* Invoice Settings */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+      <Card id="invoice-settings" className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-foreground">
             <Clock className="w-5 h-5" />
             Invoice Settings
           </CardTitle>
-          <CardDescription>Configure billing automation and reminders</CardDescription>
+          <CardDescription>Configure billing automation, reminders, and escalation</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Invoice Due Days</Label>
-              <Input
-                type="number"
-                min="7"
-                max="60"
-                value={localSettings.invoiceDueDays}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceDueDays: parseInt(e.target.value) || 15 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
+        <CardContent className="space-y-6">
+          {/* Auto-generate drafts */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">Auto-generate draft invoices on the 28th of each month</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Drafts are generated but not sent &mdash; review period is 28th to 31st</p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-foreground">First Reminder (days before due)</Label>
-              <Input
-                type="number"
-                min="1"
-                max="14"
-                value={localSettings.reminderDay1}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, reminderDay1: parseInt(e.target.value) || 7 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Overdue Reminder (days after due)</Label>
-              <Input
-                type="number"
-                min="1"
-                max="30"
-                value={localSettings.overdueDay}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, overdueDay: parseInt(e.target.value) || 7 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-foreground">Escalation (days after due)</Label>
-              <Input
-                type="number"
-                min="7"
-                max="60"
-                value={localSettings.escalationDay}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, escalationDay: parseInt(e.target.value) || 14 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-            </div>
-          </div>
-          
-          <Separator className="bg-[var(--border-color)]" />
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Auto-generate Invoices</p>
-              <p className="text-xs text-muted-foreground">Automatically create invoices at month end</p>
-            </div>
-            <Switch 
+            <Switch
               checked={localSettings.autoGenerateInvoices}
               onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, autoGenerateInvoices: c }))}
             />
           </div>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Auto-send Invoices</p>
-              <p className="text-xs text-muted-foreground">Automatically email invoices when generated</p>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Auto-send invoices */}
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Automatically send invoices on the 1st of each month</p>
+                <p className="text-xs text-muted-foreground mt-0.5">When OFF &mdash; invoices stay as draft until you manually send them</p>
+              </div>
+              <Switch
+                checked={localSettings.autoSendInvoices}
+                onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, autoSendInvoices: c }))}
+              />
             </div>
-            <Switch 
-              checked={localSettings.autoSendInvoices}
-              onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, autoSendInvoices: c }))}
-            />
+
+            {localSettings.autoSendInvoices ? (
+              <Badge variant="outline" className="border-green-500/40 bg-green-500/10 text-green-400 gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                Invoices send automatically on the 1st
+              </Badge>
+            ) : (
+              <>
+                <Badge variant="outline" className="border-yellow-500/40 bg-yellow-500/10 text-yellow-400 gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                  Manual send required
+                </Badge>
+                <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200/90">
+                  Auto-send is off. Invoices will be generated as drafts on the 28th but will not send until you manually approve and send them from the Invoices page.
+                </div>
+              </>
+            )}
           </div>
-          
-          <Button 
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Invoice due days */}
+          <div className="space-y-2">
+            <Label className="text-foreground">Invoice due days after sending</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min="1"
+                max="60"
+                value={localSettings.invoiceDueDays}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceDueDays: parseInt(e.target.value) || 15 }))}
+                className="w-24 bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              e.g. Invoice sent April 1 &rarr; due April {(1 + (localSettings.invoiceDueDays || 15))}
+            </p>
+          </div>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Reminder schedule with timeline */}
+          <div className="space-y-4">
+            <Label className="text-foreground">Reminder schedule (applies to all unpaid invoices)</Label>
+
+            <ReminderTimeline
+              reminder1={localSettings.reminderDay1}
+              overdue={localSettings.overdueDay}
+              escalation={localSettings.escalationDay}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ReminderField
+                label="First reminder"
+                suffix="after sending"
+                value={localSettings.reminderDay1}
+                min={1}
+                max={30}
+                onChange={(v) => setLocalSettings(prev => ({ ...prev, reminderDay1: v }))}
+              />
+              <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-3">
+                <p className="text-xs text-muted-foreground">Second reminder</p>
+                <p className="text-sm font-medium text-foreground mt-1">On due date (locked)</p>
+              </div>
+              <ReminderField
+                label="Overdue notice"
+                suffix="after due date"
+                value={localSettings.overdueDay}
+                min={1}
+                max={60}
+                onChange={(v) => setLocalSettings(prev => ({ ...prev, overdueDay: v }))}
+              />
+              <ReminderField
+                label="Escalation"
+                suffix="after due date"
+                value={localSettings.escalationDay}
+                min={1}
+                max={120}
+                onChange={(v) => setLocalSettings(prev => ({ ...prev, escalationDay: v }))}
+              />
+            </div>
+
+            <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-3 text-xs text-muted-foreground">
+              Once escalated, automatic reminders stop. Admin must handle the invoice manually.
+            </div>
+          </div>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Review period reminder */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground">Remind me to review drafts before auto-send</p>
+            </div>
+            <select
+              value={localSettings.reviewReminderDays}
+              onChange={(e) => setLocalSettings(prev => ({ ...prev, reviewReminderDays: parseInt(e.target.value) }))}
+              className="rounded-md border border-[var(--border-color)] bg-[var(--bg-card-2)] text-foreground text-sm px-3 py-2 min-h-[40px]"
+              aria-label="Review reminder days"
+            >
+              <option value={1}>1 day before</option>
+              <option value={2}>2 days before</option>
+              <option value={3}>3 days before</option>
+              <option value={0}>Don&apos;t remind me</option>
+            </select>
+          </div>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Notification preferences */}
+          <div className="space-y-3">
+            <Label className="text-foreground">Notification preferences</Label>
+            <p className="text-xs text-muted-foreground -mt-1">Applies to all reminders (Reminder 1, Reminder 2, overdue notice)</p>
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-foreground">Send reminder via email</p>
+              <Switch
+                checked={localSettings.sendReminderEmail}
+                onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, sendReminderEmail: c }))}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-foreground">Send reminder via SMS</p>
+              <Switch
+                checked={localSettings.sendReminderSms}
+                onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, sendReminderSms: c }))}
+              />
+            </div>
+          </div>
+
+          <Button
             onClick={handleSaveSettings}
-            className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
           >
             <Save className="w-4 h-4 mr-2" />
-            Save Settings
+            Save Invoice Settings
           </Button>
         </CardContent>
       </Card>
@@ -664,6 +751,74 @@ export function AdminSettings() {
         <LogOut className="w-4 h-4 mr-2" />
         Sign Out
       </Button>
+    </div>
+  )
+}
+
+// --- Invoice reminder helpers ---
+
+function ReminderTimeline({
+  reminder1,
+  overdue,
+  escalation,
+}: {
+  reminder1: number
+  overdue: number
+  escalation: number
+}) {
+  const stops = [
+    { label: 'Sent', sub: 'Day 0', color: 'bg-blue-400' },
+    { label: 'Reminder 1', sub: `Day ${reminder1}`, color: 'bg-blue-400' },
+    { label: 'Reminder 2', sub: 'Due date', color: 'bg-orange-400' },
+    { label: 'Overdue', sub: `+${overdue} days`, color: 'bg-red-400' },
+    { label: 'Escalated', sub: `+${escalation} days`, color: 'bg-red-600' },
+  ]
+  return (
+    <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-4">
+      <div className="flex items-start justify-between gap-2">
+        {stops.map((s, i) => (
+          <div key={i} className="flex flex-col items-center gap-1.5 text-center flex-1 min-w-0">
+            <span className={`inline-block h-3 w-3 rounded-full ${s.color}`} />
+            <p className="text-[11px] font-medium text-foreground leading-tight">{s.label}</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="relative h-px bg-border mt-2 -mb-1" />
+    </div>
+  )
+}
+
+function ReminderField({
+  label,
+  suffix,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string
+  suffix: string
+  value: number
+  min: number
+  max: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-3 space-y-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-foreground">Day</span>
+        <Input
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(parseInt(e.target.value) || min)}
+          className="w-20 bg-[var(--bg-card)] border-[var(--border-color)] text-center"
+        />
+        <span className="text-sm text-muted-foreground">{suffix}</span>
+      </div>
     </div>
   )
 }

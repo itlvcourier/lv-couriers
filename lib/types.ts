@@ -204,9 +204,12 @@ export interface SystemSettings {
   reminderDay1: number
   overdueDay: number
   escalationDay: number
+  reviewReminderDays: number
+  sendReminderEmail: boolean
+  sendReminderSms: boolean
   cancellationBeforeDepart: number
   cancellationEnRoute: number
-}
+  }
 
 export interface Notification {
   id: string
@@ -302,12 +305,35 @@ export interface InvoiceLine {
   deliveryIds: string[] // IDs of deliveries included in this line
 }
 
+export type InvoiceEventType =
+  | 'generated'
+  | 'sent'
+  | 'opened'
+  | 'reminder'       // legacy
+  | 'due_reminder'   // legacy
+  | 'reminder_1'
+  | 'reminder_2'
+  | 'overdue_notice'
+  | 'overdue'        // legacy
+  | 'escalated'
+  | 'disputed'
+  | 'dispute_resolved'
+  | 'paid'
+  | 'bounced'
+  | 'resent'
+  | 'sms_sent'
+  | 'skipped'
+  | 'reminders_paused'
+  | 'reminders_resumed'
+
 export interface InvoiceEmailEvent {
   id: string
-  type: 'generated' | 'sent' | 'opened' | 'reminder' | 'due_reminder' | 'overdue' | 'escalated' | 'bounced' | 'resent'
+  type: InvoiceEventType
   timestamp: string
   email?: string
+  phone?: string
   note?: string
+  isScheduled?: boolean
 }
 
 export interface Invoice {
@@ -332,6 +358,14 @@ export interface Invoice {
   paymentReference: string | null
   amountReceived: number | null
   emailLog: InvoiceEmailEvent[]
+  // Send/reminder state
+  sentAt: string | null
+  openedAt: string | null
+  remindersPaused: boolean
+  remindersSkipCount: number
+  emailBounced: boolean
+  backupBillingEmail: string | null
+  recipientPhone: string | null
   createdAt: string
   updatedAt: string
 }
