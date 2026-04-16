@@ -15,10 +15,10 @@ export function calculateRate(
   rateCard: RateCard
 ): number {
   // Priority 1: Rush + out of town
-  if (isRush && isOutOfTown) return rateCard.rushOutOfTown
+  if (isRush && isOutOfTown) return rateCard.rateRushOot
 
   // Priority 2: Rush only
-  if (isRush) return rateCard.rush
+  if (isRush) return rateCard.rateRush
 
   // Count big packages (use confirmed qty if available, otherwise posted qty)
   const bigCount = manifest
@@ -26,13 +26,13 @@ export function calculateRate(
     .reduce((sum, i) => sum + (i.confirmedQty ?? i.postedQty), 0)
 
   // Priority 3: 2+ big packages + out of town
-  if (bigCount >= 2 && isOutOfTown) return rateCard.outOfTownBig
+  if (bigCount >= 2 && isOutOfTown) return rateCard.rateOotBig ?? rateCard.rateBigDouble
 
   // Priority 4: 2+ big packages in town
-  if (bigCount >= 2) return rateCard.bigDouble
+  if (bigCount >= 2) return rateCard.rateBigDouble
 
   // Priority 5: Everything else (regular rate)
-  return rateCard.regular
+  return rateCard.rateRegular
 }
 
 /**
@@ -84,13 +84,13 @@ export function getDeliveryTypeLabel(type: InvoiceLine['deliveryType']): string 
  */
 export function getRateForType(type: InvoiceLine['deliveryType'], rateCard: RateCard): number {
   switch (type) {
-    case 'regular': return rateCard.regular
-    case 'big_double': return rateCard.bigDouble
-    case 'out_of_town_big': return rateCard.outOfTownBig
-    case 'rush': return rateCard.rush
-    case 'rush_out_of_town': return rateCard.rushOutOfTown
-    case 'cancellation': return rateCard.cancellationEnRoute
-    default: return rateCard.regular
+    case 'regular': return rateCard.rateRegular
+    case 'big_double': return rateCard.rateBigDouble
+    case 'out_of_town_big': return rateCard.rateOotBig ?? rateCard.rateBigDouble
+    case 'rush': return rateCard.rateRush
+    case 'rush_out_of_town': return rateCard.rateRushOot
+    case 'cancellation': return rateCard.cancelEnRoute ?? 0
+    default: return rateCard.rateRegular
   }
 }
 
@@ -168,7 +168,7 @@ export function calculateEstimatedCost(
   }
 
   const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard)
-  const gst = calculateGST(rate, rateCard.applyGst)
+  const gst = calculateGST(rate, rateCard.gstApplicable)
   return { rate, gst, total: rate + gst }
 }
 

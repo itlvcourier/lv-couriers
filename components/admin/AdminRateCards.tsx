@@ -125,17 +125,16 @@ interface RateCardEditorProps {
 function RateCardEditor({ business, location, existingRateCard, onSave, onClose }: RateCardEditorProps) {
   const [formData, setFormData] = useState({
     effectiveDate: existingRateCard?.effectiveDate || new Date().toISOString().split('T')[0],
-    regular: existingRateCard?.regular ?? 9,
-    bigDouble: existingRateCard?.bigDouble ?? 18,
-    outOfTownBig: existingRateCard?.outOfTownBig ?? 0,
-    rush: existingRateCard?.rush ?? 20,
-    rushOutOfTown: existingRateCard?.rushOutOfTown ?? 30,
-    applyGst: existingRateCard?.applyGst ?? true,
-    cancellationBeforeDepart: existingRateCard?.cancellationBeforeDepart ?? 0,
-    cancellationEnRoute: existingRateCard?.cancellationEnRoute ?? 5,
+    rateRegular: existingRateCard?.rateRegular ?? 9,
+    rateBigDouble: existingRateCard?.rateBigDouble ?? 18,
+    rateOotBig: existingRateCard?.rateOotBig ?? 0,
+    rateRush: existingRateCard?.rateRush ?? 20,
+    rateRushOot: existingRateCard?.rateRushOot ?? 30,
+    gstApplicable: existingRateCard?.gstApplicable ?? true,
+    cancelBeforeDepart: existingRateCard?.cancelBeforeDepart ?? 0,
+    cancelEnRoute: existingRateCard?.cancelEnRoute ?? 5,
     billingEmail: existingRateCard?.billingEmail || location.billingEmail,
     backupEmail: existingRateCard?.backupEmail || location.backupEmail,
-    invoiceDueDays: existingRateCard?.invoiceDueDays ?? 15,
     contractNotes: existingRateCard?.contractNotes || '',
   })
 
@@ -145,13 +144,13 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     const newErrors: string[] = []
     
     // Required rates cannot be $0 (except OOT big and cancellation fees)
-    if (formData.regular <= 0) newErrors.push('Regular delivery rate must be greater than $0')
-    if (formData.bigDouble <= 0) newErrors.push('2+ big packages rate must be greater than $0')
-    if (formData.rush <= 0) newErrors.push('Rush delivery rate must be greater than $0')
-    if (formData.rushOutOfTown <= 0) newErrors.push('Rush + out of town rate must be greater than $0')
+    if (formData.rateRegular <= 0) newErrors.push('Regular delivery rate must be greater than $0')
+    if (formData.rateBigDouble <= 0) newErrors.push('2+ big packages rate must be greater than $0')
+    if (formData.rateRush <= 0) newErrors.push('Rush delivery rate must be greater than $0')
+    if (formData.rateRushOot <= 0) newErrors.push('Rush + out of town rate must be greater than $0')
     
     // OOT big rate warning (can be 0 but show warning)
-    if (formData.outOfTownBig === 0) {
+    if (formData.rateOotBig === 0) {
       // This is just a warning, not an error
     }
 
@@ -201,8 +200,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.regular}
-                  onChange={(e) => setFormData({ ...formData, regular: parseFloat(e.target.value) || 0 })}
+                  value={formData.rateRegular}
+                  onChange={(e) => setFormData({ ...formData, rateRegular: parseFloat(e.target.value) || 0 })}
                   className="w-24 text-right"
                 />
               </div>
@@ -214,8 +213,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.bigDouble}
-                  onChange={(e) => setFormData({ ...formData, bigDouble: parseFloat(e.target.value) || 0 })}
+                  value={formData.rateBigDouble}
+                  onChange={(e) => setFormData({ ...formData, rateBigDouble: parseFloat(e.target.value) || 0 })}
                   className="w-24 text-right"
                 />
               </div>
@@ -223,7 +222,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-sm">Out of town 2+ big</Label>
-                {formData.outOfTownBig === 0 && (
+                {formData.rateOotBig === 0 && (
                   <p className="text-xs text-yellow-400 mt-0.5">Rate not set - this scenario cannot be billed</p>
                 )}
               </div>
@@ -232,8 +231,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.outOfTownBig}
-                  onChange={(e) => setFormData({ ...formData, outOfTownBig: parseFloat(e.target.value) || 0 })}
+                  value={formData.rateOotBig}
+                  onChange={(e) => setFormData({ ...formData, rateOotBig: parseFloat(e.target.value) || 0 })}
                   className="w-24 text-right"
                 />
               </div>
@@ -245,8 +244,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.rush}
-                  onChange={(e) => setFormData({ ...formData, rush: parseFloat(e.target.value) || 0 })}
+                  value={formData.rateRush}
+                  onChange={(e) => setFormData({ ...formData, rateRush: parseFloat(e.target.value) || 0 })}
                   className="w-24 text-right"
                 />
               </div>
@@ -258,8 +257,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.rushOutOfTown}
-                  onChange={(e) => setFormData({ ...formData, rushOutOfTown: parseFloat(e.target.value) || 0 })}
+                  value={formData.rateRushOot}
+                  onChange={(e) => setFormData({ ...formData, rateRushOot: parseFloat(e.target.value) || 0 })}
                   className="w-24 text-right"
                 />
               </div>
@@ -272,8 +271,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
       <div className="flex items-center justify-between">
         <Label>Apply GST 5%</Label>
         <Switch
-          checked={formData.applyGst}
-          onCheckedChange={(checked) => setFormData({ ...formData, applyGst: checked })}
+          checked={formData.gstApplicable}
+          onCheckedChange={(checked) => setFormData({ ...formData, gstApplicable: checked })}
         />
       </div>
 
@@ -290,8 +289,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
               <Input
                 type="number"
                 step="0.01"
-                value={formData.cancellationBeforeDepart}
-                onChange={(e) => setFormData({ ...formData, cancellationBeforeDepart: parseFloat(e.target.value) || 0 })}
+                value={formData.cancelBeforeDepart ?? 0}
+                onChange={(e) => setFormData({ ...formData, cancelBeforeDepart: parseFloat(e.target.value) || 0 })}
                 className="w-24 text-right"
               />
             </div>
@@ -303,8 +302,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
               <Input
                 type="number"
                 step="0.01"
-                value={formData.cancellationEnRoute}
-                onChange={(e) => setFormData({ ...formData, cancellationEnRoute: parseFloat(e.target.value) || 0 })}
+                value={formData.cancelEnRoute ?? 0}
+                onChange={(e) => setFormData({ ...formData, cancelEnRoute: parseFloat(e.target.value) || 0 })}
                 className="w-24 text-right"
               />
             </div>
@@ -341,15 +340,6 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
               value={formData.backupEmail}
               onChange={(e) => setFormData({ ...formData, backupEmail: e.target.value })}
               placeholder="accounts@company.com"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <Label>Invoice due days</Label>
-            <Input
-              type="number"
-              value={formData.invoiceDueDays}
-              onChange={(e) => setFormData({ ...formData, invoiceDueDays: parseInt(e.target.value) || 15 })}
-              className="w-20 text-right"
             />
           </div>
           <div className="space-y-2">

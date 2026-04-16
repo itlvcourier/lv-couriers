@@ -43,16 +43,19 @@ import type { AdminNotificationType, SMSType, SMSStatus } from '@/lib/types'
 
 // Notification type configs
 const NOTIFICATION_CONFIGS: Record<AdminNotificationType, { icon: React.ElementType; color: string; label: string }> = {
+  // DB types
+  new_job: { icon: AlertTriangle, color: 'text-blue-400 bg-blue-500/10', label: 'New Job' },
   flag: { icon: Flag, color: 'text-red-400 bg-red-500/10', label: 'Flag' },
+  sla_breach: { icon: AlertTriangle, color: 'text-orange-400 bg-orange-500/10', label: 'SLA Breach' },
+  driver_timeout: { icon: Clock, color: 'text-yellow-400 bg-yellow-500/10', label: 'Driver Timeout' },
+  payment_received: { icon: CheckCircle, color: 'text-green-400 bg-green-500/10', label: 'Payment' },
+  system: { icon: Bell, color: 'text-gray-400 bg-gray-500/10', label: 'System' },
+  // Mock data types
   timeout: { icon: Clock, color: 'text-yellow-400 bg-yellow-500/10', label: 'Timeout' },
-  delivery_complete: { icon: CheckCircle, color: 'text-green-400 bg-green-500/10', label: 'Delivery' },
-  unclaimed_rush: { icon: AlertTriangle, color: 'text-blue-400 bg-blue-500/10', label: 'Rush' },
-  invoice_overdue: { icon: FileText, color: 'text-gray-400 bg-gray-500/10', label: 'Invoice' },
-  qty_adjusted: { icon: RefreshCw, color: 'text-orange-400 bg-orange-500/10', label: 'Qty Change' },
+  completion: { icon: CheckCircle, color: 'text-green-400 bg-green-500/10', label: 'Delivery' },
+  invoice: { icon: FileText, color: 'text-gray-400 bg-gray-500/10', label: 'Invoice' },
+  qty_adjustment: { icon: RefreshCw, color: 'text-orange-400 bg-orange-500/10', label: 'Qty Change' },
   driver_deactivated: { icon: UserX, color: 'text-red-400 bg-red-500/10', label: 'Driver' },
-  tracking_opened: { icon: Eye, color: 'text-blue-400 bg-blue-500/10', label: 'Tracking' },
-  low_battery: { icon: Battery, color: 'text-yellow-400 bg-yellow-500/10', label: 'Battery' },
-  email_bounced: { icon: Mail, color: 'text-red-400 bg-red-500/10', label: 'Email' },
 }
 
 // SMS type configs
@@ -131,8 +134,10 @@ export function AdminCommunications() {
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="flag">Flags</SelectItem>
                 <SelectItem value="timeout">Timeouts</SelectItem>
-                <SelectItem value="invoice_overdue">Invoices</SelectItem>
-                <SelectItem value="delivery_complete">Deliveries</SelectItem>
+                <SelectItem value="invoice">Invoices</SelectItem>
+                <SelectItem value="completion">Deliveries</SelectItem>
+                <SelectItem value="sla_breach">SLA Breach</SelectItem>
+                <SelectItem value="new_job">New Jobs</SelectItem>
               </SelectContent>
             </Select>
           </div>

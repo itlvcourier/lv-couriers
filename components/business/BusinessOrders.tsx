@@ -20,35 +20,37 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { format } from 'date-fns'
-import type { Order } from '@/lib/types'
+import type { OrderLike } from '@/components/shared/OrderDetailSheet'
 
 export function BusinessOrders() {
   const { deliveries, currentUser, drivers } = useApp()
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<OrderLike | null>(null)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
   
-  // Get orders for this business - convert deliveries to orders format
-  const businessOrders = (deliveries || [])
+  // Get orders for this business - convert deliveries to order-like shape
+  const businessOrders: OrderLike[] = (deliveries || [])
     .filter(d => d.businessId === currentUser?.businessId)
     .map(d => ({
       id: d.id,
       businessId: d.businessId,
       businessName: d.businessName,
       driverId: d.driverId,
-      status: d.status as Order['status'],
-      priority: d.isUrgent ? 'urgent' as const : 'standard' as const,
+      status: d.status,
+      priority: d.isUrgent ? 'urgent' : d.isRush ? 'rush' : 'standard',
       pickupAddress: d.pickupAddress,
       dropoffAddress: d.dropoffAddress,
       price: d.calculatedRate || 15,
       createdAt: d.postedAt,
-    } as Order))
+      pickedUpAt: d.pickedUpAt || undefined,
+      deliveredAt: d.deliveredAt || undefined,
+    }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   const activeOrders = businessOrders.filter(o => 
-    ['pending', 'assigned', 'picked_up', 'in_transit'].includes(o.status)
+    ['posted', 'claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff'].includes(o.status)
   )
   const completedOrders = businessOrders.filter(o => 
-    ['delivered', 'cancelled'].includes(o.status)
+    ['delivered', 'cancelled', 'failed_permanent'].includes(o.status)
   )
 
   const filteredOrders = filter === 'all' 
@@ -184,7 +186,7 @@ export function BusinessOrders() {
         order={selectedOrder}
         driver={selectedOrder?.driverId ? getDriver(selectedOrder.driverId) : undefined}
         onClose={() => setSelectedOrder(null)}
-        onCancel={selectedOrder?.status === 'pending' ? () => handleCancelOrder(selectedOrder.id) : undefined}
+        onCancel={selectedOrder?.status === 'posted' ? () => handleCancelOrder(selectedOrder.id) : undefined}
         viewType="business"
       />
     </div>

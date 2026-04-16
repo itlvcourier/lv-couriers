@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
-    const deliveryId = params.id
+    const { id: deliveryId } = await params
 
     const { data, error } = await supabase
       .from('deliveries')
@@ -36,11 +36,11 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
-    const deliveryId = params.id
+    const { id: deliveryId } = await params
     const updateData = await req.json()
 
     const { data, error } = await supabase

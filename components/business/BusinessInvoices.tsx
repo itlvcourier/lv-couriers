@@ -61,9 +61,9 @@ export function BusinessInvoices() {
   
   // Calculate running total
   const runningTotal = monthDeliveries.reduce((sum, d) => {
-    return sum + (d.calculatedRate || rateCard?.regular || 9)
+    return sum + (d.calculatedRate || rateCard?.rateRegular || 9)
   }, 0)
-  const runningGst = rateCard?.applyGst ? runningTotal * 0.05 : 0
+  const runningGst = rateCard?.gstApplicable ? runningTotal * 0.05 : 0
   const runningTotalWithGst = runningTotal + runningGst
 
   const handleStartDispute = (lineId: string) => {
@@ -362,7 +362,7 @@ function MonthlyBreakdown({
   })
 
   const subtotal = Object.values(breakdown).reduce((sum, b) => sum + b.total, 0)
-  const gst = rateCard?.applyGst ? subtotal * 0.05 : 0
+  const gst = rateCard?.gstApplicable ? subtotal * 0.05 : 0
 
   return (
     <div className="space-y-4">
@@ -383,7 +383,7 @@ function MonthlyBreakdown({
           <span>Subtotal</span>
           <span>{formatCurrency(subtotal)}</span>
         </div>
-        {rateCard?.applyGst && (
+        {rateCard?.gstApplicable && (
           <div className="flex justify-between text-muted-foreground">
             <span>GST 5%</span>
             <span>{formatCurrency(gst)}</span>

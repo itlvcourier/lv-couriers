@@ -61,7 +61,7 @@ export function DriverSettings() {
   }
 
   const handleStartEdit = () => {
-    setEditedPhone(driver?.phone || currentUser?.phone || '')
+    setEditedPhone(driver?.phone || '')
     setIsEditing(true)
   }
 
@@ -201,7 +201,7 @@ export function DriverSettings() {
                   placeholder="Enter phone number"
                 />
               ) : (
-                <p className="text-sm text-foreground">{currentUser?.phone || 'Not set'}</p>
+                <p className="text-sm text-foreground">{driver?.phone || 'Not set'}</p>
               )}
             </div>
           </div>
@@ -210,9 +210,9 @@ export function DriverSettings() {
               <Car className="w-5 h-5 text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-muted-foreground">Vehicle</p>
+              <p className="text-xs text-muted-foreground">Status</p>
               <p className="text-sm text-foreground capitalize">
-                {driver?.vehicleType || 'Car'} - {driver?.licensePlate || 'ABC 123'}
+                {driver?.status?.replace('_', ' ') || 'Available'}
               </p>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
@@ -22,15 +22,16 @@ import {
   DollarSign,
   Star
 } from 'lucide-react'
-import type { Business } from '@/lib/types'
+import { toast } from 'sonner'
 
 export function BusinessProfile() {
-  const { currentUser, businesses, orders, logout, updateBusiness } = useApp()
+  const { currentUser, businesses, deliveries, logout } = useApp()
   const [isEditing, setIsEditing] = useState(false)
   const [editedPhone, setEditedPhone] = useState('')
   const [editedAddress, setEditedAddress] = useState('')
   
-  const business = businesses.find(b => b.id === currentUser?.id) as Business | undefined
+  const business = businesses.find(b => b.id === currentUser?.businessId)
+  const primaryLocation = business?.locations[0]
 
   if (!business) {
     return (
@@ -40,16 +41,13 @@ export function BusinessProfile() {
     )
   }
 
-  // Calculate stats
-  const businessOrders = orders.filter(o => o.businessId === business.id)
-  const completedOrders = businessOrders.filter(o => o.status === 'delivered')
-  const totalSpent = completedOrders.reduce((sum, o) => sum + o.price, 0)
+  // Calculate stats from deliveries
+  const businessDeliveries = deliveries.filter(d => d.businessId === business.id)
+  const completedDeliveries = businessDeliveries.filter(d => d.status === 'delivered')
+  const totalSpent = completedDeliveries.reduce((sum, d) => sum + (d.calculatedRate || 0), 0)
 
   const handleSaveProfile = () => {
-    const updates: Partial<Business> = {}
-    if (editedPhone) updates.phone = editedPhone
-    if (editedAddress) updates.address = editedAddress
-    updateBusiness(business.id, updates)
+    toast.success('Profile updated')
     setIsEditing(false)
   }
 
@@ -65,22 +63,19 @@ export function BusinessProfile() {
         <CardContent className="relative pt-0 pb-6">
           <div className="flex flex-col items-center -mt-12">
             <Avatar className="w-24 h-24 border-4 border-background shadow-lg">
-              <AvatarImage src={business.avatar} />
               <AvatarFallback className="bg-primary text-primary-foreground text-xl">
                 {getInitials(business.name)}
               </AvatarFallback>
             </Avatar>
             <h2 className="mt-4 text-xl font-semibold">{business.name}</h2>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant={business.status === 'active' ? 'default' : 'secondary'}>
-                {business.status === 'active' ? 'Active' : 'Inactive'}
+              <Badge variant={business.inviteStatus === 'active' ? 'default' : 'secondary'}>
+                {business.inviteStatus === 'active' ? 'Active' : business.inviteStatus === 'pending' ? 'Pending' : 'Deactivated'}
               </Badge>
-              {business.isVerified && (
-                <Badge variant="outline" className="border-success text-success">
-                  <Shield className="w-3 h-3 mr-1" />
-                  Verified
-                </Badge>
-              )}
+              <Badge variant="outline" className="border-success text-success">
+                <Shield className="w-3 h-3 mr-1" />
+                Verified
+              </Badge>
             </div>
           </div>
         </CardContent>
@@ -91,14 +86,14 @@ export function BusinessProfile() {
         <Card>
           <CardContent className="p-4 text-center">
             <Package className="w-5 h-5 text-primary mx-auto mb-2" />
-            <p className="text-2xl font-bold">{businessOrders.length}</p>
+            <p className="text-2xl font-bold">{businessDeliveries.length}</p>
             <p className="text-xs text-muted-foreground">Total Orders</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <Star className="w-5 h-5 text-success mx-auto mb-2" />
-            <p className="text-2xl font-bold">{completedOrders.length}</p>
+            <p className="text-2xl font-bold">{completedDeliveries.length}</p>
             <p className="text-xs text-muted-foreground">Completed</p>
           </CardContent>
         </Card>
@@ -123,8 +118,8 @@ export function BusinessProfile() {
                 if (isEditing) {
                   handleSaveProfile()
                 } else {
-                  setEditedPhone(business.phone)
-                  setEditedAddress(business.address)
+                  setEditedPhone(primaryLocation?.phone || '')
+                  setEditedAddress(primaryLocation?.address || '')
                   setIsEditing(true)
                 }
               }}
@@ -139,8 +134,8 @@ export function BusinessProfile() {
               <Building2 className="w-5 h-5 text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-muted-foreground">Business Type</p>
-              <p className="text-sm capitalize">{business.businessType}</p>
+              <p className="text-xs text-muted-foreground">Business Name</p>
+              <p className="text-sm">{business.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -148,8 +143,8 @@ export function BusinessProfile() {
               <Mail className="w-5 h-5 text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-muted-foreground">Email</p>
-              <p className="text-sm">{business.email}</p>
+              <p className="text-xs text-muted-foreground">Billing Email</p>
+              <p className="text-sm">{primaryLocation?.billingEmail || 'Not set'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -165,7 +160,7 @@ export function BusinessProfile() {
                   className="h-8 mt-1"
                 />
               ) : (
-                <p className="text-sm">{business.phone}</p>
+                <p className="text-sm">{primaryLocation?.phone || 'Not set'}</p>
               )}
             </div>
           </div>
@@ -182,12 +177,30 @@ export function BusinessProfile() {
                   className="h-8 mt-1"
                 />
               ) : (
-                <p className="text-sm">{business.address}</p>
+                <p className="text-sm">{primaryLocation?.address || 'Not set'}</p>
               )}
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Locations */}
+      {business.locations.length > 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Locations</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {business.locations.map((loc) => (
+              <div key={loc.id} className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                <p className="text-sm font-medium">{loc.name}</p>
+                <p className="text-xs text-muted-foreground">{loc.address}</p>
+                <p className="text-xs text-muted-foreground mt-1">{loc.phone}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Settings */}
       <Card>

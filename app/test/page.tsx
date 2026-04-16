@@ -25,7 +25,7 @@ export default function TestPage() {
         if (error) {
           setStatus(`Error: ${error.message}`)
         } else {
-          setTables(data?.map(b => b.name) || [])
+          setTables((data || []).map((b: { name: string }) => b.name))
           setStatus('✓ Connected to database')
         }
       } catch (err: any) {
