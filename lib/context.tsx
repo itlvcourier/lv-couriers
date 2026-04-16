@@ -618,17 +618,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const nameKey = input.name.trim().toLowerCase()
       const addrKey = input.address.trim().toLowerCase()
 
-      let saved: SavedContact | null = null
-      setSavedContacts(prev => {
-        const existing = prev.find(
-          c =>
-            c.businessId === input.businessId &&
-            c.name.trim().toLowerCase() === nameKey &&
-            c.address.trim().toLowerCase() === addrKey,
-        )
+      // Compute the next contact OUTSIDE the setter to keep the updater pure
+      // (React 18 strict mode invokes updaters twice). We look up the existing
+      // contact off the current snapshot; a later dispatch of the same name +
+      // address will still be deduped by the reducer below.
+      const existing = savedContacts.find(
+        c =>
+          c.businessId === input.businessId &&
+          c.name.trim().toLowerCase() === nameKey &&
+          c.address.trim().toLowerCase() === addrKey,
+      )
 
-        if (existing) {
-          saved = {
+      const next: SavedContact = existing
+        ? {
             ...existing,
             phone: input.phone ?? existing.phone,
             area: input.area ?? existing.area,
@@ -638,29 +640,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
             lastUsedAt: now,
             updatedAt: now,
           }
-          return prev.map(c => (c.id === existing.id ? saved! : c))
-        }
+        : {
+            id: `contact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            businessId: input.businessId,
+            name: input.name.trim(),
+            phone: input.phone?.trim() || null,
+            address: input.address.trim(),
+            area: input.area?.trim() || null,
+            buzzCode: input.buzzCode?.trim() || null,
+            notes: input.notes?.trim() || null,
+            useCount: 1,
+            lastUsedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          }
 
-        saved = {
-          id: `contact-${Date.now()}`,
-          businessId: input.businessId,
-          name: input.name.trim(),
-          phone: input.phone?.trim() || null,
-          address: input.address.trim(),
-          area: input.area?.trim() || null,
-          buzzCode: input.buzzCode?.trim() || null,
-          notes: input.notes?.trim() || null,
-          useCount: 1,
-          lastUsedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        }
-        return [saved, ...prev]
+      setSavedContacts(prev => {
+        // Re-check against the freshest state to handle race conditions or
+        // strict-mode double-invocation safely.
+        const dupe = prev.find(
+          c =>
+            c.businessId === input.businessId &&
+            c.name.trim().toLowerCase() === nameKey &&
+            c.address.trim().toLowerCase() === addrKey,
+        )
+        if (dupe) return prev.map(c => (c.id === dupe.id ? { ...next, id: dupe.id } : c))
+        return [next, ...prev]
       })
-      // saved is guaranteed to be set by the reducer above
-      return saved as unknown as SavedContact
+
+      return next
     },
-    [],
+    [savedContacts],
   )
 
   const deleteSavedContact = useCallback((contactId: string) => {

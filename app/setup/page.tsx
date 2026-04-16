@@ -5,9 +5,20 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 
+type SetupUserResult = {
+  email: string
+  success: boolean
+  error?: string
+}
+type SetupResponse = {
+  message: string
+  results: SetupUserResult[]
+  error?: string
+}
+
 export default function SetupPage() {
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<SetupResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const setupDemoUsers = async () => {
@@ -17,15 +28,15 @@ export default function SetupPage() {
 
     try {
       const res = await fetch('/api/setup-demo-users')
-      const data = await res.json()
+      const data: SetupResponse = await res.json()
 
       if (!res.ok) {
-        setError(data.error)
+        setError(data.error ?? 'Setup failed')
       } else {
         setResult(data)
       }
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Setup failed')
     } finally {
       setLoading(false)
     }
@@ -58,10 +69,10 @@ export default function SetupPage() {
             <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
               <p className="text-sm font-medium text-green-600 mb-2">{result.message}</p>
               <div className="space-y-1">
-                {result.results.map((r: any) => (
+                {result.results.map(r => (
                   <div key={r.email} className="text-xs">
                     <p className={r.success ? 'text-green-600' : 'text-red-600'}>
-                      {r.email}: {r.success ? '✓ Created' : '✗ ' + r.error}
+                      {r.email}: {r.success ? 'Created' : `Failed: ${r.error ?? 'unknown'}`}
                     </p>
                   </div>
                 ))}

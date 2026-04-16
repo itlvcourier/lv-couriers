@@ -246,13 +246,13 @@ export function OrderDetailSheet({
         {/* Action Buttons */}
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-card border-t border-border safe-area-bottom">
           <div className="flex gap-3">
-            {onCancel && (order.status === 'pending' || order.status === 'posted') && (
+            {onCancel && order.status === 'posted' && (
               <Button variant="destructive" className="flex-1" onClick={onCancel}>
                 <XCircle className="w-4 h-4 mr-2" />
                 Cancel Order
               </Button>
             )}
-            {onAccept && (order.status === 'pending' || order.status === 'posted') && (
+            {onAccept && order.status === 'posted' && (
               <Button className="flex-1" onClick={onAccept}>
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Accept Order
