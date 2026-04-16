@@ -27,6 +27,7 @@ import type {
   DriverMonthlyReport,
   TimeoutWarning,
   ManifestItem,
+  SavedContact,
 } from './types'
 import {
   mockUsers,
@@ -80,6 +81,21 @@ interface AppContextType {
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
   postDelivery: (data: Partial<Delivery>) => void
   reassignDriver: (deliveryId: string, newDriverId: string) => void
+  cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
+
+  // Saved recipients (address book)
+  savedContacts: SavedContact[]
+  getSavedContactsForBusiness: (businessId: string) => SavedContact[]
+  upsertSavedContact: (input: {
+    businessId: string
+    name: string
+    phone?: string | null
+    address: string
+    area?: string | null
+    buzzCode?: string | null
+    notes?: string | null
+  }) => SavedContact
+  deleteSavedContact: (contactId: string) => void
   
   // Driver functions
   toggleDriverStatus: (driverId: string) => void
@@ -160,6 +176,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [trips, setTrips] = useState<Trip[]>(initialTrips)
   const [driverReports] = useState<DriverMonthlyReport[]>(initialDriverReports)
   const [timeoutWarnings, setTimeoutWarnings] = useState<TimeoutWarning[]>(initialTimeoutWarnings)
+  const [savedContacts, setSavedContacts] = useState<SavedContact[]>([])
 
   // Auth functions
   const login = useCallback((email: string, password: string) => {
@@ -465,7 +482,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pickupArea: data.pickupArea || '',
       dropoffAddress: data.dropoffAddress || '',
       dropoffArea: data.dropoffArea || '',
+      recipientName: data.recipientName || null,
       recipientPhone: data.recipientPhone || null,
+      buzzCode: data.buzzCode || null,
       manifest: data.manifest || [],
       isUrgent: data.isUrgent || false,
       isOutOfTown: data.isOutOfTown || false,
@@ -522,6 +541,131 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
   }, [drivers])
+
+  // Business-initiated cancel: only allowed before a driver has claimed the job.
+  // Returns { ok, error } instead of throwing so the caller can show a friendly toast.
+  const cancelOrderByBusiness = useCallback(
+    (deliveryId: string, reason?: string): { ok: boolean; error?: string } => {
+      const delivery = deliveries.find(d => d.id === deliveryId)
+      if (!delivery) {
+        return { ok: false, error: 'Order not found' }
+      }
+      if (delivery.status !== 'posted') {
+        return {
+          ok: false,
+          error:
+            delivery.status === 'cancelled'
+              ? 'This order is already cancelled'
+              : 'A driver has already claimed this order. Contact dispatch to cancel.',
+        }
+      }
+
+      const now = new Date().toISOString()
+      setDeliveries(prev =>
+        prev.map(d =>
+          d.id === deliveryId
+            ? {
+                ...d,
+                status: 'cancelled' as DeliveryStatus,
+                cancelledAt: now,
+                cancellationStage: 'before_depart',
+                cancellationFee: 0,
+                cancellationReason: reason?.trim() || 'Cancelled by business (before claim)',
+                statusHistory: [
+                  ...d.statusHistory,
+                  {
+                    status: 'cancelled' as DeliveryStatus,
+                    timestamp: now,
+                    note: reason?.trim() || 'Cancelled by business',
+                    gpsLat: null,
+                    gpsLng: null,
+                  },
+                ],
+              }
+            : d,
+        ),
+      )
+      return { ok: true }
+    },
+    [deliveries],
+  )
+
+  // Saved recipients (per-business address book)
+  const getSavedContactsForBusiness = useCallback(
+    (businessId: string) =>
+      savedContacts
+        .filter(c => c.businessId === businessId)
+        .sort((a, b) => {
+          const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0
+          const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0
+          if (bTime !== aTime) return bTime - aTime
+          return a.name.localeCompare(b.name)
+        }),
+    [savedContacts],
+  )
+
+  const upsertSavedContact = useCallback(
+    (input: {
+      businessId: string
+      name: string
+      phone?: string | null
+      address: string
+      area?: string | null
+      buzzCode?: string | null
+      notes?: string | null
+    }): SavedContact => {
+      const now = new Date().toISOString()
+      const nameKey = input.name.trim().toLowerCase()
+      const addrKey = input.address.trim().toLowerCase()
+
+      let saved: SavedContact | null = null
+      setSavedContacts(prev => {
+        const existing = prev.find(
+          c =>
+            c.businessId === input.businessId &&
+            c.name.trim().toLowerCase() === nameKey &&
+            c.address.trim().toLowerCase() === addrKey,
+        )
+
+        if (existing) {
+          saved = {
+            ...existing,
+            phone: input.phone ?? existing.phone,
+            area: input.area ?? existing.area,
+            buzzCode: input.buzzCode ?? existing.buzzCode,
+            notes: input.notes ?? existing.notes,
+            useCount: existing.useCount + 1,
+            lastUsedAt: now,
+            updatedAt: now,
+          }
+          return prev.map(c => (c.id === existing.id ? saved! : c))
+        }
+
+        saved = {
+          id: `contact-${Date.now()}`,
+          businessId: input.businessId,
+          name: input.name.trim(),
+          phone: input.phone?.trim() || null,
+          address: input.address.trim(),
+          area: input.area?.trim() || null,
+          buzzCode: input.buzzCode?.trim() || null,
+          notes: input.notes?.trim() || null,
+          useCount: 1,
+          lastUsedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }
+        return [saved, ...prev]
+      })
+      // saved is guaranteed to be set by the reducer above
+      return saved as unknown as SavedContact
+    },
+    [],
+  )
+
+  const deleteSavedContact = useCallback((contactId: string) => {
+    setSavedContacts(prev => prev.filter(c => c.id !== contactId))
+  }, [])
 
   // Driver functions
   const toggleDriverStatus = useCallback((driverId: string) => {
@@ -1211,6 +1355,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         resolveFlag,
         postDelivery,
         reassignDriver,
+        cancelOrderByBusiness,
+        savedContacts,
+        getSavedContactsForBusiness,
+        upsertSavedContact,
+        deleteSavedContact,
         toggleDriverStatus,
         deactivateDriver,
         reactivateDriver,

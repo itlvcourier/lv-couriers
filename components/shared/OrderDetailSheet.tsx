@@ -6,11 +6,14 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { StatusBadge } from './StatusBadge'
-import { 
-  Package, 
-  Phone, 
+import {
+  Package,
+  Phone,
   XCircle,
   CheckCircle,
+  UserRound,
+  KeyRound,
+  AlertTriangle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import type { Driver, Business } from '@/lib/types'
@@ -36,6 +39,10 @@ export interface OrderLike {
   requirePhoto?: boolean
   pickedUpAt?: string
   deliveredAt?: string
+  recipientName?: string | null
+  recipientPhone?: string | null
+  buzzCode?: string | null
+  cancellationReason?: string | null
 }
 
 interface OrderDetailSheetProps {
@@ -88,6 +95,53 @@ export function OrderDetailSheet({
               <p className="text-2xl font-bold text-primary">${order.price.toFixed(2)}</p>
             </div>
           </div>
+
+          {/* Recipient (if any info provided) */}
+          {(order.recipientName || order.recipientPhone || order.buzzCode) && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground">Recipient</h4>
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <UserRound className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  {order.recipientName && (
+                    <p className="font-medium text-foreground truncate">
+                      {order.recipientName}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {order.recipientPhone && (
+                      <a
+                        href={`tel:${order.recipientPhone}`}
+                        className="flex items-center gap-1 hover:text-primary"
+                      >
+                        <Phone className="w-3 h-3" />
+                        {order.recipientPhone}
+                      </a>
+                    )}
+                    {order.buzzCode && (
+                      <span className="flex items-center gap-1">
+                        <KeyRound className="w-3 h-3" />
+                        Buzz {order.buzzCode}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cancellation notice */}
+          {order.status === 'cancelled' && order.cancellationReason && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-destructive mb-0.5">Order cancelled</p>
+                <p className="text-xs text-destructive/80">{order.cancellationReason}</p>
+              </div>
+            </div>
+          )}
 
           {/* Locations */}
           <div className="space-y-4">

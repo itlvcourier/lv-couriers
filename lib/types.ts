@@ -130,7 +130,9 @@ export interface Delivery {
   dropoffArea: string
   dropoffLat?: number | null
   dropoffLng?: number | null
+  recipientName?: string | null
   recipientPhone: string | null
+  buzzCode?: string | null
   // Manifest items
   manifest: ManifestItem[]
   // Delivery flags
@@ -174,6 +176,21 @@ export interface Delivery {
   // Timestamps
   createdAt?: string
   updatedAt?: string
+}
+
+export interface SavedContact {
+  id: string
+  businessId: string
+  name: string
+  phone: string | null
+  address: string
+  area: string | null
+  buzzCode: string | null
+  notes: string | null
+  useCount: number
+  lastUsedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SystemSettings {
