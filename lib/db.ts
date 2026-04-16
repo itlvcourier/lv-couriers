@@ -64,8 +64,10 @@ export interface DbDelivery {
   dropoff_area: string
   dropoff_lat: number | null
   dropoff_lng: number | null
+  recipient_name: string | null
   recipient_phone: string | null
   recipient_note: string | null
+  buzz_code: string | null
   is_rush: boolean
   is_urgent: boolean
   is_out_of_town: boolean

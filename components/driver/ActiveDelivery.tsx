@@ -29,6 +29,9 @@ import {
   Plus,
   Clock,
   RotateCcw,
+  UserRound,
+  Phone,
+  KeyRound,
 } from 'lucide-react'
 import type { Delivery, DeliveryStatus, FailReason, Trip } from '@/lib/types'
 
@@ -618,9 +621,9 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
 
         {/* Dropoff Address */}
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-          <CardContent className="p-4">
+          <CardContent className="p-4 space-y-3">
             <div className="flex items-start justify-between">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-[var(--accent-green)]" /> Drop-off
                 </p>
@@ -636,6 +639,38 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
                 Maps
               </Button>
             </div>
+
+            {(delivery.recipientName || delivery.recipientPhone || delivery.buzzCode) && (
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)] border border-[var(--border-color)]">
+                <div className="w-9 h-9 rounded-full bg-[var(--accent-green)]/15 text-[var(--accent-green)] flex items-center justify-center shrink-0">
+                  <UserRound className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  {delivery.recipientName && (
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {delivery.recipientName}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {delivery.recipientPhone && (
+                      <a
+                        href={`tel:${delivery.recipientPhone}`}
+                        className="flex items-center gap-1 text-[var(--accent-orange)] hover:underline"
+                      >
+                        <Phone className="w-3 h-3" />
+                        {delivery.recipientPhone}
+                      </a>
+                    )}
+                    {delivery.buzzCode && (
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <KeyRound className="w-3 h-3" />
+                        Buzz {delivery.buzzCode}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

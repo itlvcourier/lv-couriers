@@ -18,6 +18,7 @@ import {
   MapPin,
   Zap,
   Globe,
+  UserRound,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
@@ -228,6 +229,27 @@ export function AdminOrders() {
                         <span className="text-foreground">{delivery.dropoff_area}</span>
                       </span>
                     </div>
+
+                    {(delivery.recipient_name || delivery.buzz_code) && (
+                      <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                        {delivery.recipient_name && (
+                          <span className="flex items-center gap-1 min-w-0">
+                            <UserRound className="w-3 h-3 shrink-0" />
+                            <span className="truncate text-foreground">
+                              {delivery.recipient_name}
+                            </span>
+                          </span>
+                        )}
+                        {delivery.buzz_code && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 h-4 bg-transparent"
+                          >
+                            Buzz {delivery.buzz_code}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Price & Time */}
