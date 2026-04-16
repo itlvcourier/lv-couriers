@@ -75,7 +75,7 @@ interface AppContextType {
   verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => void
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (deliveryId: string, photoUrl: string, recipientNote: string | null) => void
-  failDelivery: (deliveryId: string, reason: FailReason) => void
+  failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => void
   flagDelivery: (deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => void
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
   postDelivery: (data: Partial<Delivery>) => void
@@ -357,7 +357,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [deliveries])
 
-  const failDelivery = useCallback((deliveryId: string, reason: FailReason) => {
+  const failDelivery = useCallback((deliveryId: string, reason: FailReason, notes?: string) => {
+    const noteText = notes?.trim() ? `${reason} — ${notes.trim()}` : reason
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
@@ -369,7 +370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             {
               status: 'failed_retry' as DeliveryStatus,
               timestamp: new Date().toISOString(),
-              note: reason,
+              note: noteText,
               gpsLat: null,
               gpsLng: null,
             },

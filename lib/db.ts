@@ -174,7 +174,7 @@ export async function getAvailableDeliveries() {
     .select(`
       *,
       business:businesses(*),
-      location:locations(*),
+      location:business_locations(*),
       manifest_items(*)
     `)
     .eq('status', 'posted')
@@ -191,7 +191,7 @@ export async function getDriverActiveDeliveries(driverId: string) {
     .select(`
       *,
       business:businesses(*),
-      location:locations(*),
+      location:business_locations(*),
       manifest_items(*)
     `)
     .eq('driver_id', driverId)
@@ -209,7 +209,7 @@ export async function getDriverHistory(driverId: string, limit = 50) {
     .select(`
       *,
       business:businesses(*),
-      location:locations(*)
+      location:business_locations(*)
     `)
     .eq('driver_id', driverId)
     .in('status', ['delivered', 'failed_permanent', 'cancelled'])
@@ -227,7 +227,7 @@ export async function getBusinessDeliveries(businessId: string) {
     .select(`
       *,
       driver:drivers(*),
-      location:locations(*),
+      location:business_locations(*),
       manifest_items(*)
     `)
     .eq('business_id', businessId)
@@ -261,7 +261,7 @@ export async function getAllDeliveries(status?: DeliveryStatus) {
     .select(`
       *,
       business:businesses(*),
-      location:locations(*),
+      location:business_locations(*),
       driver:drivers(*),
       manifest_items(*)
     `)
@@ -283,7 +283,7 @@ export async function getDelivery(deliveryId: string) {
     .select(`
       *,
       business:businesses(*),
-      location:locations(*),
+      location:business_locations(*),
       driver:drivers(*),
       manifest_items(*),
       delivery_flags(*)
@@ -519,7 +519,7 @@ export async function getBusinesses() {
     .from('businesses')
     .select(`
       *,
-      locations(*)
+      locations:business_locations(*)
     `)
     .order('name')
 
@@ -533,7 +533,7 @@ export async function getBusiness(businessId: string) {
     .from('businesses')
     .select(`
       *,
-      locations(*)
+      locations:business_locations(*)
     `)
     .eq('id', businessId)
     .single()
@@ -559,7 +559,7 @@ export async function getBusinessByUserId(userId: string) {
 export async function getBusinessLocations(businessId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
-    .from('locations')
+    .from('business_locations')
     .select('*')
     .eq('business_id', businessId)
     .order('is_default', { ascending: false })

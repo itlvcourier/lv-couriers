@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useApp } from '@/lib/context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { PickupVerification } from './PickupVerification'
 import { DeliveryCompletion } from './DeliveryCompletion'
@@ -407,25 +409,9 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   const [showVerification, setShowVerification] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
   const [showFailSheet, setShowFailSheet] = useState(false)
-  const [showRetrySheet, setShowRetrySheet] = useState(false)
   const [failReason, setFailReason] = useState<FailReason | ''>('')
-  const [retryCountdown, setRetryCountdown] = useState(30)
+  const [failNotes, setFailNotes] = useState('')
   const { advanceStatus, failDelivery, retryDelivery, escalateDelivery } = useApp()
-
-  // Retry countdown timer
-  useEffect(() => {
-    if (delivery.status === 'failed_retry' && retryCountdown > 0) {
-      const timer = setTimeout(() => {
-        setRetryCountdown(prev => prev - 1)
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-    if (delivery.status === 'failed_retry' && retryCountdown === 0) {
-      // Timeout expired - escalate
-      toast.error('Retry window expired - job returned to board')
-      escalateDelivery(delivery.id)
-    }
-  }, [delivery.status, retryCountdown, delivery.id, escalateDelivery])
 
   const openInMaps = (address: string) => {
     const encoded = encodeURIComponent(address)
@@ -451,41 +437,42 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
     }
   }
 
+  const isFinalAttempt = (delivery.retryCount ?? 0) >= 1
+
+  const resetFailForm = () => {
+    setFailReason('')
+    setFailNotes('')
+  }
+
   const handleMarkFailed = () => {
-    if (failReason) {
-      // Check if this is a second failure
-      if ((delivery.retryCount ?? 0) >= 1) {
-        // Second failure - escalate
-        toast.error('Delivery escalated - 2 failed attempts')
-        escalateDelivery(delivery.id)
-        setShowFailSheet(false)
-        setFailReason('')
-        return
-      }
-      
-      failDelivery(delivery.id, failReason)
-      setShowFailSheet(false)
-      setFailReason('')
-      setShowRetrySheet(true)
+    if (!failReason) return
+    setShowFailSheet(false)
+
+    if (isFinalAttempt) {
+      // Second failure - auto-escalate to dispatch
+      escalateDelivery(delivery.id)
+      toast.error('Delivery escalated to dispatch after 2 failed attempts', {
+        description: 'You can move on to your next job.',
+      })
+    } else {
+      failDelivery(delivery.id, failReason, failNotes)
+      toast.warning('Delivery flagged for retry', {
+        description: 'Try again when you can, or release it to dispatch.',
+      })
     }
+    resetFailForm()
   }
-  
-  const handleRetryLater = () => {
-    setShowRetrySheet(false)
-    setRetryCountdown(30) // 30 second demo countdown
-    toast.info('Retry window active - 30 seconds to retry')
-  }
-  
-  const handleReturnToBoard = () => {
-    setShowRetrySheet(false)
-    toast.info('Job returned to board')
-    // The delivery stays in failed_retry but will be handled by the board
-  }
-  
+
   const handleRetryNow = () => {
     retryDelivery(delivery.id)
-    setRetryCountdown(30)
-    toast.success('Delivery retry started')
+    toast.success('Resuming delivery')
+  }
+
+  const handleReleaseToDispatch = () => {
+    escalateDelivery(delivery.id)
+    toast.info('Released to dispatch', {
+      description: 'A dispatcher will reassign or follow up.',
+    })
   }
 
   const getActionButton = () => {
@@ -505,36 +492,64 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
 
   const actionButton = getActionButton()
 
-  // Show retry pending view
+  // Show retry pending view (driver flagged delivery as can't complete - one more attempt allowed)
   if (delivery.status === 'failed_retry') {
+    const lastFailure = [...delivery.statusHistory]
+      .reverse()
+      .find(h => h.status === 'failed_retry')
+
     return (
       <div className="space-y-4">
         <Card className="bg-yellow-500/10 border-yellow-500/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Clock className="w-5 h-5 text-yellow-400" />
-              <h3 className="font-medium text-yellow-400">Retry Pending</h3>
+          <CardContent className="p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-yellow-400">Needs Another Attempt</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Attempt 1 of 2 failed. One retry allowed before escalation.
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-foreground mb-2">{delivery.businessName}</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              {delivery.dropoffAddress}
-            </p>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-card)]">
-              <span className="text-sm text-muted-foreground">Retry window:</span>
-              <span className={`font-mono font-medium ${retryCountdown < 10 ? 'text-red-400' : 'text-yellow-400'}`}>
-                0:{retryCountdown.toString().padStart(2, '0')}
-              </span>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-foreground">{delivery.businessName}</p>
+              <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                <span>{delivery.dropoffAddress}</span>
+              </p>
             </div>
+
+            {lastFailure?.note && (
+              <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
+                <p className="text-xs text-muted-foreground mb-1">Reason</p>
+                <p className="text-sm text-foreground">{lastFailure.note}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
-        
-        <Button
-          onClick={handleRetryNow}
-          className="w-full h-12 rounded-xl bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white font-medium"
-        >
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Retry Now
-        </Button>
+
+        <div className="space-y-2">
+          <Button
+            onClick={handleRetryNow}
+            className="w-full h-12 rounded-xl bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white font-medium"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Try Delivery Again
+          </Button>
+          <Button
+            onClick={handleReleaseToDispatch}
+            variant="outline"
+            className="w-full h-11 rounded-xl border-[var(--border-color)]"
+          >
+            Release to Dispatch
+          </Button>
+          <p className="text-xs text-center text-muted-foreground pt-1">
+            Take your time. This delivery stays here until you act on it.
+          </p>
+        </div>
       </div>
     )
   }
@@ -670,39 +685,125 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
       )}
 
       {/* Fail delivery sheet */}
-      <Sheet open={showFailSheet} onOpenChange={setShowFailSheet}>
-        <SheetContent side="bottom" className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl">
+      <Sheet
+        open={showFailSheet}
+        onOpenChange={(open) => {
+          setShowFailSheet(open)
+          if (!open) resetFailForm()
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl max-h-[90vh] overflow-y-auto"
+        >
           <SheetHeader className="mb-4">
             <div className="flex items-center justify-between">
               <SheetTitle className="text-foreground flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-[var(--accent-red)]" />
-                Cannot Complete Delivery
+                Can&apos;t Complete Delivery
               </SheetTitle>
-              <button onClick={() => setShowFailSheet(false)} className="tap-target">
+              <button
+                onClick={() => {
+                  setShowFailSheet(false)
+                  resetFailForm()
+                }}
+                className="tap-target"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
           </SheetHeader>
+
           <div className="space-y-4">
-            <Select value={failReason} onValueChange={(value) => setFailReason(value as FailReason)}>
-              <SelectTrigger className="h-12 bg-[var(--bg-card-2)] border-[var(--border-color)] text-foreground rounded-xl">
-                <SelectValue placeholder="Select a reason..." />
-              </SelectTrigger>
-              <SelectContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
-                {FAIL_REASONS.map(reason => (
-                  <SelectItem
-                    key={reason}
-                    value={reason}
-                    className="text-foreground focus:bg-[var(--bg-card-2)] focus:text-foreground"
+            {/* Attempt warning banner */}
+            <div
+              className={`p-3 rounded-xl border ${
+                isFinalAttempt
+                  ? 'bg-red-500/10 border-red-500/30'
+                  : 'bg-yellow-500/10 border-yellow-500/30'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle
+                  className={`w-4 h-4 mt-0.5 shrink-0 ${
+                    isFinalAttempt ? 'text-red-400' : 'text-yellow-400'
+                  }`}
+                />
+                <div className="text-xs">
+                  <p
+                    className={`font-medium ${
+                      isFinalAttempt ? 'text-red-400' : 'text-yellow-400'
+                    }`}
                   >
-                    {FAIL_REASON_LABELS[reason]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-3">
+                    {isFinalAttempt
+                      ? 'Final attempt — will escalate to dispatch'
+                      : 'Attempt 1 of 2'}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5">
+                    {isFinalAttempt
+                      ? 'This delivery has already failed once. Confirming now sends it to dispatch.'
+                      : "You'll get one more chance to retry before this escalates."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div className="space-y-2">
+              <Label htmlFor="fail-reason" className="text-sm text-foreground">
+                Reason <span className="text-red-400">*</span>
+              </Label>
+              <Select
+                value={failReason}
+                onValueChange={(value) => setFailReason(value as FailReason)}
+              >
+                <SelectTrigger
+                  id="fail-reason"
+                  className="h-12 bg-[var(--bg-card-2)] border-[var(--border-color)] text-foreground rounded-xl"
+                >
+                  <SelectValue placeholder="Select a reason..." />
+                </SelectTrigger>
+                <SelectContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+                  {FAIL_REASONS.map((reason) => (
+                    <SelectItem
+                      key={reason}
+                      value={reason}
+                      className="text-foreground focus:bg-[var(--bg-card-2)] focus:text-foreground"
+                    >
+                      {FAIL_REASON_LABELS[reason]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Optional notes */}
+            <div className="space-y-2">
+              <Label htmlFor="fail-notes" className="text-sm text-foreground">
+                Notes <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Textarea
+                id="fail-notes"
+                placeholder="Add details to help dispatch — e.g. building locked, customer unreachable, wrong unit number"
+                value={failNotes}
+                onChange={(e) => setFailNotes(e.target.value)}
+                rows={3}
+                maxLength={300}
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)] rounded-xl resize-none"
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {failNotes.length}/300
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
               <Button
-                onClick={() => setShowFailSheet(false)}
+                onClick={() => {
+                  setShowFailSheet(false)
+                  resetFailForm()
+                }}
                 variant="outline"
                 className="flex-1 h-12 rounded-xl border-[var(--border-color)] tap-target"
               >
@@ -711,44 +812,15 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
               <Button
                 onClick={handleMarkFailed}
                 disabled={!failReason}
-                className="flex-1 h-12 rounded-xl bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90 text-white tap-target disabled:opacity-50"
+                className={`flex-1 h-12 rounded-xl text-white tap-target disabled:opacity-50 ${
+                  isFinalAttempt
+                    ? 'bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90'
+                    : 'bg-yellow-500 hover:bg-yellow-500/90'
+                }`}
               >
-                Confirm Failed
+                {isFinalAttempt ? 'Escalate to Dispatch' : 'Flag for Retry'}
               </Button>
             </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-      
-      {/* Retry options sheet */}
-      <Sheet open={showRetrySheet} onOpenChange={setShowRetrySheet}>
-        <SheetContent side="bottom" className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-foreground">What should happen with this delivery?</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-3">
-            <Button
-              onClick={handleRetryLater}
-              variant="outline"
-              className="w-full h-14 rounded-xl border-[var(--border-color)] justify-start px-4"
-            >
-              <RotateCcw className="w-5 h-5 mr-3 text-[var(--accent-orange)]" />
-              <div className="text-left">
-                <p className="font-medium text-foreground">Retry Later</p>
-                <p className="text-xs text-muted-foreground">I&apos;ll come back within 30 seconds</p>
-              </div>
-            </Button>
-            <Button
-              onClick={handleReturnToBoard}
-              variant="outline"
-              className="w-full h-14 rounded-xl border-[var(--border-color)] justify-start px-4"
-            >
-              <X className="w-5 h-5 mr-3 text-muted-foreground" />
-              <div className="text-left">
-                <p className="font-medium text-foreground">Cannot Complete</p>
-                <p className="text-xs text-muted-foreground">Return job to board</p>
-              </div>
-            </Button>
           </div>
         </SheetContent>
       </Sheet>
