@@ -412,7 +412,7 @@ export function AdminDrivers() {
               </SheetHeader>
               
               {/* Stats Row */}
-              <div className="grid grid-cols-5 gap-2 py-4 border-b border-[var(--border-color)]">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 py-4 border-b border-[var(--border-color)]">
                 <div className="text-center">
                   <p className="text-lg font-bold text-foreground">{selectedDriver.today_deliveries}</p>
                   <p className="text-xs text-muted-foreground">Today</p>

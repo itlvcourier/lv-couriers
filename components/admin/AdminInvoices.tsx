@@ -106,14 +106,16 @@ export function AdminInvoices() {
 
       {/* Filter Tabs */}
       <Tabs value={filter} onValueChange={(v) => setFilter(v as InvoiceStatus | 'all')}>
-        <TabsList className="bg-muted/30">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="draft">Draft</TabsTrigger>
-          <TabsTrigger value="sent">Sent</TabsTrigger>
-          <TabsTrigger value="paid">Paid</TabsTrigger>
-          <TabsTrigger value="overdue">Overdue</TabsTrigger>
-          <TabsTrigger value="disputed">Disputed</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1">
+          <TabsList className="bg-muted/30 w-max">
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="draft">Draft</TabsTrigger>
+            <TabsTrigger value="sent">Sent</TabsTrigger>
+            <TabsTrigger value="paid">Paid</TabsTrigger>
+            <TabsTrigger value="overdue">Overdue</TabsTrigger>
+            <TabsTrigger value="disputed">Disputed</TabsTrigger>
+          </TabsList>
+        </div>
       </Tabs>
 
       {/* Invoice List */}
@@ -316,8 +318,8 @@ function InvoiceDetail({
           </div>
 
           {/* Line Items */}
-          <div className="border-t border-gray-200 pt-4">
-            <table className="w-full text-sm">
+          <div className="border-t border-gray-200 pt-4 overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-2 text-gray-600 font-medium">Description</th>

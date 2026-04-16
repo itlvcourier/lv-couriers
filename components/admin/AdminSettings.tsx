@@ -9,11 +9,18 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { 
   Shield,
   Bell,
-  Moon,
   Lock,
   LogOut,
   Clock,
@@ -21,6 +28,10 @@ import {
   Zap,
   X,
   Save,
+  Smartphone,
+  CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 export function AdminSettings() {
@@ -46,6 +57,69 @@ export function AdminSettings() {
     })
     return overrides
   })
+
+  // Password change dialog state
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [showPw, setShowPw] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+
+  // 2FA dialog state
+  const [show2faDialog, setShow2faDialog] = useState(false)
+  const [twoFaEnabled, setTwoFaEnabled] = useState(false)
+  const [twoFaStep, setTwoFaStep] = useState<'intro' | 'verify' | 'done'>('intro')
+  const [twoFaCode, setTwoFaCode] = useState('')
+  const [twoFaPhone, setTwoFaPhone] = useState('')
+
+  const handleChangePassword = async () => {
+    if (!pwForm.current || !pwForm.next || !pwForm.confirm) {
+      toast.error('Please fill in all fields')
+      return
+    }
+    if (pwForm.next.length < 8) {
+      toast.error('New password must be at least 8 characters')
+      return
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      toast.error('New passwords do not match')
+      return
+    }
+    setPwSaving(true)
+    // Simulate network request
+    await new Promise(r => setTimeout(r, 600))
+    setPwSaving(false)
+    setShowPasswordDialog(false)
+    setPwForm({ current: '', next: '', confirm: '' })
+    toast.success('Password changed successfully')
+  }
+
+  const handleStart2fa = () => {
+    if (!twoFaPhone || twoFaPhone.replace(/\D/g, '').length < 10) {
+      toast.error('Enter a valid phone number')
+      return
+    }
+    setTwoFaStep('verify')
+    toast.success('Verification code sent')
+  }
+
+  const handleVerify2fa = () => {
+    if (twoFaCode.length !== 6) {
+      toast.error('Enter the 6-digit code')
+      return
+    }
+    setTwoFaEnabled(true)
+    setTwoFaStep('done')
+    toast.success('Two-factor authentication enabled')
+  }
+
+  const handleDisable2fa = () => {
+    setTwoFaEnabled(false)
+    setTwoFaStep('intro')
+    setTwoFaCode('')
+    setTwoFaPhone('')
+    setShow2faDialog(false)
+    toast.success('Two-factor authentication disabled')
+  }
 
   const handleSaveSettings = () => {
     updateSettings(localSettings)
@@ -102,12 +176,12 @@ export function AdminSettings() {
           {/* Per Driver Overrides */}
           <div className="space-y-3">
             <Label className="text-foreground">Per Driver Overrides</Label>
-            <div className="rounded-lg border border-[var(--border-color)] overflow-hidden">
-              <table className="w-full">
+            <div className="rounded-lg border border-[var(--border-color)] overflow-x-auto">
+              <table className="w-full min-w-[520px]">
                 <thead>
                   <tr className="bg-[var(--bg-card-2)]">
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Driver</th>
-                    <th className="text-center p-3 text-sm font-medium text-muted-foreground">Global Default</th>
+                    <th className="text-center p-3 text-sm font-medium text-muted-foreground">Default</th>
                     <th className="text-center p-3 text-sm font-medium text-muted-foreground">Override</th>
                     <th className="text-center p-3 text-sm font-medium text-muted-foreground">Status</th>
                   </tr>
@@ -358,16 +432,212 @@ export function AdminSettings() {
           <CardDescription>Account security settings</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button variant="outline" className="w-full justify-start gap-2">
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => setShowPasswordDialog(true)}
+          >
             <Lock className="w-4 h-4" />
             Change Password
           </Button>
-          <Button variant="outline" className="w-full justify-start gap-2">
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => {
+              setTwoFaStep(twoFaEnabled ? 'done' : 'intro')
+              setShow2faDialog(true)
+            }}
+          >
             <Shield className="w-4 h-4" />
             Two-Factor Authentication
+            {twoFaEnabled && (
+              <Badge variant="outline" className="ml-auto border-green-500/30 text-green-400">
+                Enabled
+              </Badge>
+            )}
           </Button>
         </CardContent>
       </Card>
+
+      {/* Change Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>
+              Enter your current password and choose a new one. Passwords must be at least 8 characters.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="current-pw">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="current-pw"
+                  type={showPw ? 'text' : 'password'}
+                  value={pwForm.current}
+                  onChange={(e) => setPwForm({ ...pwForm, current: e.target.value })}
+                  autoComplete="current-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+                  onClick={() => setShowPw(!showPw)}
+                >
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-pw">New Password</Label>
+              <Input
+                id="new-pw"
+                type={showPw ? 'text' : 'password'}
+                value={pwForm.next}
+                onChange={(e) => setPwForm({ ...pwForm, next: e.target.value })}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-pw">Confirm New Password</Label>
+              <Input
+                id="confirm-pw"
+                type={showPw ? 'text' : 'password'}
+                value={pwForm.confirm}
+                onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPasswordDialog(false)
+                setPwForm({ current: '', next: '', confirm: '' })
+              }}
+              disabled={pwSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleChangePassword} disabled={pwSaving}>
+              {pwSaving ? 'Saving...' : 'Update Password'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Two-Factor Authentication Dialog */}
+      <Dialog open={show2faDialog} onOpenChange={setShow2faDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Two-Factor Authentication</DialogTitle>
+            <DialogDescription>
+              {twoFaStep === 'intro' && 'Add an extra layer of security to your account using SMS verification.'}
+              {twoFaStep === 'verify' && 'Enter the 6-digit code sent to your phone.'}
+              {twoFaStep === 'done' && 'Two-factor authentication is currently active on your account.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {twoFaStep === 'intro' && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)] border border-[var(--border-color)]">
+                <Smartphone className="w-5 h-5 text-[var(--accent-orange)] mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">SMS verification</p>
+                  <p className="text-muted-foreground">
+                    We&apos;ll text a 6-digit code to your phone each time you sign in.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="2fa-phone">Phone Number</Label>
+                <Input
+                  id="2fa-phone"
+                  type="tel"
+                  placeholder="(555) 123-4567"
+                  value={twoFaPhone}
+                  onChange={(e) => setTwoFaPhone(e.target.value)}
+                  autoComplete="tel"
+                />
+              </div>
+            </div>
+          )}
+
+          {twoFaStep === 'verify' && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="2fa-code">Verification Code</Label>
+                <Input
+                  id="2fa-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={twoFaCode}
+                  onChange={(e) => setTwoFaCode(e.target.value.replace(/\D/g, ''))}
+                  className="text-center text-lg tracking-widest"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Sent to {twoFaPhone}. Didn&apos;t receive it?{' '}
+                  <button
+                    type="button"
+                    className="text-[var(--accent-orange)] hover:underline"
+                    onClick={() => toast.success('Code resent')}
+                  >
+                    Resend
+                  </button>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {twoFaStep === 'done' && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                <CheckCircle2 className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">2FA is enabled</p>
+                  <p className="text-muted-foreground">
+                    Verified phone: {twoFaPhone || 'on file'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {twoFaStep === 'intro' && (
+              <>
+                <Button variant="outline" onClick={() => setShow2faDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleStart2fa}>Send Code</Button>
+              </>
+            )}
+            {twoFaStep === 'verify' && (
+              <>
+                <Button variant="outline" onClick={() => setTwoFaStep('intro')}>
+                  Back
+                </Button>
+                <Button onClick={handleVerify2fa}>Verify &amp; Enable</Button>
+              </>
+            )}
+            {twoFaStep === 'done' && (
+              <>
+                <Button variant="outline" onClick={() => setShow2faDialog(false)}>
+                  Close
+                </Button>
+                <Button variant="destructive" onClick={handleDisable2fa}>
+                  Disable 2FA
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Sign Out */}
       <Button 
