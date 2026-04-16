@@ -623,17 +623,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           businessId: business?.businessId || '',
           locationId,
           effectiveDate: rateCardData.effectiveDate || new Date().toISOString().split('T')[0],
-          regular: rateCardData.regular ?? 9,
-          bigDouble: rateCardData.bigDouble ?? 18,
-          outOfTownBig: rateCardData.outOfTownBig ?? 0,
-          rush: rateCardData.rush ?? 20,
-          rushOutOfTown: rateCardData.rushOutOfTown ?? 30,
-          applyGst: rateCardData.applyGst ?? true,
-          cancellationBeforeDepart: rateCardData.cancellationBeforeDepart ?? 0,
-          cancellationEnRoute: rateCardData.cancellationEnRoute ?? 5,
+          rateRegular: rateCardData.rateRegular ?? 9,
+          rateBigDouble: rateCardData.rateBigDouble ?? 18,
+          rateOotBig: rateCardData.rateOotBig ?? 0,
+          rateRush: rateCardData.rateRush ?? 20,
+          rateRushOot: rateCardData.rateRushOot ?? 30,
+          gstApplicable: rateCardData.gstApplicable ?? true,
+          cancelBeforeDepart: rateCardData.cancelBeforeDepart ?? 0,
+          cancelEnRoute: rateCardData.cancelEnRoute ?? 5,
+          notifyDriverAssigned: rateCardData.notifyDriverAssigned ?? true,
+          notifyPickupConfirmed: rateCardData.notifyPickupConfirmed ?? true,
+          notifyEnRoute: rateCardData.notifyEnRoute ?? true,
+          notifyDelivered: rateCardData.notifyDelivered ?? true,
+          notifyFailed: rateCardData.notifyFailed ?? true,
+          notifyInvoiceSent: rateCardData.notifyInvoiceSent ?? true,
+          notifyPaymentReminder: rateCardData.notifyPaymentReminder ?? true,
+          notifyRecipientSms: rateCardData.notifyRecipientSms ?? true,
           billingEmail: rateCardData.billingEmail || '',
           backupEmail: rateCardData.backupEmail || '',
-          invoiceDueDays: rateCardData.invoiceDueDays ?? 15,
           contractNotes: rateCardData.contractNotes || '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -671,11 +678,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const lines = calculateInvoiceLines(periodDeliveries, rateCard)
     const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
-    const gstAmount = calculateGST(subtotal, rateCard.applyGst)
+    const gstAmount = calculateGST(subtotal, rateCard.gstApplicable)
     const total = subtotal + gstAmount
 
     const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + rateCard.invoiceDueDays)
+    dueDate.setDate(dueDate.getDate() + (settings.invoiceDueDays || 15))
 
     const newInvoice: Invoice = {
       id: `inv-${Date.now()}`,

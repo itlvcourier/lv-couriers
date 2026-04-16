@@ -372,7 +372,7 @@ export async function startDropoff(deliveryId: string) {
 
 export async function completeDelivery(deliveryId: string, proofPhotoUrl?: string) {
   const now = new Date()
-  const { data: delivery } = await getDelivery(deliveryId).catch(() => ({ data: null }))
+  const delivery = await getDelivery(deliveryId).catch(() => null)
   
   let durationMins: number | null = null
   if (delivery?.picked_up_at) {

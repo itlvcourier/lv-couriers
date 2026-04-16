@@ -121,7 +121,7 @@ export function BusinessOrders() {
       {/* Orders List */}
       <div className="space-y-3">
         {filteredOrders.map((order) => {
-          const driver = getDriver(order.driverId)
+          const driver = getDriver(order.driverId ?? undefined)
           
           return (
             <Card 

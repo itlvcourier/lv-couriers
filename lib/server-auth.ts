@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@supabase/supabase-js'
-import type { VehicleType } from './types'
 
 // Server actions - all must be async per Next.js requirements
 export async function generateTemporaryPassword(): Promise<string> {
@@ -12,7 +11,6 @@ export async function inviteDriver(
   email: string,
   name: string,
   phone: string,
-  vehicleType: VehicleType
 ): Promise<{ error?: string; tempPassword?: string }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -52,15 +50,11 @@ export async function inviteDriver(
         name,
         email,
         phone,
-        vehicle_type: vehicleType,
         status: 'offline',
-        rating: 5.0,
-        total_deliveries: 0
       })
 
     if (profileError) {
       console.error('Profile creation error:', profileError)
-      // Don't fail the whole operation if profile creation fails
     }
 
     return { tempPassword }

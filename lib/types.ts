@@ -120,53 +120,53 @@ export interface Delivery {
   businessName: string
   driverId: string | null
   driverName: string | null
-  tripId: string | null
+  tripId?: string | null
   // Addresses
   pickupAddress: string
   pickupArea: string
-  pickupLat: number | null
-  pickupLng: number | null
+  pickupLat?: number | null
+  pickupLng?: number | null
   dropoffAddress: string
   dropoffArea: string
-  dropoffLat: number | null
-  dropoffLng: number | null
+  dropoffLat?: number | null
+  dropoffLng?: number | null
   recipientPhone: string | null
   // Manifest items
   manifest: ManifestItem[]
   // Delivery flags
   isUrgent: boolean
   isOutOfTown: boolean
-  isRush: boolean
+  isRush?: boolean
   // Status
   status: DeliveryStatus
-  retryCount: number
+  retryCount?: number
   // Timestamps
   postedAt: string
   claimedAt: string | null
-  pickupArrivedAt: string | null
+  pickupArrivedAt?: string | null
   pickedUpAt: string | null
   deliveredAt: string | null
   // Billing
-  rateCardId: string | null
+  rateCardId?: string | null
   calculatedRate: number | null
-  gstAmount: number | null
-  totalAmount: number | null
-  invoiceId: string | null
+  gstAmount?: number | null
+  totalAmount?: number | null
+  invoiceId?: string | null
   // Completion
-  durationMins: number | null
+  durationMins?: number | null
   duration: string | null // Formatted for display
   proofPhotoUrl: string | null
   recipientNote: string | null
   // Tracking
   trackingCode: string | null
-  trackingExpiresAt: string | null
+  trackingExpiresAt?: string | null
   // Cancellation
-  cancelledAt: string | null
-  cancellationStage: 'before_depart' | 'en_route_pickup' | 'after_pickup' | null
-  cancellationFee: number | null
-  cancellationReason: string | null
+  cancelledAt?: string | null
+  cancellationStage?: 'before_depart' | 'en_route_pickup' | 'after_pickup' | null
+  cancellationFee?: number | null
+  cancellationReason?: string | null
   // Trip ordering
-  tripOrder: number | null
+  tripOrder?: number | null
   // Relations (for client-side convenience)
   flags: DeliveryFlag[]
   verifications: PickupVerification[]
