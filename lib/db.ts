@@ -544,20 +544,6 @@ export async function getBusiness(businessId: string) {
   return data as DbBusiness & { locations: DbLocation[] }
 }
 
-export async function getBusinessByUserId(userId: string) {
-  const supabase = createClient()
-  // First check business_users join table
-  const { data: businessUser, error: buError } = await supabase
-    .from('business_users')
-    .select('business_id')
-    .eq('user_id', userId)
-    .single()
-
-  if (buError || !businessUser) return null
-  
-  return getBusiness(businessUser.business_id)
-}
-
 export async function getBusinessLocations(businessId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
