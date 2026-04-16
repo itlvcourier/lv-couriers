@@ -363,7 +363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return {
           ...d,
           status: 'failed_retry' as DeliveryStatus,
-          retryCount: d.retryCount + 1,
+          retryCount: (d.retryCount ?? 0) + 1,
           statusHistory: [
             ...d.statusHistory,
             {

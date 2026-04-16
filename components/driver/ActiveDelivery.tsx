@@ -454,7 +454,7 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   const handleMarkFailed = () => {
     if (failReason) {
       // Check if this is a second failure
-      if (delivery.retryCount >= 1) {
+      if ((delivery.retryCount ?? 0) >= 1) {
         // Second failure - escalate
         toast.error('Delivery escalated - 2 failed attempts')
         escalateDelivery(delivery.id)
