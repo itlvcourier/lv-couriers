@@ -20,7 +20,7 @@ export default function DriverPage() {
     if (activeRole !== 'driver') {
       // Redirect to correct role page
       if (activeRole === 'admin') {
-        router.replace('/admin/dashboard')
+        router.replace('/admin')
       } else if (activeRole === 'business') {
         router.replace('/business')
       } else {

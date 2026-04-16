@@ -72,14 +72,14 @@ export default function SetupPage() {
           <div className="p-3 bg-muted/50 rounded-lg border border-border">
             <p className="text-xs text-muted-foreground font-medium mb-2">Demo Credentials:</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p><strong>Business:</strong> business@demo.lvcouriers.com / Demo@123</p>
-              <p><strong>Driver:</strong> driver@demo.lvcouriers.com / Demo@123</p>
-              <p><strong>Admin:</strong> admin@demo.lvcouriers.com / Demo@123</p>
+              <p><strong>Admin:</strong> admin@lvcourier.ca / admin123</p>
+              <p><strong>Driver:</strong> marcus@lvcourier.ca / driver123</p>
+              <p><strong>Business:</strong> freshmart@lvcourier.ca / business123</p>
             </div>
           </div>
 
           <div className="text-center">
-            <a href="/auth/login" className="text-sm text-primary hover:underline">
+            <a href="/login" className="text-sm text-primary hover:underline">
               Go to Login →
             </a>
           </div>

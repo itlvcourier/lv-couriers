@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useApp } from '@/lib/context'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { CreateOrderForm } from './CreateOrderForm'
 import { BusinessOrders } from './BusinessOrders'
 import { BusinessInvoices } from './BusinessInvoices'
@@ -21,7 +21,7 @@ export function BusinessView() {
   const [activeTab, setActiveTab] = useState('orders')
   const { currentUser, businesses } = useApp()
   
-  const business = businesses.find(b => b.id === currentUser?.id)
+  const business = businesses.find(b => b.id === currentUser?.businessId)
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -43,7 +43,6 @@ export function BusinessView() {
               </div>
             </div>
             <Avatar className="w-9 h-9">
-              <AvatarImage src={business?.avatar} />
               <AvatarFallback className="bg-primary/10 text-primary text-sm">
                 {business?.name ? getInitials(business.name) : 'B'}
               </AvatarFallback>

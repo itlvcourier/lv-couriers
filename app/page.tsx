@@ -19,7 +19,7 @@ export default function Home() {
     // Route based on role
     switch (activeRole) {
       case 'admin':
-        router.replace('/admin/dashboard')
+        router.replace('/admin')
         break
       case 'driver':
         router.replace('/driver')

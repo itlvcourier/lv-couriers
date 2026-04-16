@@ -8,19 +8,20 @@ import { Spinner } from '@/components/ui/spinner'
 import { Truck } from 'lucide-react'
 
 export default function BusinessPage() {
-  const { currentUser, isLoading } = useApp()
+  const { currentUser } = useApp()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !currentUser) {
+    if (!currentUser) {
       router.replace('/login')
+      return
     }
-    if (!isLoading && currentUser && currentUser.role !== 'business') {
+    if (currentUser.role !== 'business') {
       router.replace(`/${currentUser.role}`)
     }
-  }, [currentUser, isLoading, router])
+  }, [currentUser, router])
 
-  if (isLoading || !currentUser) {
+  if (!currentUser) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">

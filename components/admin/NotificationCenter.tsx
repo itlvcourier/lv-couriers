@@ -17,28 +17,45 @@ import {
   AlertTriangle,
   CreditCard,
   Settings,
-  Package
+  Package,
+  FileText,
+  RefreshCw,
+  UserX
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import type { AdminNotificationType } from '@/lib/types'
 
 const NOTIFICATION_ICONS: Record<AdminNotificationType, React.ElementType> = {
+  // DB types
   new_job: Package,
   flag: Flag,
   sla_breach: AlertTriangle,
   driver_timeout: Clock,
   payment_received: CreditCard,
   system: Settings,
+  // Mock data types
+  timeout: Clock,
+  completion: CheckCircle,
+  invoice: FileText,
+  qty_adjustment: RefreshCw,
+  driver_deactivated: UserX,
 }
 
 const NOTIFICATION_COLORS: Record<AdminNotificationType, string> = {
+  // DB types
   new_job: 'text-blue-400 bg-blue-500/10',
   flag: 'text-red-400 bg-red-500/10',
   sla_breach: 'text-orange-400 bg-orange-500/10',
   driver_timeout: 'text-yellow-400 bg-yellow-500/10',
   payment_received: 'text-green-400 bg-green-500/10',
   system: 'text-gray-400 bg-gray-500/10',
+  // Mock data types
+  timeout: 'text-yellow-400 bg-yellow-500/10',
+  completion: 'text-green-400 bg-green-500/10',
+  invoice: 'text-gray-400 bg-gray-500/10',
+  qty_adjustment: 'text-orange-400 bg-orange-500/10',
+  driver_deactivated: 'text-red-400 bg-red-500/10',
 }
 
 export function NotificationCenter() {

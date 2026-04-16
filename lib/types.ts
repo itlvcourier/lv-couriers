@@ -380,14 +380,21 @@ export interface SMSLogEntry {
   errorMessage: string | null
 }
 
-// Matches schema: notification_type enum
+// Notification types: matches DB schema + mock data types
 export type AdminNotificationType = 
+  // DB schema types
   | 'new_job'
   | 'flag' 
   | 'sla_breach'
   | 'driver_timeout'
   | 'payment_received'
   | 'system'
+  // Mock data types (for local context backwards compat)
+  | 'timeout'
+  | 'completion'
+  | 'invoice'
+  | 'qty_adjustment'
+  | 'driver_deactivated'
 
 export interface AdminNotification {
   id: string
