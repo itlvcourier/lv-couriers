@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import { toast } from 'sonner'
 import { 
   Shield,
   Bell,
+  Moon,
   Lock,
   LogOut,
   Clock,
@@ -383,6 +385,20 @@ export function AdminSettings() {
             <Save className="w-4 h-4 mr-2" />
             Save Settings
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Appearance */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Moon className="w-5 h-5" />
+            Appearance
+          </CardTitle>
+          <CardDescription>Customize how DOMS looks on your device</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggleRow id="admin-dark-mode" />
         </CardContent>
       </Card>
 

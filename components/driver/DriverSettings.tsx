@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { toast } from 'sonner'
 import { 
   User, 
@@ -18,7 +19,6 @@ import {
   Star,
   Shield,
   Bell,
-  Moon,
   MapPin,
   LogOut,
   Package,
@@ -254,6 +254,8 @@ export function DriverSettings() {
               className="data-[state=checked]:bg-[var(--accent-orange)]"
             />
           </div>
+          <Separator className="bg-[var(--border-color)]" />
+          <ThemeToggleRow id="driver-dark-mode" />
         </CardContent>
       </Card>
 

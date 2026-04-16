@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
+import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { 
   Building2, 
   Phone, 
@@ -16,7 +17,6 @@ import {
   MapPin, 
   Shield,
   Bell,
-  Moon,
   LogOut,
   Package,
   DollarSign,
@@ -216,13 +216,7 @@ export function BusinessProfile() {
             <Switch defaultChecked />
           </div>
           <Separator />
-          <div className="flex items-center justify-between py-3">
-            <div className="flex items-center gap-3">
-              <Moon className="w-5 h-5 text-muted-foreground" />
-              <span className="text-sm">Dark Mode</span>
-            </div>
-            <Switch defaultChecked />
-          </div>
+          <ThemeToggleRow id="business-dark-mode" />
         </CardContent>
       </Card>
 

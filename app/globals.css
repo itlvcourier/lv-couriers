@@ -3,9 +3,63 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* DOMS Dark Theme - Delivery Operations Management System */
+/* DOMS - Delivery Operations Management System */
+/* Light theme (default) */
 :root {
-  /* Dark theme by default */
+  /* Custom DOMS tokens */
+  --bg-primary: #f6f7fa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f2f4f8;
+  --bg-card-2: #eef1f6;
+  --accent-orange: #f97316;
+  --accent-blue: #2563eb;
+  --accent-green: #16a34a;
+  --accent-red: #dc2626;
+  --accent-yellow: #ca8a04;
+  --accent-purple: #9333ea;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e5e7eb;
+
+  /* shadcn tokens mapped to light theme */
+  --background: #f6f7fa;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f6;
+  --secondary-foreground: #0f172a;
+  --muted: #f2f4f8;
+  --muted-foreground: #64748b;
+  --accent: #2563eb;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #f97316;
+  --chart-1: #f97316;
+  --chart-2: #2563eb;
+  --chart-3: #16a34a;
+  --chart-4: #ca8a04;
+  --chart-5: #9333ea;
+  --radius: 1rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f2f4f8;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #f97316;
+}
+
+/* Dark theme */
+.dark {
+  /* Custom DOMS tokens */
   --bg-primary: #0d0f14;
   --bg-card: #141720;
   --bg-card-hover: #1a1e2a;
@@ -19,7 +73,7 @@
   --text-primary: #e8eaf0;
   --text-muted: #6b7280;
   --border-color: #1f2535;
-  
+
   /* shadcn tokens mapped to dark theme */
   --background: #0d0f14;
   --foreground: #e8eaf0;
@@ -45,38 +99,6 @@
   --chart-3: #22c55e;
   --chart-4: #eab308;
   --chart-5: #a855f7;
-  --radius: 1rem;
-  --sidebar: #0d0f14;
-  --sidebar-foreground: #e8eaf0;
-  --sidebar-primary: #f97316;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1a1e2a;
-  --sidebar-accent-foreground: #e8eaf0;
-  --sidebar-border: #1f2535;
-  --sidebar-ring: #f97316;
-}
-
-/* Keep same theme for .dark class */
-.dark {
-  --background: #0d0f14;
-  --foreground: #e8eaf0;
-  --card: #141720;
-  --card-foreground: #e8eaf0;
-  --popover: #141720;
-  --popover-foreground: #e8eaf0;
-  --primary: #f97316;
-  --primary-foreground: #ffffff;
-  --secondary: #1f2535;
-  --secondary-foreground: #e8eaf0;
-  --muted: #1a1e2a;
-  --muted-foreground: #6b7280;
-  --accent: #3b82f6;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #1f2535;
-  --input: #1f2535;
-  --ring: #f97316;
   --sidebar: #0d0f14;
   --sidebar-foreground: #e8eaf0;
   --sidebar-primary: #f97316;
@@ -135,6 +157,10 @@
   }
   html {
     @apply bg-background;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -146,29 +172,29 @@
   .tap-target {
     @apply min-h-[44px] min-w-[44px];
   }
-  
+
   .card-hover {
     @apply transition-colors duration-200 hover:bg-[var(--bg-card-hover)];
   }
-  
+
   .text-balance {
     text-wrap: balance;
   }
 }
 
 /* Status badge styles */
-.status-posted { @apply bg-gray-500/10 text-gray-400 border-gray-500/20; }
-.status-pending { @apply bg-gray-500/10 text-gray-400 border-gray-500/20; }
-.status-claimed { @apply bg-blue-500/10 text-blue-400 border-blue-500/20; }
-.status-en_route_pickup { @apply bg-yellow-500/10 text-yellow-400 border-yellow-500/20; }
-.status-picked_up { @apply bg-orange-500/10 text-orange-400 border-orange-500/20; }
-.status-en_route_dropoff { @apply bg-purple-500/10 text-purple-400 border-purple-500/20; }
-.status-delivered { @apply bg-green-500/10 text-green-400 border-green-500/20; }
-.status-failed { @apply bg-red-500/10 text-red-400 border-red-500/20; }
-.status-failed_retry { @apply bg-red-500/10 text-red-400 border-red-500/20; }
-.status-failed_permanent { @apply bg-red-500/10 text-red-400 border-red-500/20; }
-.status-flagged { @apply bg-red-500/10 text-red-400 border-red-500/20; }
-.status-cancelled { @apply bg-gray-500/10 text-gray-400 border-gray-500/20; }
+.status-posted { @apply bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20; }
+.status-pending { @apply bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20; }
+.status-claimed { @apply bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20; }
+.status-en_route_pickup { @apply bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20; }
+.status-picked_up { @apply bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20; }
+.status-en_route_dropoff { @apply bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20; }
+.status-delivered { @apply bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20; }
+.status-failed { @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20; }
+.status-failed_retry { @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20; }
+.status-failed_permanent { @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20; }
+.status-flagged { @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20; }
+.status-cancelled { @apply bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20; }
 
 /* Driver tracking animation */
 @keyframes driver-move {
