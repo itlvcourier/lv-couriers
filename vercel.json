@@ -2,20 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/generate-drafts",
-      "schedule": "0 6 28 * *"
-    },
-    {
-      "path": "/api/cron/auto-send",
-      "schedule": "0 6 1 * *"
-    },
-    {
-      "path": "/api/cron/process-reminders",
+      "path": "/api/cron/invoice-daily",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/mark-overdue",
-      "schedule": "15 9 * * *"
     }
   ]
 }
