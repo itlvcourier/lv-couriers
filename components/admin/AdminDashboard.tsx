@@ -1,24 +1,24 @@
 'use client'
 
 import useSWR from 'swr'
+import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { 
-  getDashboardStats, 
-  getAllDeliveries, 
-  getDrivers, 
+import {
+  getDashboardStats,
+  getAllDeliveries,
+  getDrivers,
   getBusinesses,
   getAdminNotifications,
   type DbDelivery,
   type DbDriver,
 } from '@/lib/db'
-import { 
-  Package, 
-  Truck, 
-  Building2, 
-  CheckCircle,
+import {
+  Package,
+  Truck,
+  Building2,
   Clock,
   AlertTriangle,
   Activity,
@@ -26,10 +26,53 @@ import {
   Phone,
   RefreshCw,
   Flag,
+  FileText,
+  AlertOctagon,
+  MailWarning,
+  ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function AdminDashboard() {
+  // Invoice context (mock state)
+  const { invoices, settings } = useApp()
+
+  // Navigate to Admin > Invoices tab (and optionally preselect a status)
+  const goToInvoices = (status?: 'draft' | 'sent' | 'overdue' | 'escalated') => {
+    if (typeof window === 'undefined') return
+    if (status) {
+      try {
+        sessionStorage.setItem('doms.invoices.initialStatus', status)
+      } catch {
+        // sessionStorage may not be available (private mode, etc.)
+      }
+    }
+    window.dispatchEvent(new CustomEvent('doms:navigate-admin', { detail: 'invoices' }))
+  }
+
+  // --- Invoice derived state ---
+  const drafts = invoices.filter(i => i.status === 'draft')
+  const draftsWithIssues = drafts.filter(i => i.emailBounced || !i.billingEmail)
+  const overdueInvoices = invoices.filter(i => i.status === 'overdue')
+  const escalatedInvoices = invoices.filter(i => i.status === 'escalated')
+
+  // Review reminder: today falls within N days of the 1st
+  const now = new Date()
+  const dayOfMonth = now.getDate()
+  const reviewWindow = settings.reviewReminderDays
+  const isReviewPeriod = reviewWindow > 0 &&
+    (dayOfMonth >= 28 || dayOfMonth <= 1) && drafts.length > 0
+
+  // Days until the 1st (approximate — treats day 28 onward as approaching)
+  const daysUntilFirst = dayOfMonth >= 28
+    ? ((() => {
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+        return lastDay - dayOfMonth + 1
+      })())
+    : dayOfMonth === 1
+      ? 0
+      : undefined
+
   // Fetch dashboard stats
   const { data: stats, isLoading: statsLoading } = useSWR('dashboard-stats', getDashboardStats, {
     refreshInterval: 30000, // Refresh every 30 seconds
@@ -85,6 +128,55 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Invoice alert banners - appear at the very top, highest priority */}
+      {escalatedInvoices.length > 0 && (
+        <InvoiceAlertBanner
+          tone="critical"
+          icon={<AlertOctagon className="w-4 h-4" />}
+          title={`${escalatedInvoices.length} invoice${escalatedInvoices.length > 1 ? 's' : ''} escalated — requires attention`}
+          subtitle="Automatic reminders have stopped. Resolve manually."
+          ctaLabel="Review escalated"
+          onClick={() => goToInvoices('escalated')}
+        />
+      )}
+
+      {overdueInvoices.length > 0 && (
+        <InvoiceAlertBanner
+          tone="warning"
+          icon={<AlertTriangle className="w-4 h-4" />}
+          title={`${overdueInvoices.length} invoice${overdueInvoices.length > 1 ? 's are' : ' is'} overdue`}
+          subtitle={`Total unpaid: ${formatCurrency(overdueInvoices.reduce((s, i) => s + i.total, 0))}`}
+          ctaLabel="View overdue"
+          onClick={() => goToInvoices('overdue')}
+        />
+      )}
+
+      {draftsWithIssues.length > 0 && (
+        <InvoiceAlertBanner
+          tone="warning"
+          icon={<MailWarning className="w-4 h-4" />}
+          title={`${draftsWithIssues.length} draft invoice${draftsWithIssues.length > 1 ? 's have' : ' has'} an email issue`}
+          subtitle="Bounced or missing billing email. These will be skipped on auto-send."
+          ctaLabel="Fix now"
+          onClick={() => goToInvoices('draft')}
+        />
+      )}
+
+      {isReviewPeriod && (
+        <InvoiceAlertBanner
+          tone="info"
+          icon={<FileText className="w-4 h-4" />}
+          title={`${drafts.length} draft invoice${drafts.length > 1 ? 's' : ''} ready for review`}
+          subtitle={
+            settings.autoSendInvoices
+              ? `Auto-send ${daysUntilFirst === 0 ? 'today' : `in ${daysUntilFirst} day${daysUntilFirst !== 1 ? 's' : ''}`}${draftsWithIssues.length > 0 ? ` · ${draftsWithIssues.length} with issues` : ''}`
+              : 'Auto-send is off — manually send when ready'
+          }
+          ctaLabel="Review drafts"
+          onClick={() => goToInvoices('draft')}
+        />
+      )}
+
       {/* Unclaimed Rush Jobs Warning */}
       {rushDeliveries.length > 0 && (
         <Card className="border-red-500/30 bg-red-500/5">
@@ -382,5 +474,77 @@ export function AdminDashboard() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function formatCurrency(n: number) {
+  return n.toLocaleString('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    minimumFractionDigits: 2,
+  })
+}
+
+type BannerTone = 'critical' | 'warning' | 'info'
+
+function InvoiceAlertBanner({
+  tone,
+  icon,
+  title,
+  subtitle,
+  ctaLabel,
+  onClick,
+}: {
+  tone: BannerTone
+  icon: React.ReactNode
+  title: string
+  subtitle?: string
+  ctaLabel: string
+  onClick: () => void
+}) {
+  const palette: Record<BannerTone, { border: string; bg: string; iconColor: string; title: string; cta: string }> = {
+    critical: {
+      border: 'border-red-500/40',
+      bg: 'bg-red-500/10',
+      iconColor: 'text-red-400',
+      title: 'text-red-300',
+      cta: 'bg-red-500 hover:bg-red-500/90 text-white',
+    },
+    warning: {
+      border: 'border-yellow-500/40',
+      bg: 'bg-yellow-500/10',
+      iconColor: 'text-yellow-400',
+      title: 'text-yellow-200',
+      cta: 'bg-yellow-500 hover:bg-yellow-500/90 text-black',
+    },
+    info: {
+      border: 'border-blue-500/40',
+      bg: 'bg-blue-500/10',
+      iconColor: 'text-blue-400',
+      title: 'text-blue-200',
+      cta: 'bg-blue-500 hover:bg-blue-500/90 text-white',
+    },
+  }
+  const c = palette[tone]
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left rounded-xl border ${c.border} ${c.bg} p-4 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-orange)]`}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`flex-shrink-0 w-9 h-9 rounded-lg bg-[var(--bg-card)] flex items-center justify-center ${c.iconColor}`}>
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold ${c.title}`}>{title}</p>
+          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        <div className="flex-shrink-0 flex items-center gap-2">
+          <Badge className={`${c.cta} border-0 hidden sm:inline-flex`}>{ctaLabel}</Badge>
+          <ChevronRight className={`w-5 h-5 ${c.iconColor}`} />
+        </div>
+      </div>
+    </button>
   )
 }

@@ -125,7 +125,19 @@ export function AdminInvoices() {
     updateInvoiceBackupEmail,
   } = useApp()
 
-  const [filter, setFilter] = useState<InvoiceFilter>('all')
+  const [filter, setFilter] = useState<InvoiceFilter>(() => {
+    if (typeof window === 'undefined') return 'all'
+    try {
+      const v = sessionStorage.getItem('doms.invoices.initialStatus') as InvoiceFilter | null
+      if (v) {
+        sessionStorage.removeItem('doms.invoices.initialStatus')
+        return v
+      }
+    } catch {
+      // ignore
+    }
+    return 'all'
+  })
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [showMarkPaidFor, setShowMarkPaidFor] = useState<string | null>(null)
