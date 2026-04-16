@@ -7,14 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { CreateOrderForm } from './CreateOrderForm'
 import { BusinessOrders } from './BusinessOrders'
+import { BusinessLiveTracking } from './BusinessLiveTracking'
 import { BusinessInvoices } from './BusinessInvoices'
 import { BusinessProfile } from './BusinessProfile'
-import { 
-  Plus, 
-  Package, 
+import {
+  Plus,
+  Package,
   Building2,
   User,
-  FileText
+  FileText,
+  Radio,
 } from 'lucide-react'
 
 export function BusinessView() {
@@ -58,7 +60,11 @@ export function BusinessView() {
             <TabsContent value="orders" className="mt-0 m-0">
               <BusinessOrders />
             </TabsContent>
-            
+
+            <TabsContent value="live" className="mt-0 m-0">
+              <BusinessLiveTracking />
+            </TabsContent>
+
             <TabsContent value="create" className="mt-0 m-0">
               <CreateOrderForm onSuccess={() => setActiveTab('orders')} />
             </TabsContent>
@@ -75,16 +81,23 @@ export function BusinessView() {
 
         {/* Bottom Navigation */}
         <div className="sticky bottom-0 bg-card border-t border-border safe-area-bottom">
-          <TabsList className="w-full h-16 rounded-none bg-transparent p-0 grid grid-cols-4 max-w-lg mx-auto">
-            <TabsTrigger 
-              value="orders" 
+          <TabsList className="w-full h-16 rounded-none bg-transparent p-0 grid grid-cols-5 max-w-lg mx-auto">
+            <TabsTrigger
+              value="orders"
               className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
             >
               <Package className="w-5 h-5" />
               <span className="text-xs font-medium">Orders</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="create" 
+            <TabsTrigger
+              value="live"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+            >
+              <Radio className="w-5 h-5" />
+              <span className="text-xs font-medium">Live</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="create"
               className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
             >
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center -mt-4 shadow-lg">
@@ -92,15 +105,15 @@ export function BusinessView() {
               </div>
               <span className="text-xs font-medium -mt-1">Create</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="invoices" 
+            <TabsTrigger
+              value="invoices"
               className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
             >
               <FileText className="w-5 h-5" />
               <span className="text-xs font-medium">Invoices</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="profile" 
+            <TabsTrigger
+              value="profile"
               className="h-full rounded-none flex flex-col items-center justify-center gap-1 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
             >
               <User className="w-5 h-5" />
