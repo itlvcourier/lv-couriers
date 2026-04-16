@@ -6,6 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart'
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { 
   Download, 
@@ -63,6 +70,13 @@ export function AdminDriverReports() {
     if (rate >= 70) return 'text-yellow-400'
     return 'text-red-400'
   }
+
+  const weeklyChartConfig = {
+    count: {
+      label: 'Deliveries',
+      color: 'var(--accent-orange)',
+    },
+  } satisfies ChartConfig
 
   // Calculate totals
   const totals = filteredReports.reduce((acc, r) => ({
@@ -219,20 +233,62 @@ export function AdminDriverReports() {
                 </Badge>
               </div>
               
-              {/* Weekly bars */}
-              <div className="flex items-end justify-around h-16 gap-2 mb-4">
-                {report.weeklyBreakdown.map((count, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                    <div 
-                      className="w-full bg-[var(--accent-orange)] rounded-t max-w-8"
-                      style={{ 
-                        height: `${Math.max(4, (count / Math.max(...report.weeklyBreakdown)) * 48)}px` 
-                      }}
-                    />
-                    <span className="text-xs text-muted-foreground">W{i + 1}</span>
-                  </div>
-                ))}
-              </div>
+              {/* Weekly bars — interactive */}
+              {(() => {
+                const peak = Math.max(...report.weeklyBreakdown, 1)
+                const data = report.weeklyBreakdown.map((count, i) => ({
+                  week: `W${i + 1}`,
+                  count,
+                  isPeak: count === peak && count > 0,
+                }))
+                return (
+                  <ChartContainer
+                    config={weeklyChartConfig}
+                    className="h-28 w-full mb-4"
+                  >
+                    <BarChart
+                      data={data}
+                      margin={{ top: 8, right: 4, bottom: 0, left: 4 }}
+                      barCategoryGap="20%"
+                    >
+                      <CartesianGrid
+                        vertical={false}
+                        stroke="var(--border-color)"
+                        strokeDasharray="3 3"
+                      />
+                      <XAxis
+                        dataKey="week"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                      />
+                      <YAxis hide domain={[0, Math.ceil(peak * 1.2)]} />
+                      <ChartTooltip
+                        cursor={{ fill: 'var(--bg-card-2)', opacity: 0.6 }}
+                        content={
+                          <ChartTooltipContent
+                            labelFormatter={label => `Week ${String(label).replace('W', '')}`}
+                            formatter={value => [`${value} deliveries`, '']}
+                            hideIndicator
+                          />
+                        }
+                      />
+                      <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                        {data.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill={
+                              entry.isPeak
+                                ? 'var(--accent-orange)'
+                                : 'color-mix(in oklab, var(--accent-orange) 55%, transparent)'
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ChartContainer>
+                )
+              })()}
               
               <div className="grid grid-cols-3 gap-4 text-center text-sm">
                 <div>
