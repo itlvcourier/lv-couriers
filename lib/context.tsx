@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import type {
   MockUser,
   Driver,
@@ -20,7 +20,6 @@ import type {
   Dispute,
   UnmatchedPayment,
   PaymentDetails,
-  InvoiceLine,
   SMSLogEntry,
   AdminNotification,
   DriverGPS,
@@ -31,25 +30,56 @@ import type {
   ManifestItem,
   SavedContact,
 } from './types'
-import {
-  mockUsers,
-  initialDrivers,
-  initialBusinesses,
-  initialDeliveries,
-  initialSettings,
-  initialRateCards,
-  initialInvoices,
-  initialDisputes,
-  initialUnmatchedPayments,
-  initialSMSLog,
-  initialAdminNotifications,
-  initialDriverGPS,
-  initialActivityFeed,
-  initialTrips,
-  initialDriverReports,
-  initialTimeoutWarnings,
-} from './data'
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES } from './billing'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
+import {
+  loadAllBusinesses,
+  loadAllDrivers,
+  loadAllRateCards,
+  loadSettings,
+  loadDeliveries,
+  loadInvoices,
+  createDeliveryInDb,
+  updateDeliveryFields,
+  applyPickupVerifications,
+  insertDeliveryFlag,
+  insertFailureAndFinalize,
+  cancelDeliveryInDb,
+  saveRateCardToDb,
+  saveSettingsToDb,
+  saveBusinessToDb,
+  saveLocationToDb,
+  updateDriverRow,
+  createDriverInDb,
+} from './db-extended'
+
+// Default settings used before system_settings has been loaded from the DB.
+const DEFAULT_SETTINGS: SystemSettings = {
+  globalMaxJobs: 3,
+  rushSlaMins: 45,
+  intownTimeoutMins: 90,
+  outOfTownTimeoutMins: 150,
+  autoGenerateInvoices: true,
+  invoiceDueDays: 15,
+  autoSendInvoices: false,
+  reminderDay1: 7,
+  overdueDay: 7,
+  escalationDay: 14,
+  reviewReminderDays: 2,
+  sendReminderEmail: true,
+  sendReminderSms: false,
+  cancellationBeforeDepart: 0,
+  cancellationEnRoute: 5,
+}
+
+// Fire-and-forget DB persistence. Logs errors so we can diagnose without
+// blocking the optimistic UI update.
+function persist<T>(promise: Promise<T>, label: string): void {
+  promise.catch(err => {
+    // eslint-disable-next-line no-console
+    console.error(`[db] ${label} failed:`, err?.message || err)
+  })
+}
 
 interface AppContextType {
   // Auth state
@@ -69,8 +99,10 @@ interface AppContextType {
   unmatchedPayments: UnmatchedPayment[]
   
   // Auth functions
-  login: (email: string, password: string) => { success: boolean; role?: UserRole; error?: string }
-  logout: () => void
+  login: (email: string, password: string) => Promise<{ success: boolean; role?: UserRole; error?: string }>
+  logout: () => Promise<void>
+  // True while we're waiting for Supabase session check + initial data load.
+  isHydrating: boolean
   switchLocation: (locationId: string) => void
   
   // Delivery functions
@@ -174,42 +206,145 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null)
   const [activeRole, setActiveRole] = useState<UserRole | null>(null)
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
-  const [deliveries, setDeliveries] = useState<Delivery[]>(initialDeliveries)
-  const [drivers, setDrivers] = useState<Driver[]>(initialDrivers)
-  const [businesses, setBusinesses] = useState<Business[]>(initialBusinesses)
-  const [settings, setSettings] = useState<SystemSettings>(initialSettings)
+  const [isHydrating, setIsHydrating] = useState<boolean>(true)
+  // Core entities are loaded from Supabase on login and refreshed on mutations.
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [drivers, setDrivers] = useState<Driver[]>([])
+  const [businesses, setBusinesses] = useState<Business[]>([])
+  const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS)
+  const [rateCards, setRateCards] = useState<RateCard[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  // In-memory state: starts empty on every session. These aren't persisted yet.
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [rateCards, setRateCards] = useState<RateCard[]>(initialRateCards)
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices)
-  const [disputes, setDisputes] = useState<Dispute[]>(initialDisputes)
-  const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPayment[]>(initialUnmatchedPayments)
-  const [smsLog, setSMSLog] = useState<SMSLogEntry[]>(initialSMSLog)
-  const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>(initialAdminNotifications)
-  const [driverGPS, setDriverGPS] = useState<DriverGPS[]>(initialDriverGPS)
-  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>(initialActivityFeed)
-  const [trips, setTrips] = useState<Trip[]>(initialTrips)
-  const [driverReports] = useState<DriverMonthlyReport[]>(initialDriverReports)
-  const [timeoutWarnings, setTimeoutWarnings] = useState<TimeoutWarning[]>(initialTimeoutWarnings)
+  const [disputes, setDisputes] = useState<Dispute[]>([])
+  const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPayment[]>([])
+  const [smsLog, setSMSLog] = useState<SMSLogEntry[]>([])
+  const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>([])
+  const [driverGPS, setDriverGPS] = useState<DriverGPS[]>([])
+  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([])
+  const [trips, setTrips] = useState<Trip[]>([])
+  const [driverReports] = useState<DriverMonthlyReport[]>([])
+  const [timeoutWarnings, setTimeoutWarnings] = useState<TimeoutWarning[]>([])
   const [savedContacts, setSavedContacts] = useState<SavedContact[]>([])
 
-  // Auth functions
-  const login = useCallback((email: string, password: string) => {
-    const user = mockUsers.find(u => u.email === email && u.password === password)
-    if (!user) {
+  // -------------------------------------------------------------------------
+  // Hydration: fetch the profile + all core entities after a Supabase session
+  // exists. Runs on mount (for page refreshes where a session cookie persists)
+  // and whenever login/logout change the user.
+  // -------------------------------------------------------------------------
+  const hydrateFromDb = useCallback(async (user: MockUser) => {
+    try {
+      const profile = {
+        role: user.role,
+        businessId: user.businessId || null,
+        driverId: user.driverId || null,
+      }
+      const [b, d, rc, s, dl, inv] = await Promise.all([
+        loadAllBusinesses().catch(() => [] as Business[]),
+        loadAllDrivers().catch(() => [] as Driver[]),
+        loadAllRateCards().catch(() => [] as RateCard[]),
+        loadSettings().catch(() => DEFAULT_SETTINGS),
+        loadDeliveries(profile).catch(() => [] as Delivery[]),
+        loadInvoices(profile).catch(() => [] as Invoice[]),
+      ])
+      // Backfill businessName on deliveries using the businesses we loaded.
+      const byBizId = new Map(b.map(biz => [biz.id, biz.name]))
+      setBusinesses(b)
+      setDrivers(d)
+      setRateCards(rc)
+      setSettings(s)
+      setDeliveries(dl.map(x => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })))
+      setInvoices(inv)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[db] hydration failed', err)
+    }
+  }, [])
+
+  // Check for an existing Supabase session on mount (page refresh).
+  useEffect(() => {
+    const supabase = createSupabaseClient()
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        if (!authUser) {
+          if (!cancelled) setIsHydrating(false)
+          return
+        }
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .maybeSingle()
+        if (!profile || cancelled) {
+          setIsHydrating(false)
+          return
+        }
+        const restored: MockUser = {
+          email: profile.email,
+          password: '',
+          role: profile.role as UserRole,
+          name: profile.full_name || profile.email,
+          businessId: profile.business_id || undefined,
+          locationId: profile.location_id || undefined,
+          driverId: profile.driver_id || undefined,
+        }
+        setCurrentUser(restored)
+        setActiveRole(restored.role)
+        if (restored.locationId) setActiveLocationId(restored.locationId)
+        await hydrateFromDb(restored)
+      } finally {
+        if (!cancelled) setIsHydrating(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [hydrateFromDb])
+
+  // Auth functions — real Supabase Auth.
+  const login = useCallback(async (email: string, password: string) => {
+    const supabase = createSupabaseClient()
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error || !data.user) {
       return { success: false, error: 'Incorrect email or password. Please try again.' }
+    }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle()
+    if (!profile) {
+      return { success: false, error: 'No profile found for this account. Contact admin.' }
+    }
+    const user: MockUser = {
+      email: profile.email,
+      password: '',
+      role: profile.role as UserRole,
+      name: profile.full_name || profile.email,
+      businessId: profile.business_id || undefined,
+      locationId: profile.location_id || undefined,
+      driverId: profile.driver_id || undefined,
     }
     setCurrentUser(user)
     setActiveRole(user.role)
-    if (user.locationId) {
-      setActiveLocationId(user.locationId)
-    }
+    if (user.locationId) setActiveLocationId(user.locationId)
+    await hydrateFromDb(user)
     return { success: true, role: user.role }
-  }, [])
+  }, [hydrateFromDb])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    const supabase = createSupabaseClient()
+    await supabase.auth.signOut()
     setCurrentUser(null)
     setActiveRole(null)
     setActiveLocationId(null)
+    // Clear cached data so the next sign-in starts fresh.
+    setDeliveries([])
+    setDrivers([])
+    setBusinesses([])
+    setRateCards([])
+    setInvoices([])
+    setNotifications([])
   }, [])
 
   const switchLocation = useCallback((locationId: string) => {
@@ -240,6 +375,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const driver = drivers.find(d => d.id === driverId)
     if (!driver) return
 
+    persist(
+      updateDeliveryFields(deliveryId, {
+        driver_id: driverId,
+        status: 'claimed',
+        claimed_at: new Date().toISOString(),
+      }),
+      'claimDelivery',
+    )
+
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
@@ -265,6 +409,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [drivers])
 
   const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
+    // Persist the verified qty + rate to the DB. Rate calculation happens
+    // server-side via the existing billing trigger when we update the row.
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    const rateCardForLoc = delivery ? rateCards.find(rc => rc.locationId === delivery.locationId) : null
+    persist(
+      applyPickupVerifications(
+        deliveryId,
+        verifications,
+        delivery?.calculatedRate || 0,
+        delivery?.gstAmount || 0,
+        delivery?.totalAmount || 0,
+        rateCardForLoc?.id || null,
+      ),
+      'verifyPickup',
+    )
+
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         const updatedManifest = d.manifest.map(item => {
@@ -306,6 +466,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const advanceStatus = useCallback((deliveryId: string) => {
+    // Compute next status outside the updater so we can persist it.
+    const current = deliveries.find(d => d.id === deliveryId)
+    if (current) {
+      const nextStatusMap: Record<string, DeliveryStatus> = {
+        claimed: 'en_route_pickup',
+        en_route_pickup: 'picked_up',
+        picked_up: 'en_route_dropoff',
+      }
+      const next = nextStatusMap[current.status]
+      if (next) persist(updateDeliveryFields(deliveryId, { status: next }), 'advanceStatus')
+    }
+
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         let newStatus: DeliveryStatus = d.status
@@ -339,11 +511,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [])
+  }, [deliveries])
 
   const completeDelivery = useCallback((deliveryId: string, photoUrl: string, recipientNote: string | null) => {
     const delivery = deliveries.find(d => d.id === deliveryId)
-    
+    const now = new Date()
+    const pickedUpAt = delivery?.pickedUpAt ? new Date(delivery.pickedUpAt) : null
+    const durationMins = pickedUpAt ? Math.round((now.getTime() - pickedUpAt.getTime()) / 60000) : null
+    persist(
+      updateDeliveryFields(deliveryId, {
+        status: 'delivered',
+        delivered_at: now.toISOString(),
+        duration_mins: durationMins,
+        proof_photo_url: photoUrl,
+        recipient_note: recipientNote,
+      }),
+      'completeDelivery',
+    )
+    if (delivery?.driverId) {
+      const drv = drivers.find(dr => dr.id === delivery.driverId)
+      persist(
+        updateDriverRow(delivery.driverId, {
+          total_deliveries: (drv?.totalDeliveries ?? 0) + 1,
+          today_deliveries: (drv?.todayDeliveries ?? 0) + 1,
+          month_deliveries: (drv?.monthDeliveries ?? 0) + 1,
+          updated_at: new Date().toISOString(),
+        }),
+        'incrementDriverStats',
+      )
+    }
+
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         const deliveredAt = new Date().toISOString()
@@ -390,6 +587,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const failDelivery = useCallback((deliveryId: string, reason: FailReason, notes?: string) => {
     const noteText = notes?.trim() ? `${reason} — ${notes.trim()}` : reason
+    const current = deliveries.find(d => d.id === deliveryId)
+    const retriesSoFar = current?.retryCount ?? 0
+    persist(
+      insertFailureAndFinalize(deliveryId, reason, notes, retriesSoFar + 1 >= 3),
+      'failDelivery',
+    )
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
@@ -410,7 +613,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [])
+  }, [deliveries])
 
   const flagDelivery = useCallback((deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => {
     const flag: DeliveryFlag = {
@@ -422,6 +625,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resolution: null,
       createdAt: new Date().toISOString(),
     }
+
+    persist(
+      insertDeliveryFlag({ deliveryId, type, description: note, photoUrl }),
+      'flagDelivery',
+    )
 
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
@@ -485,50 +693,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const postDelivery = useCallback((data: Partial<Delivery>) => {
-    const newDelivery: Delivery = {
-      id: `del-${Date.now()}`,
-      businessId: data.businessId || '',
-      locationId: data.locationId || '',
-      businessName: data.businessName || '',
-      driverId: null,
-      driverName: null,
-      pickupAddress: data.pickupAddress || '',
-      pickupArea: data.pickupArea || '',
-      dropoffAddress: data.dropoffAddress || '',
-      dropoffArea: data.dropoffArea || '',
-      recipientName: data.recipientName || null,
-      recipientPhone: data.recipientPhone || null,
-      buzzCode: data.buzzCode || null,
-      manifest: data.manifest || [],
-      isUrgent: data.isUrgent || false,
-      isOutOfTown: data.isOutOfTown || false,
-      status: 'posted',
-      postedAt: new Date().toISOString(),
-      claimedAt: null,
-      pickedUpAt: null,
-      deliveredAt: null,
-      duration: null,
-      proofPhotoUrl: null,
-      recipientNote: null,
-      calculatedRate: null,
-      flags: [],
-      verifications: [],
-      statusHistory: [
-        {
-          status: 'posted',
-          timestamp: new Date().toISOString(),
-          note: null,
-          gpsLat: null,
-          gpsLng: null,
-        },
-      ],
-      trackingCode: null,
-      tripId: null,
-      retryCount: 0,
+    // Write to DB first so the app has a real UUID + the row survives refresh.
+    // We do it async but don't block — once created, we refresh the row into state.
+    const businessId = data.businessId || ''
+    const locationId = data.locationId || ''
+    if (!businessId || !locationId) {
+      // eslint-disable-next-line no-console
+      console.error('[db] postDelivery missing businessId/locationId')
+      return
     }
-
-    setDeliveries(prev => [newDelivery, ...prev])
-  }, [])
+    persist(
+      createDeliveryInDb({
+        businessId,
+        locationId,
+        pickupAddress: data.pickupAddress || '',
+        pickupArea: data.pickupArea || '',
+        dropoffAddress: data.dropoffAddress || '',
+        dropoffArea: data.dropoffArea || '',
+        recipientName: data.recipientName ?? null,
+        recipientPhone: data.recipientPhone ?? null,
+        recipientNote: data.recipientNote ?? null,
+        buzzCode: data.buzzCode ?? null,
+        isRush: data.isRush ?? false,
+        isUrgent: data.isUrgent ?? false,
+        isOutOfTown: data.isOutOfTown ?? false,
+        manifest: (data.manifest || []).map(m => ({
+          type: m.type,
+          quantity: m.postedQty,
+          notes: m.notes || undefined,
+        })),
+      }).then(saved => {
+        // Attach businessName from our local state for display convenience.
+        setDeliveries(prev => {
+          // Dedupe: if somehow this ID was already added locally, replace it.
+          const withoutDupe = prev.filter(d => d.id !== saved.id)
+          const bName = businesses.find(b => b.id === saved.businessId)?.name || ''
+          return [{ ...saved, businessName: bName }, ...withoutDupe]
+        })
+      }),
+      'postDelivery',
+    )
+  }, [businesses])
 
   const reassignDriver = useCallback((deliveryId: string, newDriverId: string) => {
     const newDriver = drivers.find(d => d.id === newDriverId)
@@ -575,6 +780,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date().toISOString()
+      persist(
+        cancelDeliveryInDb(
+          deliveryId,
+          'before_depart',
+          0,
+          reason?.trim() || 'Cancelled by business (before claim)',
+        ),
+        'cancelOrderByBusiness',
+      )
       setDeliveries(prev =>
         prev.map(d =>
           d.id === deliveryId
@@ -693,16 +907,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Driver functions
   const toggleDriverStatus = useCallback((driverId: string) => {
-    setDrivers(prev => prev.map(d => {
-      if (d.id === driverId) {
-        const newStatus = d.status === 'available' ? 'off_duty' : 'available'
-        return { ...d, status: newStatus }
-      }
-      return d
-    }))
+    setDrivers(prev => {
+      const next = prev.map(d => {
+        if (d.id === driverId) {
+          const newStatus = d.status === 'available' ? 'off_duty' : 'available'
+          persist(updateDriverRow(driverId, { status: newStatus }), 'toggleDriverStatus')
+          return { ...d, status: newStatus as Driver['status'] }
+        }
+        return d
+      })
+      return next
+    })
   }, [])
 
   const deactivateDriver = useCallback((driverId: string) => {
+    persist(updateDriverRow(driverId, { invite_status: 'deactivated' }), 'deactivateDriver')
     setDrivers(prev => prev.map(d => {
       if (d.id === driverId) {
         return { ...d, inviteStatus: 'deactivated' }
@@ -731,6 +950,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [deliveries, drivers])
 
   const reactivateDriver = useCallback((driverId: string) => {
+    persist(updateDriverRow(driverId, { invite_status: 'active' }), 'reactivateDriver')
     setDrivers(prev => prev.map(d => {
       if (d.id === driverId) {
         return { ...d, inviteStatus: 'active' }
@@ -740,11 +960,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addDriver = useCallback((driver: Omit<Driver, 'id'>) => {
-    const newDriver: Driver = {
-      ...driver,
-      id: `driver-${Date.now()}`,
-    }
-    setDrivers(prev => [...prev, newDriver])
+    // Insert to DB, get the real UUID back, then append to local state.
+    persist(
+      createDriverInDb(driver).then(saved => setDrivers(prev => [...prev, saved])),
+      'addDriver',
+    )
   }, [])
 
   // ---- Rate-card seeding helper (shared by addBusiness + addLocation + saveRateCard) ----
@@ -774,8 +994,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // the posting form, estimates, and invoices always have billing data to use.
   // Admins can still override any card later in Admin > Rate Cards.
   const addBusiness = useCallback((business: Omit<Business, 'id'>): Business => {
-    const businessId = `business-${Date.now()}`
-    const newBusiness: Business = { ...business, id: businessId }
+    // Use a browser-generated UUID so we can link locations immediately.
+    const businessId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `business-${Date.now()}`
+    // Ensure every location has a real UUID before persisting.
+    const locationsWithIds: BusinessLocation[] = (business.locations || []).map(loc => ({
+      ...loc,
+      businessId,
+      id: loc.id && loc.id.length >= 16 ? loc.id : (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `loc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+    }))
+    const newBusiness: Business = { ...business, id: businessId, locations: locationsWithIds }
+
+    persist(saveBusinessToDb(newBusiness), 'addBusiness')
     setBusinesses(prev => [...prev, newBusiness])
 
     if (newBusiness.locations && newBusiness.locations.length > 0) {
@@ -785,6 +1018,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           backupEmail: loc.backupEmail || '',
         }),
       )
+      for (const rc of seeded) persist(saveRateCardToDb(rc), 'seedRateCard')
       setRateCards(prev => {
         const existingIds = new Set(prev.map(rc => rc.locationId))
         const additions = seeded.filter(rc => !existingIds.has(rc.locationId))
@@ -804,10 +1038,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const newLocation: BusinessLocation = {
         ...location,
-        id: `location-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+          ? crypto.randomUUID()
+          : `location-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         businessId,
       }
 
+      persist(saveLocationToDb(businessId, newLocation), 'addLocation')
       setBusinesses(prev =>
         prev.map(b =>
           b.id === businessId ? { ...b, locations: [...b.locations, newLocation] } : b,
@@ -818,6 +1055,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         billingEmail: newLocation.billingEmail || '',
         backupEmail: newLocation.backupEmail || '',
       })
+      persist(saveRateCardToDb(seeded), 'seedRateCardForNewLocation')
       setRateCards(prev => (prev.some(rc => rc.locationId === newLocation.id) ? prev : [...prev, seeded]))
 
       return newLocation
@@ -827,6 +1065,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Settings functions
   const updateSettings = useCallback((newSettings: Partial<SystemSettings>) => {
+    persist(saveSettingsToDb(newSettings), 'updateSettings')
     setSettings(prev => ({ ...prev, ...newSettings }))
   }, [])
 
@@ -852,6 +1091,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...rateCardData,
           updatedAt: new Date().toISOString(),
         }
+        persist(saveRateCardToDb(updated[existingIndex]), 'saveRateCard:update')
         return updated
       } else {
         // Create new — centralized defaults via buildDefaultRateCard.
@@ -861,6 +1101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           locationId,
           rateCardData,
         )
+        persist(saveRateCardToDb(newRateCard), 'saveRateCard:create')
         return [...prev, newRateCard]
       }
     })
@@ -975,10 +1216,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ===== Invoice sending & reminder controls =====
 
   const toggleAutoSend = useCallback(() => {
-    setSettings(prev => ({ ...prev, autoSendInvoices: !prev.autoSendInvoices }))
+    setSettings(prev => {
+      const nextValue = !prev.autoSendInvoices
+      persist(saveSettingsToDb({ autoSendInvoices: nextValue }), 'toggleAutoSend')
+      return { ...prev, autoSendInvoices: nextValue }
+    })
   }, [])
 
   const updateInvoiceSettings = useCallback((next: Partial<SystemSettings>) => {
+    persist(saveSettingsToDb(next), 'updateInvoiceSettings')
     setSettings(prev => ({ ...prev, ...next }))
   }, [])
 
@@ -1573,6 +1819,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateDriverCapacity = useCallback((driverId: string, maxJobs: number | null) => {
+    persist(updateDriverRow(driverId, { max_jobs_override: maxJobs }), 'updateDriverCapacity')
     setDrivers(prev => prev.map(d => {
       if (d.id === driverId) {
         return { ...d, maxJobsOverride: maxJobs }
