@@ -51,6 +51,21 @@ import {
   saveLocationToDb,
   updateDriverRow,
   createDriverInDb,
+  // Turn 2 helpers (aliased to avoid name clash with the context's own
+  // upsertSavedContact/deleteSavedContact callbacks exposed to consumers).
+  loadSavedContacts,
+  upsertSavedContact as upsertSavedContactInDb,
+  deleteSavedContactRow,
+  loadAdminNotifications,
+  insertAdminNotification,
+  markAdminNotificationReadInDb,
+  loadSMSLog,
+  insertSMSLog,
+  markSMSRetriedInDb,
+  loadDisputes,
+  insertDispute,
+  resolveDisputeInDb,
+  updateInvoiceStatusOnly,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -255,6 +270,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSettings(s)
       setDeliveries(dl.map(x => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })))
       setInvoices(inv)
+
+      // Turn 2 entities: saved contacts, admin notifications, SMS log, disputes.
+      // These depend on the data we just loaded (disputes need invoices for
+      // enrichment), so we run them in a second parallel batch.
+      const [contacts, notifs, sms, disputesLoaded] = await Promise.all([
+        loadSavedContacts(profile).catch(() => [] as SavedContact[]),
+        loadAdminNotifications(profile).catch(() => [] as AdminNotification[]),
+        loadSMSLog(profile).catch(() => [] as SMSLogEntry[]),
+        loadDisputes(inv).catch(() => [] as Dispute[]),
+      ])
+      setSavedContacts(contacts)
+      setAdminNotifications(notifs)
+      setSMSLog(sms)
+      setDisputes(disputesLoaded)
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[db] hydration failed', err)
@@ -345,6 +374,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRateCards([])
     setInvoices([])
     setNotifications([])
+    // Turn 2 entities
+    setSavedContacts([])
+    setAdminNotifications([])
+    setSMSLog([])
+    setDisputes([])
   }, [])
 
   const switchLocation = useCallback((locationId: string) => {
@@ -896,6 +930,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return [next, ...prev]
       })
 
+      // Persist to DB. On create, swap the optimistic client id with the real
+      // UUID Postgres assigns so future updates target the right row.
+      persist(
+        upsertSavedContactInDb(next).then(saved => {
+          if (saved.id !== next.id) {
+            setSavedContacts(prev => prev.map(c => (c.id === next.id ? saved : c)))
+          }
+        }),
+        'upsertSavedContact',
+      )
+
       return next
     },
     [savedContacts],
@@ -903,6 +948,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteSavedContact = useCallback((contactId: string) => {
     setSavedContacts(prev => prev.filter(c => c.id !== contactId))
+    persist(deleteSavedContactRow(contactId), 'deleteSavedContact')
   }, [])
 
   // Driver functions
@@ -1421,6 +1467,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setDisputes(prev => [...prev, newDispute])
 
+    // Persist the dispute + flip invoice status to 'disputed'.
+    persist(
+      insertDispute({ invoiceId, lineItemId, claim, photoUrl }).then(({ id, createdAt }) => {
+        setDisputes(prev =>
+          prev.map(d => (d.id === newDispute.id ? { ...d, id, createdAt } : d)),
+        )
+      }),
+      'insertDispute',
+    )
+    persist(updateInvoiceStatusOnly(invoiceId, 'disputed'), 'invoice->disputed')
+
     // Update invoice status
     setInvoices(prev => prev.map(inv => {
       if (inv.id === invoiceId) {
@@ -1461,9 +1518,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
 
+    persist(
+      resolveDisputeInDb(disputeId, action, adminNote, creditAmount ?? null),
+      'resolveDispute',
+    )
+
     // If accepted, update invoice status back to sent (reminders can resume)
     const dispute = disputes.find(d => d.id === disputeId)
     if (dispute) {
+      persist(updateInvoiceStatusOnly(dispute.invoiceId, 'sent'), 'invoice->sent')
       setInvoices(prev => prev.map(inv => {
         if (inv.id === dispute.invoiceId) {
           return {
@@ -1540,6 +1603,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     setSMSLog(prev => [newSMS, ...prev])
 
+    // Persist and swap in the DB-assigned UUID.
+    persist(
+      insertSMSLog({
+        deliveryId: newSMS.deliveryId,
+        invoiceId: newSMS.invoiceId,
+        recipientName: newSMS.recipientName,
+        recipientPhone: newSMS.recipientPhone,
+        type: newSMS.type,
+        message: newSMS.message,
+        status: newSMS.status,
+        sentAt: newSMS.sentAt,
+        deliveredAt: newSMS.deliveredAt,
+        errorMessage: newSMS.errorMessage,
+      }).then(saved => {
+        if (saved.id !== newSMS.id) {
+          setSMSLog(prev => prev.map(s => (s.id === newSMS.id ? saved : s)))
+        }
+      }),
+      'insertSMSLog',
+    )
+
     // Add to activity feed
     const feedItem: ActivityFeedItem = {
       id: `feed-${Date.now()}`,
@@ -1555,6 +1639,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [deliveries, generateTrackingLink])
 
   const markAdminNotificationRead = useCallback((notificationId: string) => {
+    persist(markAdminNotificationReadInDb(notificationId, false), 'markAdminNotificationRead')
     setAdminNotifications(prev => prev.map(n => {
       if (n.id === notificationId) {
         return { ...n, read: true }
@@ -1564,10 +1649,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const markAllAdminNotificationsRead = useCallback(() => {
+    persist(markAdminNotificationReadInDb('', true), 'markAllAdminNotificationsRead')
     setAdminNotifications(prev => prev.map(n => ({ ...n, read: true })))
   }, [])
 
   const retrySMS = useCallback((smsLogId: string) => {
+    persist(markSMSRetriedInDb(smsLogId), 'retrySMS')
     setSMSLog(prev => prev.map(sms => {
       if (sms.id === smsLogId) {
         return {
@@ -1743,7 +1830,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }))
     }
 
-    // Add admin notification
+    // Add admin notification (optimistic + persisted)
     const newNotification: AdminNotification = {
       id: `notif-${Date.now()}`,
       type: 'flag',
@@ -1758,6 +1845,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       priority: 'high',
     }
     setAdminNotifications(prev => [newNotification, ...prev])
+    persist(
+      insertAdminNotification({
+        type: newNotification.type,
+        title: newNotification.title,
+        message: newNotification.message,
+        deliveryId: newNotification.deliveryId,
+        driverId: newNotification.driverId,
+        businessId: newNotification.businessId,
+        invoiceId: newNotification.invoiceId,
+        priority: newNotification.priority,
+        read: false,
+      }).then(saved => {
+        if (saved.id !== newNotification.id) {
+          setAdminNotifications(prev => prev.map(n => (n.id === newNotification.id ? saved : n)))
+        }
+      }),
+      'insertAdminNotification:escalate',
+    )
   }, [deliveries])
 
   const checkDuplicateAddress = useCallback((dropoffAddress: string, businessId: string, locationId: string): Delivery | null => {

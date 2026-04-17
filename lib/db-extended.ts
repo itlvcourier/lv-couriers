@@ -19,6 +19,14 @@ import type {
   InvoiceEmailEvent,
   InvoiceStatus,
   PickupVerification,
+  SavedContact,
+  AdminNotification,
+  AdminNotificationType,
+  SMSLogEntry,
+  SMSType,
+  SMSStatus,
+  Dispute,
+  DisputeStatus,
 } from './types'
 
 type Row = Record<string, unknown>
@@ -634,5 +642,336 @@ export async function cancelDeliveryInDb(
       cancellation_reason: reason,
     })
     .eq('id', deliveryId)
+  if (error) throw error
+}
+
+// ============================================================================
+// TURN 2: saved_contacts, admin_notifications, sms_log, invoice_disputes
+// ============================================================================
+
+// ---------- saved_contacts -------------------------------------------------
+
+export function mapSavedContactRow(row: Row): SavedContact {
+  return {
+    id: row.id as string,
+    businessId: row.business_id as string,
+    name: row.name as string,
+    phone: (row.phone as string | null) ?? null,
+    address: row.address as string,
+    area: (row.area as string | null) ?? null,
+    buzzCode: (row.buzz_code as string | null) ?? null,
+    notes: (row.notes as string | null) ?? null,
+    useCount: Number(row.use_count) || 0,
+    lastUsedAt: (row.last_used_at as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+export async function loadSavedContacts(profile: {
+  role: string
+  businessId: string | null
+}): Promise<SavedContact[]> {
+  const supabase = createClient()
+  // Admin sees all contacts; other roles rely on RLS to filter. Drivers get an
+  // empty list by design (they don't need saved contacts).
+  if (profile.role === 'driver') return []
+  let query = supabase
+    .from('saved_contacts')
+    .select('*')
+    .order('last_used_at', { ascending: false, nullsFirst: false })
+    .limit(500)
+  if (profile.role === 'business' && profile.businessId) {
+    query = query.eq('business_id', profile.businessId)
+  }
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []).map((r: Row) => mapSavedContactRow(r))
+}
+
+export async function upsertSavedContact(contact: SavedContact): Promise<SavedContact> {
+  const supabase = createClient()
+  // If the client generated a non-UUID id (e.g. `contact-<ts>-<rand>` from the
+  // legacy in-memory flow), let Postgres assign a real UUID so future updates
+  // can target it by primary key.
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contact.id)
+  const payload: Record<string, unknown> = {
+    business_id: contact.businessId,
+    name: contact.name,
+    phone: contact.phone,
+    address: contact.address,
+    area: contact.area,
+    buzz_code: contact.buzzCode,
+    notes: contact.notes,
+    use_count: contact.useCount,
+    last_used_at: contact.lastUsedAt,
+  }
+  if (looksLikeUuid) payload.id = contact.id
+
+  const { data, error } = await supabase
+    .from('saved_contacts')
+    .upsert(payload, { onConflict: 'id' })
+    .select('*')
+    .single()
+  if (error) throw error
+  return mapSavedContactRow(data as Row)
+}
+
+export async function deleteSavedContactRow(contactId: string): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase.from('saved_contacts').delete().eq('id', contactId)
+  if (error) throw error
+}
+
+// ---------- admin_notifications --------------------------------------------
+
+export function mapAdminNotificationRow(row: Row): AdminNotification {
+  return {
+    id: row.id as string,
+    type: (row.notification_type as AdminNotificationType) || 'system',
+    title: row.title as string,
+    message: row.message as string,
+    deliveryId: (row.delivery_id as string | null) ?? null,
+    driverId: (row.driver_id as string | null) ?? null,
+    businessId: (row.business_id as string | null) ?? null,
+    invoiceId: (row.invoice_id as string | null) ?? null,
+    priority: ((row.priority as AdminNotification['priority']) || 'medium'),
+    read: Boolean(row.is_read),
+    createdAt: row.created_at as string,
+  }
+}
+
+export async function loadAdminNotifications(profile: {
+  role: string
+}): Promise<AdminNotification[]> {
+  const supabase = createClient()
+  // Admin-only. RLS will reject other roles; skip the round-trip.
+  if (profile.role !== 'admin') return []
+  const { data, error } = await supabase
+    .from('admin_notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (error) throw error
+  return (data || []).map((r: Row) => mapAdminNotificationRow(r))
+}
+
+export async function insertAdminNotification(
+  input: Omit<AdminNotification, 'id' | 'createdAt'>,
+): Promise<AdminNotification> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('admin_notifications')
+    .insert({
+      notification_type: input.type,
+      title: input.title,
+      message: input.message,
+      delivery_id: input.deliveryId,
+      driver_id: input.driverId,
+      business_id: input.businessId,
+      invoice_id: input.invoiceId,
+      priority: input.priority,
+      is_read: input.read,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  return mapAdminNotificationRow(data as Row)
+}
+
+export async function markAdminNotificationReadInDb(
+  notificationId: string,
+  allMode: boolean,
+): Promise<void> {
+  const supabase = createClient()
+  const q = supabase.from('admin_notifications').update({ is_read: true })
+  const { error } = allMode ? await q.eq('is_read', false) : await q.eq('id', notificationId)
+  if (error) throw error
+}
+
+// ---------- sms_log --------------------------------------------------------
+
+export function mapSMSRow(row: Row): SMSLogEntry {
+  return {
+    id: row.id as string,
+    deliveryId: (row.delivery_id as string | null) ?? null,
+    invoiceId: (row.invoice_id as string | null) ?? null,
+    recipientName: '', // column doesn't exist on DB; derive client-side if needed
+    recipientPhone: row.recipient_phone as string,
+    type: (row.sms_type as SMSType) || 'tracking_link',
+    message: row.message_body as string,
+    status: (row.status as SMSStatus) || 'sent',
+    sentAt: row.sent_at as string,
+    deliveredAt: null, // DB only tracks sent_at; delivered_at not modelled
+    errorMessage: (row.error_message as string | null) ?? null,
+  }
+}
+
+export async function loadSMSLog(profile: {
+  role: string
+}): Promise<SMSLogEntry[]> {
+  const supabase = createClient()
+  if (profile.role === 'driver') return [] // drivers don't view SMS log
+  const { data, error } = await supabase
+    .from('sms_log')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(200)
+  if (error) throw error
+  return (data || []).map((r: Row) => mapSMSRow(r))
+}
+
+export async function insertSMSLog(
+  entry: Omit<SMSLogEntry, 'id'>,
+): Promise<SMSLogEntry> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('sms_log')
+    .insert({
+      delivery_id: entry.deliveryId,
+      invoice_id: entry.invoiceId,
+      recipient_phone: entry.recipientPhone,
+      sms_type: entry.type,
+      message_body: entry.message,
+      status: entry.status,
+      error_message: entry.errorMessage,
+      sent_at: entry.sentAt || new Date().toISOString(),
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  return mapSMSRow(data as Row)
+}
+
+export async function markSMSRetriedInDb(smsId: string): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('sms_log')
+    .update({
+      status: 'sent',
+      error_message: null,
+      sent_at: new Date().toISOString(),
+    })
+    .eq('id', smsId)
+  if (error) throw error
+}
+
+// ---------- invoice_disputes -----------------------------------------------
+
+// DB enum is 'open' | 'accepted' | 'rejected'; app uses resolved_accepted/rejected.
+function mapDbDisputeStatusToApp(s: string): DisputeStatus {
+  if (s === 'accepted') return 'resolved_accepted'
+  if (s === 'rejected') return 'resolved_rejected'
+  return 'open'
+}
+
+function mapAppDisputeStatusToDb(s: DisputeStatus): string {
+  if (s === 'resolved_accepted') return 'accepted'
+  if (s === 'resolved_rejected') return 'rejected'
+  return 'open'
+}
+
+export function mapDisputeRow(row: Row, ctx: {
+  invoiceNumber: string
+  businessId: string
+  businessName: string
+  lineItemDescription: string
+}): Dispute {
+  return {
+    id: row.id as string,
+    invoiceId: row.invoice_id as string,
+    invoiceNumber: ctx.invoiceNumber,
+    lineItemId: (row.line_item_id as string) || '',
+    lineItemDescription: ctx.lineItemDescription,
+    businessId: ctx.businessId,
+    businessName: ctx.businessName,
+    claim: row.reason as string,
+    photoUrl: (row.photo_url as string | null) ?? null,
+    status: mapDbDisputeStatusToApp(row.status as string),
+    adminResponse: (row.resolution_notes as string | null) ?? null,
+    creditAmount: row.credit_amount != null ? Number(row.credit_amount) : null,
+    createdAt: row.created_at as string,
+    resolvedAt: (row.resolved_at as string | null) ?? null,
+  }
+}
+
+export async function loadDisputes(
+  invoices: Invoice[],
+): Promise<Dispute[]> {
+  // Enrichment context (invoiceNumber/businessName/lineItemDescription) lives
+  // on the already-hydrated invoices array, so we resolve it in-memory after
+  // fetching the dispute rows. This keeps the query simple + RLS-compatible.
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('invoice_disputes')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (error) throw error
+
+  const invoicesById = new Map(invoices.map(i => [i.id, i]))
+  return (data || []).map((r: Row) => {
+    const inv = invoicesById.get(r.invoice_id as string)
+    const line = inv?.lines.find(l => l.id === (r.line_item_id as string))
+    return mapDisputeRow(r, {
+      invoiceNumber: inv?.invoiceNumber || '',
+      businessId: inv?.businessId || '',
+      businessName: inv?.businessName || '',
+      lineItemDescription: line?.description || '',
+    })
+  })
+}
+
+export async function insertDispute(input: {
+  invoiceId: string
+  lineItemId: string
+  claim: string
+  photoUrl: string | null
+}): Promise<{ id: string; createdAt: string }> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('invoice_disputes')
+    .insert({
+      invoice_id: input.invoiceId,
+      line_item_id: input.lineItemId,
+      reason: input.claim,
+      photo_url: input.photoUrl,
+      status: 'open',
+    })
+    .select('id, created_at')
+    .single()
+  if (error) throw error
+  const row = data as Row
+  return { id: row.id as string, createdAt: row.created_at as string }
+}
+
+export async function resolveDisputeInDb(
+  disputeId: string,
+  action: 'accept' | 'reject',
+  adminNote: string,
+  creditAmount: number | null,
+): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('invoice_disputes')
+    .update({
+      status: mapAppDisputeStatusToDb(action === 'accept' ? 'resolved_accepted' : 'resolved_rejected'),
+      resolution_notes: adminNote,
+      credit_amount: action === 'accept' ? creditAmount ?? 0 : null,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', disputeId)
+  if (error) throw error
+}
+
+export async function updateInvoiceStatusOnly(
+  invoiceId: string,
+  status: InvoiceStatus,
+): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('invoices')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', invoiceId)
   if (error) throw error
 }
