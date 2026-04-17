@@ -1321,6 +1321,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         emailLog: [...inv.emailLog, sentEvent, ...scheduled],
       }
     }))
+
+    // Fire-and-forget: persist + email + schedule reminders on the server.
+    void fetch('/api/email/invoice-sent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId, backupEmail: opts?.backupEmail }),
+    }).catch(err => console.error('[v0] invoice-sent email failed', err))
+
     return { ok: true }
   }, [invoices, settings, computeScheduledEvents])
 
@@ -1358,6 +1366,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sent.push(next)
       return next
     }))
+
+    // Fire-and-forget email each invoice the server-side route will persist +
+    // send via Resend + schedule reminder events.
+    for (const inv of sent) {
+      void fetch('/api/email/invoice-sent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: inv.id }),
+      }).catch(err => console.error('[v0] bulk invoice-sent email failed', err))
+    }
 
     return { sent, skipped }
   }, [invoices, settings, computeScheduledEvents])
@@ -1468,11 +1486,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDisputes(prev => [...prev, newDispute])
 
     // Persist the dispute + flip invoice status to 'disputed'.
+    // After the real dispute id is known, fire the admin notification email.
     persist(
       insertDispute({ invoiceId, lineItemId, claim, photoUrl }).then(({ id, createdAt }) => {
         setDisputes(prev =>
           prev.map(d => (d.id === newDispute.id ? { ...d, id, createdAt } : d)),
         )
+        void fetch('/api/email/dispute-raised', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ disputeId: id }),
+        }).catch(err => console.error('[v0] dispute-raised email failed', err))
       }),
       'insertDispute',
     )
@@ -1519,7 +1543,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
 
     persist(
-      resolveDisputeInDb(disputeId, action, adminNote, creditAmount ?? null),
+      resolveDisputeInDb(disputeId, action, adminNote, creditAmount ?? null).then(() => {
+        void fetch('/api/email/dispute-resolved', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ disputeId }),
+        }).catch(err => console.error('[v0] dispute-resolved email failed', err))
+      }),
       'resolveDispute',
     )
 

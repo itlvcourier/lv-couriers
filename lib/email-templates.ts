@@ -121,3 +121,125 @@ export function invoiceEscalatedEmail(d: InvoiceEmailData) {
   const text = `FINAL NOTICE: Invoice ${d.invoiceNumber} for ${fmtMoney(d.total)} has been escalated.`
   return { subject, html, text }
 }
+
+// ---------- Driver welcome ----------
+
+type DriverWelcomeData = {
+  name: string
+  email: string
+  tempPassword: string
+  loginUrl: string
+}
+
+export function driverWelcomeEmail(d: DriverWelcomeData) {
+  const subject = `Welcome to Lv Couriers, ${d.name}`
+  const html = baseLayout(subject, `
+    <h1 style="font-size:22px;font-weight:600;color:#fafafa;margin:0 0 12px;">Welcome aboard, ${escapeHtml(d.name)}</h1>
+    <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0 0 16px;">Your driver account is ready. Use the credentials below to sign in and start claiming jobs.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #262626;border-radius:8px;">
+      <tr><td style="padding:16px 20px;border-bottom:1px solid #262626;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Email</div>
+        <div style="font-size:16px;font-weight:500;color:#fafafa;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(d.email)}</div>
+      </td></tr>
+      <tr><td style="padding:16px 20px;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Temporary password</div>
+        <div style="font-size:16px;font-weight:500;color:#fafafa;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(d.tempPassword)}</div>
+      </td></tr>
+    </table>
+    <p style="text-align:center;margin:24px 0;"><a href="${escapeHtml(d.loginUrl)}" style="display:inline-block;padding:12px 24px;background:#ff6b1a;color:#0a0a0a;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Sign in to your dashboard</a></p>
+    <p style="font-size:13px;line-height:1.5;color:#737373;margin:16px 0 0;">For your security, please change your password on your first sign-in.</p>
+  `)
+  const text = `Welcome aboard, ${d.name}.\n\nYour driver account is ready:\nEmail: ${d.email}\nTemporary password: ${d.tempPassword}\n\nSign in: ${d.loginUrl}\n\nPlease change your password on first sign-in.`
+  return { subject, html, text }
+}
+
+// ---------- Dispute notifications ----------
+
+type DisputeRaisedData = {
+  businessName: string
+  invoiceNumber: string
+  lineItemDescription: string
+  claim: string
+  adminUrl: string
+}
+
+export function disputeRaisedEmail(d: DisputeRaisedData) {
+  const subject = `Dispute raised on invoice ${d.invoiceNumber} by ${d.businessName}`
+  const html = baseLayout(subject, `
+    <h1 style="font-size:22px;font-weight:600;color:#fafafa;margin:0 0 12px;">New dispute needs review</h1>
+    <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">${escapeHtml(d.businessName)} has opened a dispute on invoice <strong style="color:#fafafa;">${escapeHtml(d.invoiceNumber)}</strong>.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #262626;border-radius:8px;">
+      <tr><td style="padding:16px 20px;border-bottom:1px solid #262626;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Line item</div>
+        <div style="font-size:14px;color:#fafafa;margin-top:4px;">${escapeHtml(d.lineItemDescription)}</div>
+      </td></tr>
+      <tr><td style="padding:16px 20px;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Business claim</div>
+        <div style="font-size:14px;color:#fafafa;margin-top:4px;white-space:pre-wrap;">${escapeHtml(d.claim)}</div>
+      </td></tr>
+    </table>
+    <p style="text-align:center;margin:24px 0;"><a href="${escapeHtml(d.adminUrl)}" style="display:inline-block;padding:12px 24px;background:#ff6b1a;color:#0a0a0a;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Review dispute</a></p>
+    <p style="font-size:13px;line-height:1.5;color:#737373;margin:16px 0 0;">Reminders on this invoice are paused until the dispute is resolved.</p>
+  `)
+  const text = `New dispute: ${d.businessName} disputed "${d.lineItemDescription}" on invoice ${d.invoiceNumber}.\n\nClaim:\n${d.claim}\n\nReview: ${d.adminUrl}`
+  return { subject, html, text }
+}
+
+type DisputeResolvedData = {
+  businessName: string
+  invoiceNumber: string
+  lineItemDescription: string
+  action: 'accept' | 'reject'
+  adminResponse: string
+  creditAmount: number | null
+}
+
+export function disputeResolvedEmail(d: DisputeResolvedData) {
+  const accepted = d.action === 'accept'
+  const headline = accepted ? 'Credit issued' : 'Dispute declined'
+  const subject = accepted
+    ? `Credit issued on invoice ${d.invoiceNumber}`
+    : `Dispute response for invoice ${d.invoiceNumber}`
+  const creditRow = accepted && d.creditAmount != null
+    ? `<tr><td style="padding:16px 20px;border-bottom:1px solid #262626;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Credit amount</div>
+        <div style="font-size:24px;font-weight:700;color:#22c55e;margin-top:4px;">${fmtMoney(d.creditAmount)}</div>
+      </td></tr>`
+    : ''
+  const html = baseLayout(subject, `
+    <h1 style="font-size:22px;font-weight:600;color:${accepted ? '#22c55e' : '#fafafa'};margin:0 0 12px;">${escapeHtml(headline)}</h1>
+    <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">We've finished reviewing your dispute on invoice <strong style="color:#fafafa;">${escapeHtml(d.invoiceNumber)}</strong>.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #262626;border-radius:8px;">
+      ${creditRow}
+      <tr><td style="padding:16px 20px;border-bottom:1px solid #262626;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Line item</div>
+        <div style="font-size:14px;color:#fafafa;margin-top:4px;">${escapeHtml(d.lineItemDescription)}</div>
+      </td></tr>
+      <tr><td style="padding:16px 20px;">
+        <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;">Our response</div>
+        <div style="font-size:14px;color:#fafafa;margin-top:4px;white-space:pre-wrap;">${escapeHtml(d.adminResponse)}</div>
+      </td></tr>
+    </table>
+  `)
+  const text = `${headline}\n\nInvoice ${d.invoiceNumber} — "${d.lineItemDescription}"\n${accepted && d.creditAmount != null ? `Credit: ${fmtMoney(d.creditAmount)}\n` : ''}\nResponse:\n${d.adminResponse}`
+  return { subject, html, text }
+}
+
+// ---------- Admin review reminder ----------
+
+type ReviewReminderData = {
+  draftCount: number
+  periodLabel: string
+  adminUrl: string
+}
+
+export function invoiceReviewReminderEmail(d: ReviewReminderData) {
+  const subject = `${d.draftCount} invoice${d.draftCount === 1 ? '' : 's'} awaiting review`
+  const html = baseLayout(subject, `
+    <h1 style="font-size:22px;font-weight:600;color:#fafafa;margin:0 0 12px;">Drafts ready for review</h1>
+    <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">${d.draftCount} draft invoice${d.draftCount === 1 ? ' is' : 's are'} ready from the ${escapeHtml(d.periodLabel)} billing period. Review and send before the auto-send date on the 1st.</p>
+    <p style="text-align:center;margin:24px 0;"><a href="${escapeHtml(d.adminUrl)}" style="display:inline-block;padding:12px 24px;background:#ff6b1a;color:#0a0a0a;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Open invoice review</a></p>
+  `)
+  const text = `${d.draftCount} draft invoice${d.draftCount === 1 ? '' : 's'} from ${d.periodLabel} are awaiting review.\n\n${d.adminUrl}`
+  return { subject, html, text }
+}

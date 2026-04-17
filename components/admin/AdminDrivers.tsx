@@ -29,7 +29,6 @@ import {
 import { 
   getDrivers, 
   getDriverHistory, 
-  createDriver,
   type DbDriver,
   type DbDelivery,
 } from '@/lib/db'
@@ -72,31 +71,36 @@ export function AdminDrivers() {
       toast.error('Please fill in all fields')
       return
     }
-    
+
     try {
-      await createDriver({
-        user_id: null,
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        status: 'off_duty',
-        max_jobs_override: null,
-        total_deliveries: 0,
-        today_deliveries: 0,
-        month_deliveries: 0,
-        avg_delivery_mins: null,
-        rush_sla_rate: null,
-        invite_status: 'pending',
+      // Creates auth user + drivers row + profile link, then sends a welcome
+      // email (via Resend) with the temp password.
+      const res = await fetch('/api/drivers/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
       })
-      
-      // Refresh drivers list
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to invite driver')
+        return
+      }
+
       mutate('all-drivers')
-      
       setForm({ name: '', email: '', phone: '' })
       setShowAddSheet(false)
-      toast.success('Driver created successfully')
+
+      if (data.emailSent) {
+        toast.success(`Welcome email sent to ${data.email}`)
+      } else {
+        toast.warning(
+          `Driver created, but email failed. Temp password: ${data.tempPassword}`,
+          { duration: 15000 },
+        )
+      }
     } catch (error) {
-      toast.error('Failed to create driver')
+      toast.error('Failed to invite driver')
       console.error(error)
     }
   }

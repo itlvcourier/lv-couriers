@@ -6,6 +6,8 @@ import {
   sendInvoiceAndRecord,
   type CronInvoiceRow,
 } from '@/lib/invoice-db'
+import { sendEmail } from '@/lib/email'
+import { invoiceReviewReminderEmail } from '@/lib/email-templates'
 
 /**
  * Pure job functions — no HTTP, no auth. Each returns a JSON-serializable
@@ -123,12 +125,48 @@ export async function runGenerateDrafts() {
     generated.push(newInvoice.id)
   }
 
+  // If auto-send is OFF and we generated at least one draft, ping admins so
+  // they know to review before the 1st-of-month auto-send window.
+  let reviewEmailOk = false
+  if (!settings.auto_send_invoices && generated.length > 0) {
+    const adminRecipients = await resolveAdminEmails(supabase)
+    if (adminRecipients.length > 0) {
+      const site =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+      const adminUrl = `${(site || '').replace(/\/$/, '')}/admin?tab=invoices`
+      const tpl = invoiceReviewReminderEmail({
+        draftCount: generated.length,
+        periodLabel: `${periodStartISO} – ${periodEndISO}`,
+        adminUrl,
+      })
+      const r = await sendEmail({
+        to: adminRecipients,
+        subject: tpl.subject,
+        html: tpl.html,
+        text: tpl.text,
+        tag: 'invoice.review_reminder',
+      })
+      reviewEmailOk = r.ok
+    }
+  }
+
   return {
     ok: true,
     period: { start: periodStartISO, end: periodEndISO },
     generated: generated.length,
     skipped: skipped.length,
+    reviewEmailOk,
   }
+}
+
+async function resolveAdminEmails(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<string[]> {
+  const env = process.env.ADMIN_NOTIFICATION_EMAIL?.trim()
+  if (env) return env.split(',').map(s => s.trim()).filter(Boolean)
+  const { data } = await supabase.from('profiles').select('email').eq('role', 'admin')
+  return (data || []).map(r => r.email).filter((e): e is string => !!e)
 }
 
 // 2. Send every draft invoice on the 1st (if auto-send is enabled)

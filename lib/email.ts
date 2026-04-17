@@ -8,16 +8,19 @@
 
 import { Resend } from 'resend'
 
-export type SendInvoiceEmailInput = {
-  to: string
+export type SendEmailInput = {
+  to: string | string[]
   cc?: string | string[]
   replyTo?: string
   subject: string
   html: string
   text: string
-  /** Internal tag for logging - e.g. 'invoice.sent', 'invoice.reminder_1' */
+  /** Internal tag for logging - e.g. 'invoice.sent', 'driver.welcome' */
   tag: string
 }
+
+/** Backwards-compatible alias for the invoice-specific callers. */
+export type SendInvoiceEmailInput = SendEmailInput
 
 export type EmailResult =
   | { ok: true; id: string }
@@ -32,7 +35,12 @@ function getResend(): Resend | null {
   return _resend
 }
 
-export async function sendInvoiceEmail(input: SendInvoiceEmailInput): Promise<EmailResult> {
+/**
+ * Generic email sender. Works for any category of email — invoices, driver
+ * welcomes, dispute notifications, etc. Returns a structured result so callers
+ * can distinguish "hard bounce" from "transient failure".
+ */
+export async function sendEmail(input: SendEmailInput): Promise<EmailResult> {
   const client = getResend()
 
   if (!client) {
@@ -69,3 +77,6 @@ export async function sendInvoiceEmail(input: SendInvoiceEmailInput): Promise<Em
     return { ok: false, reason, bounced: false }
   }
 }
+
+/** Backwards-compatible alias — the function is already generic. */
+export const sendInvoiceEmail = sendEmail
