@@ -30,9 +30,10 @@ import {
 import { toast } from 'sonner'
 import type { OrderLike } from '@/components/shared/OrderDetailSheet'
 import type { Delivery } from '@/lib/types'
+import { calculateRate } from '@/lib/billing'
 
 export function BusinessOrders() {
-  const { deliveries, currentUser, drivers, cancelOrderByBusiness } = useApp()
+  const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation } = useApp()
   const [selectedOrder, setSelectedOrder] = useState<OrderLike | null>(null)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
   const [cancelTarget, setCancelTarget] = useState<Delivery | null>(null)
@@ -46,7 +47,19 @@ export function BusinessOrders() {
   // Keep a map from OrderLike.id -> full Delivery so detail/cancel handlers
   // can access the richer data without extra lookups.
   const businessOrders: OrderLike[] = businessDeliveries
-    .map(d => ({
+    .map(d => {
+      // Price priority:
+      // 1. calculatedRate (locked in at pickup verification) — the real charge
+      // 2. Posted estimate from the location's rate card (before pickup)
+      // 3. 0 when no rate card exists for the location
+      let price = d.calculatedRate ?? 0
+      if (d.calculatedRate == null) {
+        const rateCard = getRateCardForLocation(d.locationId)
+        price = rateCard
+          ? calculateRate(d.manifest, d.isOutOfTown, d.isUrgent, rateCard, false)
+          : 0
+      }
+      return {
       id: d.id,
       businessId: d.businessId,
       businessName: d.businessName,
@@ -55,7 +68,7 @@ export function BusinessOrders() {
       priority: d.isUrgent ? 'urgent' : d.isRush ? 'rush' : 'standard',
       pickupAddress: d.pickupAddress,
       dropoffAddress: d.dropoffAddress,
-      price: d.calculatedRate || 15,
+      price,
       createdAt: d.postedAt,
       pickedUpAt: d.pickedUpAt || undefined,
       deliveredAt: d.deliveredAt || undefined,
@@ -64,7 +77,8 @@ export function BusinessOrders() {
       buzzCode: d.buzzCode || null,
       cancellationReason: d.cancellationReason || null,
       dropoffContact: d.recipientPhone || undefined,
-    }))
+      }
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   const getDelivery = (id: string) => businessDeliveries.find(d => d.id === id)
