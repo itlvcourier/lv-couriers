@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useApp } from '@/lib/context'
 import type { Invoice, InvoiceLine } from '@/lib/types'
-import { formatCurrency, getDeliveryTypeLabel, getRateForType } from '@/lib/billing'
+import { formatCurrency, getDeliveryTypeLabel, getRateForType, estimateDeliveryPrice } from '@/lib/billing'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -59,10 +59,12 @@ export function BusinessInvoices() {
 
   const rateCard = rateCards.find(rc => rc.locationId === activeLocationId)
   
-  // Calculate running total
-  const runningTotal = monthDeliveries.reduce((sum, d) => {
-    return sum + (d.calculatedRate || rateCard?.rateRegular || 9)
-  }, 0)
+  // Running total — use the locked calculatedRate when set, otherwise compute
+  // the correct rule-based rate from the current rate card. No hardcoded fallbacks.
+  const runningTotal = monthDeliveries.reduce(
+    (sum, d) => sum + estimateDeliveryPrice(d, rateCard || null),
+    0,
+  )
   const runningGst = rateCard?.gstApplicable ? runningTotal * 0.05 : 0
   const runningTotalWithGst = runningTotal + runningGst
 

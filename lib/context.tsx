@@ -5,6 +5,7 @@ import type {
   MockUser,
   Driver,
   Business,
+  BusinessLocation,
   Delivery,
   SystemSettings,
   Notification,
@@ -48,7 +49,7 @@ import {
   initialDriverReports,
   initialTimeoutWarnings,
 } from './data'
-import { calculateInvoiceLines, calculateGST, generateInvoiceNumber } from './billing'
+import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES } from './billing'
 
 interface AppContextType {
   // Auth state
@@ -105,7 +106,8 @@ interface AppContextType {
   addDriver: (driver: Omit<Driver, 'id'>) => void
   
   // Business functions
-  addBusiness: (business: Omit<Business, 'id'>) => void
+  addBusiness: (business: Omit<Business, 'id'>) => Business
+  addLocation: (businessId: string, location: Omit<BusinessLocation, 'id' | 'businessId'>) => BusinessLocation | null
   
   // Settings functions
   updateSettings: (settings: Partial<SystemSettings>) => void
@@ -745,14 +747,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDrivers(prev => [...prev, newDriver])
   }, [])
 
+  // ---- Rate-card seeding helper (shared by addBusiness + addLocation + saveRateCard) ----
+  const buildDefaultRateCard = useCallback(
+    (businessId: string, locationId: string, overrides: Partial<RateCard> = {}): RateCard => {
+      const now = new Date().toISOString()
+      return {
+        id: `rc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        businessId,
+        locationId,
+        effectiveDate: overrides.effectiveDate || now.split('T')[0],
+        ...DEFAULT_RATE_CARD_VALUES,
+        billingEmail: '',
+        backupEmail: '',
+        contractNotes: '',
+        createdAt: now,
+        updatedAt: now,
+        ...overrides,
+      }
+    },
+    [],
+  )
+
   // Business functions
-  const addBusiness = useCallback((business: Omit<Business, 'id'>) => {
-    const newBusiness: Business = {
-      ...business,
-      id: `business-${Date.now()}`,
-    }
+  //
+  // Every new business gets a default rate card for EACH of its locations so
+  // the posting form, estimates, and invoices always have billing data to use.
+  // Admins can still override any card later in Admin > Rate Cards.
+  const addBusiness = useCallback((business: Omit<Business, 'id'>): Business => {
+    const businessId = `business-${Date.now()}`
+    const newBusiness: Business = { ...business, id: businessId }
     setBusinesses(prev => [...prev, newBusiness])
-  }, [])
+
+    if (newBusiness.locations && newBusiness.locations.length > 0) {
+      const seeded = newBusiness.locations.map(loc =>
+        buildDefaultRateCard(businessId, loc.id, {
+          billingEmail: loc.billingEmail || '',
+          backupEmail: loc.backupEmail || '',
+        }),
+      )
+      setRateCards(prev => {
+        const existingIds = new Set(prev.map(rc => rc.locationId))
+        const additions = seeded.filter(rc => !existingIds.has(rc.locationId))
+        return additions.length > 0 ? [...prev, ...additions] : prev
+      })
+    }
+
+    return newBusiness
+  }, [buildDefaultRateCard])
+
+  // Adds a location to an existing business and auto-creates a rate card so
+  // the new location is immediately usable for billing.
+  const addLocation = useCallback(
+    (businessId: string, location: Omit<BusinessLocation, 'id' | 'businessId'>): BusinessLocation | null => {
+      const business = businesses.find(b => b.id === businessId)
+      if (!business) return null
+
+      const newLocation: BusinessLocation = {
+        ...location,
+        id: `location-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        businessId,
+      }
+
+      setBusinesses(prev =>
+        prev.map(b =>
+          b.id === businessId ? { ...b, locations: [...b.locations, newLocation] } : b,
+        ),
+      )
+
+      const seeded = buildDefaultRateCard(businessId, newLocation.id, {
+        billingEmail: newLocation.billingEmail || '',
+        backupEmail: newLocation.backupEmail || '',
+      })
+      setRateCards(prev => (prev.some(rc => rc.locationId === newLocation.id) ? prev : [...prev, seeded]))
+
+      return newLocation
+    },
+    [businesses, buildDefaultRateCard],
+  )
 
   // Settings functions
   const updateSettings = useCallback((newSettings: Partial<SystemSettings>) => {
@@ -783,39 +854,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return updated
       } else {
-        // Create new
-        const business = businesses.flatMap(b => b.locations).find(l => l.id === locationId)
-        const newRateCard: RateCard = {
-          id: `rc-${Date.now()}`,
-          businessId: business?.businessId || '',
+        // Create new — centralized defaults via buildDefaultRateCard.
+        const location = businesses.flatMap(b => b.locations).find(l => l.id === locationId)
+        const newRateCard = buildDefaultRateCard(
+          location?.businessId || '',
           locationId,
-          effectiveDate: rateCardData.effectiveDate || new Date().toISOString().split('T')[0],
-          rateRegular: rateCardData.rateRegular ?? 9,
-          rateBigDouble: rateCardData.rateBigDouble ?? 18,
-          rateOotBig: rateCardData.rateOotBig ?? 0,
-          rateRush: rateCardData.rateRush ?? 20,
-          rateRushOot: rateCardData.rateRushOot ?? 30,
-          gstApplicable: rateCardData.gstApplicable ?? true,
-          cancelBeforeDepart: rateCardData.cancelBeforeDepart ?? 0,
-          cancelEnRoute: rateCardData.cancelEnRoute ?? 5,
-          notifyDriverAssigned: rateCardData.notifyDriverAssigned ?? true,
-          notifyPickupConfirmed: rateCardData.notifyPickupConfirmed ?? true,
-          notifyEnRoute: rateCardData.notifyEnRoute ?? true,
-          notifyDelivered: rateCardData.notifyDelivered ?? true,
-          notifyFailed: rateCardData.notifyFailed ?? true,
-          notifyInvoiceSent: rateCardData.notifyInvoiceSent ?? true,
-          notifyPaymentReminder: rateCardData.notifyPaymentReminder ?? true,
-          notifyRecipientSms: rateCardData.notifyRecipientSms ?? true,
-          billingEmail: rateCardData.billingEmail || '',
-          backupEmail: rateCardData.backupEmail || '',
-          contractNotes: rateCardData.contractNotes || '',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
+          rateCardData,
+        )
         return [...prev, newRateCard]
       }
     })
-  }, [businesses])
+  }, [businesses, buildDefaultRateCard])
 
   const getRateCardForLocation = useCallback((locationId: string): RateCard | null => {
     return rateCards.find(rc => rc.locationId === locationId) || null
@@ -1569,6 +1618,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reactivateDriver,
         addDriver,
         addBusiness,
+    addLocation,
         updateSettings,
         markNotificationRead,
         rateCards,

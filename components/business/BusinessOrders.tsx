@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner'
 import type { OrderLike } from '@/components/shared/OrderDetailSheet'
 import type { Delivery } from '@/lib/types'
-import { calculateRate } from '@/lib/billing'
+import { estimateDeliveryPrice } from '@/lib/billing'
 
 export function BusinessOrders() {
   const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation } = useApp()
@@ -48,17 +48,9 @@ export function BusinessOrders() {
   // can access the richer data without extra lookups.
   const businessOrders: OrderLike[] = businessDeliveries
     .map(d => {
-      // Price priority:
-      // 1. calculatedRate (locked in at pickup verification) — the real charge
-      // 2. Posted estimate from the location's rate card (before pickup)
-      // 3. 0 when no rate card exists for the location
-      let price = d.calculatedRate ?? 0
-      if (d.calculatedRate == null) {
-        const rateCard = getRateCardForLocation(d.locationId)
-        price = rateCard
-          ? calculateRate(d.manifest, d.isOutOfTown, d.isUrgent, rateCard, false)
-          : 0
-      }
+      // Authoritative price (from pickup verification) falls back to a live
+      // rate-card estimate, then 0 if no rate card is set (UI flags this).
+      const price = estimateDeliveryPrice(d, getRateCardForLocation(d.locationId))
       return {
       id: d.id,
       businessId: d.businessId,

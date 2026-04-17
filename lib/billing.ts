@@ -1,6 +1,44 @@
 import type { ManifestItem, RateCard, Delivery, InvoiceLine, Invoice } from './types'
 
 /**
+ * Default rate card values applied when a business or location is created
+ * without explicit overrides. Matches FreshMart's Shawnessy card (the baseline
+ * referenced in the verification spec) so every location has sane defaults
+ * from day one — no $0 estimates, no hardcoded fallbacks elsewhere.
+ */
+export const DEFAULT_RATE_CARD_VALUES = {
+  rateRegular: 9,
+  rateBigDouble: 18,
+  rateOotBig: 25,
+  rateRush: 20,
+  rateRushOot: 30,
+  gstApplicable: true,
+  cancelBeforeDepart: 0,
+  cancelEnRoute: 5,
+  notifyDriverAssigned: true,
+  notifyPickupConfirmed: true,
+  notifyEnRoute: true,
+  notifyDelivered: true,
+  notifyFailed: true,
+  notifyInvoiceSent: true,
+  notifyPaymentReminder: true,
+  notifyRecipientSms: true,
+} as const
+
+/**
+ * Returns the price to display for a delivery in any list or summary context.
+ * Priority:
+ *   1. `calculatedRate` — locked in by PickupVerification once a driver confirms.
+ *   2. Live estimate from the location's rate card using posted quantities.
+ *   3. 0 when no rate card exists yet (UI should flag this separately).
+ */
+export function estimateDeliveryPrice(delivery: Delivery, rateCard: RateCard | null): number {
+  if (delivery.calculatedRate != null) return delivery.calculatedRate
+  if (!rateCard) return 0
+  return calculateRate(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, false)
+}
+
+/**
  * Count big packages in a manifest.
  * - `useConfirmed: false` (default) → always use postedQty (for estimates, pre-pickup).
  * - `useConfirmed: true` → use confirmedQty when it is not null (post-pickup); otherwise
@@ -260,8 +298,8 @@ export function calculateEstimatedCost(
   rateCard: RateCard | null
 ): { rate: number; gst: number; total: number } {
   if (!rateCard) {
-    // Use default rates if no rate card
-    return { rate: 9, gst: 0.45, total: 9.45 }
+    // No rate card set — callers must handle this state explicitly (e.g. warn).
+    return { rate: 0, gst: 0, total: 0 }
   }
 
   const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard)
