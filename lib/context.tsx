@@ -261,6 +261,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Build an app-level user object from a Supabase auth user. All role +
+  // linkage info lives in raw_user_meta_data (set when the account was
+  // created), so we can resolve everything without hitting a RLS-protected
+  // table — which matters because the session cookie doesn't reliably
+  // persist across PostgREST calls in the v0 preview sandbox.
+  const mockUserFromAuthUser = useCallback((authUser: {
+    id: string
+    email?: string | null
+    user_metadata?: Record<string, unknown> | null
+  }): MockUser | null => {
+    const meta = (authUser.user_metadata || {}) as Record<string, string>
+    const role = meta.role as UserRole | undefined
+    if (!role || !['admin', 'driver', 'business'].includes(role)) return null
+    return {
+      email: authUser.email || '',
+      password: '',
+      role,
+      name: meta.full_name || authUser.email || '',
+      businessId: meta.business_id || undefined,
+      locationId: meta.location_id || undefined,
+      driverId: meta.driver_id || undefined,
+    }
+  }, [])
+
   // Check for an existing Supabase session on mount (page refresh).
   useEffect(() => {
     const supabase = createSupabaseClient()
@@ -268,27 +292,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser()
-        if (!authUser) {
+        if (!authUser || cancelled) {
           if (!cancelled) setIsHydrating(false)
           return
         }
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authUser.id)
-          .maybeSingle()
-        if (!profile || cancelled) {
+        const restored = mockUserFromAuthUser(authUser)
+        if (!restored) {
           setIsHydrating(false)
           return
-        }
-        const restored: MockUser = {
-          email: profile.email,
-          password: '',
-          role: profile.role as UserRole,
-          name: profile.full_name || profile.email,
-          businessId: profile.business_id || undefined,
-          locationId: profile.location_id || undefined,
-          driverId: profile.driver_id || undefined,
         }
         setCurrentUser(restored)
         setActiveRole(restored.role)
@@ -299,48 +310,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     })()
     return () => { cancelled = true }
-  }, [hydrateFromDb])
+  }, [hydrateFromDb, mockUserFromAuthUser])
 
   // Auth functions — real Supabase Auth.
   const login = useCallback(async (email: string, password: string) => {
     const supabase = createSupabaseClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    console.log('[v0] signInWithPassword:', { userId: data?.user?.id, email: data?.user?.email, error: error?.message })
     if (error || !data.user) {
       return { success: false, error: 'Incorrect email or password. Please try again.' }
     }
-    // Re-fetch the session so any internal auth-state hydration has completed
-    // before we issue the profile query. Without this there's a brief window
-    // where the JWT isn't yet attached to subsequent REST requests.
-    const { data: sessionData } = await supabase.auth.getSession()
-    console.log('[v0] session after signIn:', {
-      hasSession: !!sessionData.session,
-      accessTokenUserId: sessionData.session?.user?.id,
-    })
-    const { data: profile, error: profileErr } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .maybeSingle()
-    console.log('[v0] profile lookup:', { profile, profileErr: profileErr?.message, code: profileErr?.code, details: profileErr?.details })
-    if (!profile) {
-      return { success: false, error: `No profile found for this account. ${profileErr?.message || 'Contact admin.'}` }
-    }
-    const user: MockUser = {
-      email: profile.email,
-      password: '',
-      role: profile.role as UserRole,
-      name: profile.full_name || profile.email,
-      businessId: profile.business_id || undefined,
-      locationId: profile.location_id || undefined,
-      driverId: profile.driver_id || undefined,
+    // Read role + linkage from user_metadata (populated at account creation),
+    // so login succeeds even if the session cookie hasn't fully persisted yet.
+    const user = mockUserFromAuthUser(data.user)
+    if (!user) {
+      return { success: false, error: 'Account is missing a role assignment. Contact admin.' }
     }
     setCurrentUser(user)
     setActiveRole(user.role)
     if (user.locationId) setActiveLocationId(user.locationId)
     await hydrateFromDb(user)
     return { success: true, role: user.role }
-  }, [hydrateFromDb])
+  }, [hydrateFromDb, mockUserFromAuthUser])
 
   const logout = useCallback(async () => {
     const supabase = createSupabaseClient()
