@@ -17,15 +17,27 @@ import {
 } from '@/components/ui/sheet'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { 
-  Users, 
-  Plus, 
-  Phone, 
+import {
+  Users,
+  Plus,
+  Phone,
   Mail,
   Search,
   LayoutGrid,
   Table,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { 
   getDrivers, 
   getDriverHistory, 
@@ -40,6 +52,11 @@ export function AdminDrivers() {
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [selectedDriver, setSelectedDriver] = useState<DbDriver | null>(null)
   const [detailTab, setDetailTab] = useState('overview')
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' })
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch drivers from Supabase
   const { data: drivers = [], isLoading } = useSWR('all-drivers', getDrivers, {
@@ -120,6 +137,73 @@ export function AdminDrivers() {
     mutate('all-drivers')
     toast.success('Driver deactivated')
     setSelectedDriver(null)
+  }
+
+  const openEditMode = () => {
+    if (!selectedDriver) return
+    setEditForm({
+      name: selectedDriver.name,
+      email: selectedDriver.email,
+      phone: selectedDriver.phone,
+    })
+    setIsEditing(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!selectedDriver) return
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      toast.error('Name and email are required')
+      return
+    }
+    setIsSavingEdit(true)
+    try {
+      const res = await fetch(`/api/drivers/${selectedDriver.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to update driver')
+        return
+      }
+      mutate('all-drivers')
+      setSelectedDriver({
+        ...selectedDriver,
+        name: editForm.name.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        phone: editForm.phone.trim(),
+      })
+      setIsEditing(false)
+      toast.success('Driver updated')
+    } catch {
+      toast.error('Failed to update driver')
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
+  const handleDeleteDriver = async () => {
+    if (!selectedDriver) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/drivers/${selectedDriver.id}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to delete driver', { duration: 8000 })
+        return
+      }
+      mutate('all-drivers')
+      toast.success('Driver permanently deleted')
+      setShowDeleteConfirm(false)
+      setSelectedDriver(null)
+    } catch {
+      toast.error('Failed to delete driver')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const handleReactivateDriver = async (driverId: string) => {
@@ -394,7 +478,15 @@ export function AdminDrivers() {
       </Sheet>
 
       {/* Driver Detail Panel */}
-      <Sheet open={!!selectedDriver} onOpenChange={() => setSelectedDriver(null)}>
+      <Sheet
+        open={!!selectedDriver}
+        onOpenChange={open => {
+          if (!open) {
+            setSelectedDriver(null)
+            setIsEditing(false)
+          }
+        }}
+      >
         <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)] w-full sm:max-w-lg overflow-y-auto">
           {selectedDriver && (
             <>
@@ -449,48 +541,120 @@ export function AdminDrivers() {
                 </TabsList>
                 
                 <TabsContent value="overview" className="mt-4 space-y-4">
-                  {/* Contact Info */}
+                  {/* Contact Info / Edit Form */}
                   <Card className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
-                    <CardHeader className="pb-2">
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
                       <CardTitle className="text-sm text-foreground">Contact Information</CardTitle>
+                      {!isEditing ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={openEditMode}
+                          className="h-7 px-2 text-xs gap-1"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Edit
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsEditing(false)}
+                          className="h-7 px-2 text-xs"
+                          disabled={isSavingEdit}
+                        >
+                          Cancel
+                        </Button>
+                      )}
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="w-4 h-4 text-muted-foreground" />
-                        <span>{selectedDriver.email}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="w-4 h-4 text-muted-foreground" />
-                        <span>{selectedDriver.phone}</span>
-                      </div>
+                    <CardContent className="space-y-3">
+                      {!isEditing ? (
+                        <>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="w-4 h-4 text-muted-foreground" />
+                            <span>{selectedDriver.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className="w-4 h-4 text-muted-foreground" />
+                            <span>{selectedDriver.phone}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Full Name</Label>
+                            <Input
+                              value={editForm.name}
+                              onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                              className="bg-[var(--bg-card)] border-[var(--border-color)] h-9"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Email</Label>
+                            <Input
+                              type="email"
+                              value={editForm.email}
+                              onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                              className="bg-[var(--bg-card)] border-[var(--border-color)] h-9"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Phone</Label>
+                            <Input
+                              value={editForm.phone}
+                              onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                              className="bg-[var(--bg-card)] border-[var(--border-color)] h-9"
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={handleSaveEdit}
+                            disabled={isSavingEdit}
+                            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+                          >
+                            {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
-                  
+
                   {/* Actions */}
-                  <div className="pt-4 space-y-2">
+                  <div className="pt-2 space-y-2">
                     {selectedDriver.invite_status === 'active' ? (
-                      <Button 
-                        variant="destructive" 
-                        className="w-full"
+                      <Button
+                        variant="outline"
+                        className="w-full border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-400"
                         onClick={() => handleDeactivateDriver(selectedDriver.id)}
                       >
                         Deactivate Driver
                       </Button>
                     ) : selectedDriver.invite_status === 'deactivated' ? (
-                      <Button 
+                      <Button
                         className="w-full bg-green-600 hover:bg-green-700"
                         onClick={() => handleReactivateDriver(selectedDriver.id)}
                       >
                         Reactivate Driver
                       </Button>
                     ) : (
-                      <Button 
+                      <Button
                         className="w-full bg-green-600 hover:bg-green-700"
                         onClick={() => handleReactivateDriver(selectedDriver.id)}
                       >
                         Activate Driver
                       </Button>
                     )}
+                    <Button
+                      variant="destructive"
+                      className="w-full gap-2"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Permanently
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                      Deactivate keeps the driver&apos;s history. Delete is only allowed for drivers with no deliveries.
+                    </p>
                   </div>
                 </TabsContent>
                 
@@ -524,6 +688,32 @@ export function AdminDrivers() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">
+              Delete {selectedDriver?.name} permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the driver&apos;s login and record completely. It will fail
+              if the driver has any delivery history — use Deactivate instead to
+              preserve historical records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDriver}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

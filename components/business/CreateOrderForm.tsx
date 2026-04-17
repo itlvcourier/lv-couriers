@@ -61,9 +61,11 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
   const initialFormState = {
     pickupAddress: location?.address || '',
+    pickupPostalCode: '',
     pickupContact: location?.phone || '',
     recipientName: '',
     dropoffAddress: '',
+    dropoffPostalCode: '',
     dropoffContact: '',
     buzzCode: '',
     saveContact: true,
@@ -138,6 +140,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       ...prev,
       recipientName: '',
       dropoffAddress: '',
+      dropoffPostalCode: '',
       dropoffContact: '',
       buzzCode: '',
       saveContact: true,
@@ -260,8 +263,10 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       businessName: business?.name || '',
       pickupAddress: form.pickupAddress,
       pickupArea: location?.name || '',
+      pickupPostalCode: form.pickupPostalCode.trim().toUpperCase() || null,
       dropoffAddress: form.dropoffAddress,
       dropoffArea: form.dropoffAddress.split(',')[1]?.trim() || 'Calgary',
+      dropoffPostalCode: form.dropoffPostalCode.trim().toUpperCase() || null,
       recipientName: form.recipientName.trim() || null,
       recipientPhone: form.dropoffContact.trim() || null,
       buzzCode: form.buzzCode.trim() || null,
@@ -335,14 +340,28 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pickupContact">Contact Phone</Label>
-              <Input
-                id="pickupContact"
-                value={form.pickupContact}
-                onChange={e => setForm({ ...form, pickupContact: e.target.value })}
-                placeholder="Phone number at pickup"
-              />
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pickupPostalCode">Postal Code</Label>
+                <Input
+                  id="pickupPostalCode"
+                  value={form.pickupPostalCode}
+                  onChange={e => setForm({ ...form, pickupPostalCode: e.target.value.toUpperCase() })}
+                  placeholder="T2Y 3Z1"
+                  autoComplete="postal-code"
+                  maxLength={7}
+                  className="uppercase tracking-wider"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pickupContact">Contact Phone</Label>
+                <Input
+                  id="pickupContact"
+                  value={form.pickupContact}
+                  onChange={e => setForm({ ...form, pickupContact: e.target.value })}
+                  placeholder="Phone number at pickup"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -417,6 +436,18 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 onChange={e => setForm({ ...form, dropoffAddress: e.target.value })}
                 placeholder="Enter delivery address"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dropoffPostalCode">Delivery Postal Code</Label>
+              <Input
+                id="dropoffPostalCode"
+                value={form.dropoffPostalCode}
+                onChange={e => setForm({ ...form, dropoffPostalCode: e.target.value.toUpperCase() })}
+                placeholder="T2P 1J9"
+                autoComplete="postal-code"
+                maxLength={7}
+                className="uppercase tracking-wider max-w-[200px]"
               />
             </div>
 

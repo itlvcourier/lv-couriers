@@ -18,10 +18,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { 
-  Building2, 
-  Plus, 
-  Phone, 
+import {
+  Building2,
+  Plus,
+  Phone,
   Mail,
   MapPin,
   Search,
@@ -30,7 +30,18 @@ import {
   Edit,
   Ban,
   Package,
+  Trash2,
 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +58,8 @@ export function AdminBusinesses() {
   const [statusFilter, setStatusFilter] = useState<DbBusiness['status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessWithLocations | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch businesses from Supabase
   const { data: businesses = [], isLoading } = useSWR('all-businesses', getBusinesses, {
@@ -120,6 +133,29 @@ export function AdminBusinesses() {
     
     mutate('all-businesses')
     toast.success(`Business ${newStatus === 'active' ? 'activated' : 'suspended'}`)
+  }
+
+  const handleDeleteBusiness = async () => {
+    if (!selectedBusiness) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/businesses/${selectedBusiness.id}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to delete business', { duration: 8000 })
+        return
+      }
+      mutate('all-businesses')
+      toast.success('Business permanently deleted')
+      setShowDeleteConfirm(false)
+      setSelectedBusiness(null)
+    } catch {
+      toast.error('Failed to delete business')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const handleUpdateBusiness = async () => {
@@ -255,6 +291,16 @@ export function AdminBusinesses() {
                         <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
                           <Ban className="w-4 h-4 mr-2" />
                           {business.status === 'active' ? 'Suspend' : 'Activate'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedBusiness(business)
+                            setShowDeleteConfirm(true)
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Permanently
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -416,16 +462,56 @@ export function AdminBusinesses() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button 
-                onClick={handleUpdateBusiness} 
+              <Button
+                onClick={handleUpdateBusiness}
                 className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
               >
                 Save Changes
               </Button>
+
+              <div className="pt-4 mt-2 border-t border-[var(--border-color)] space-y-2">
+                <Button
+                  variant="destructive"
+                  className="w-full gap-2"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Permanently
+                </Button>
+                <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                  Suspend keeps the business and its history. Delete is only allowed for businesses with no deliveries or invoices.
+                </p>
+              </div>
             </div>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">
+              Delete {selectedBusiness?.name} permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the business, all its locations, rate cards, and saved
+              contacts. It will fail if any deliveries or invoices exist for the
+              business — suspend it instead to preserve records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBusiness}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

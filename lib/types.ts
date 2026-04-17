@@ -124,10 +124,12 @@ export interface Delivery {
   // Addresses
   pickupAddress: string
   pickupArea: string
+  pickupPostalCode?: string | null
   pickupLat?: number | null
   pickupLng?: number | null
   dropoffAddress: string
   dropoffArea: string
+  dropoffPostalCode?: string | null
   dropoffLat?: number | null
   dropoffLng?: number | null
   recipientName?: string | null

@@ -143,10 +143,12 @@ export function mapDeliveryRow(row: Row): Delivery {
     status: row.status as DeliveryStatus,
     pickupAddress: (row.pickup_address as string) || '',
     pickupArea: (row.pickup_area as string) || '',
+    pickupPostalCode: (row.pickup_postal_code as string | null) ?? null,
     pickupLat: (row.pickup_lat as number | null) ?? null,
     pickupLng: (row.pickup_lng as number | null) ?? null,
     dropoffAddress: (row.dropoff_address as string) || '',
     dropoffArea: (row.dropoff_area as string) || '',
+    dropoffPostalCode: (row.dropoff_postal_code as string | null) ?? null,
     dropoffLat: (row.dropoff_lat as number | null) ?? null,
     dropoffLng: (row.dropoff_lng as number | null) ?? null,
     recipientName: (row.recipient_name as string | null) ?? null,
@@ -347,8 +349,10 @@ export async function createDeliveryInDb(input: {
   locationId: string
   pickupAddress: string
   pickupArea: string
+  pickupPostalCode?: string | null
   dropoffAddress: string
   dropoffArea: string
+  dropoffPostalCode?: string | null
   recipientName?: string | null
   recipientPhone?: string | null
   recipientNote?: string | null
@@ -367,8 +371,10 @@ export async function createDeliveryInDb(input: {
       status: 'posted',
       pickup_address: input.pickupAddress,
       pickup_area: input.pickupArea,
+      pickup_postal_code: input.pickupPostalCode ?? null,
       dropoff_address: input.dropoffAddress,
       dropoff_area: input.dropoffArea,
+      dropoff_postal_code: input.dropoffPostalCode ?? null,
       recipient_name: input.recipientName ?? null,
       recipient_phone: input.recipientPhone ?? null,
       recipient_note: input.recipientNote ?? null,
