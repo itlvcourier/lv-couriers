@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp } from '@/lib/context'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { X, Package, Camera, AlertCircle, CheckCircle, Copy, Navigation } from 'lucide-react'
-import type { Delivery, PickupVerification as VerificationType } from '@/lib/types'
+import { X, Package, Camera, AlertCircle, CheckCircle, Copy, Navigation, Zap } from 'lucide-react'
+import type { Delivery, PickupVerification as VerificationType, ManifestItem } from '@/lib/types'
+import { calculateBreakdown } from '@/lib/billing'
+import { RuleBadge } from '@/components/shared/CostCalculator'
 
 interface PickupVerificationProps {
   delivery: Delivery
@@ -16,7 +18,8 @@ interface PickupVerificationProps {
 }
 
 export function PickupVerification({ delivery, onClose }: PickupVerificationProps) {
-  const { verifyPickup, generateTrackingLink, sendTrackingSMS } = useApp()
+  const { verifyPickup, generateTrackingLink, sendTrackingSMS, getRateCardForLocation } = useApp()
+  const rateCard = getRateCardForLocation(delivery.locationId)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [trackingCode, setTrackingCode] = useState<string | null>(null)
   const [verifications, setVerifications] = useState<Record<string, { qty: number; photo: string | null; outOfTown: boolean }>>(
@@ -29,6 +32,36 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     }
   )
   const [hasDiscrepancy, setHasDiscrepancy] = useState(false)
+
+  // Build a pseudo-manifest for "confirmed" using the driver's current inputs.
+  // - postedQty keeps the original estimate.
+  // - confirmedQty is the driver-entered qty (treat 0 as an explicit zero, not a fallback).
+  const confirmedManifest: ManifestItem[] = useMemo(
+    () =>
+      delivery.manifest.map(item => ({
+        ...item,
+        confirmedQty: verifications[item.id]?.qty ?? item.postedQty,
+      })),
+    [delivery.manifest, verifications],
+  )
+
+  // OOT for billing = delivery-level flag OR any per-item OOT toggle set at pickup.
+  const effectiveOot =
+    delivery.isOutOfTown ||
+    Object.values(verifications).some(v => v?.outOfTown === true)
+
+  const postedBreakdown = useMemo(
+    () => calculateBreakdown(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, false),
+    [delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard],
+  )
+
+  const confirmedBreakdown = useMemo(
+    () => calculateBreakdown(confirmedManifest, effectiveOot, delivery.isUrgent, rateCard, true),
+    [confirmedManifest, effectiveOot, delivery.isUrgent, rateCard],
+  )
+
+  const ruleChanged = postedBreakdown.rule !== confirmedBreakdown.rule
+  const rateChanged = postedBreakdown.rate !== confirmedBreakdown.rate
 
   const handleQtyChange = (itemId: string, value: string) => {
     const qty = parseInt(value) || 0
@@ -269,6 +302,57 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Live billing preview */}
+          {rateCard && (
+            <div
+              className={
+                ruleChanged || rateChanged
+                  ? 'p-4 rounded-xl bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 space-y-3'
+                  : 'p-4 rounded-xl bg-[var(--bg-card-2)] border border-[var(--border-color)] space-y-3'
+              }
+            >
+              <div className="flex items-center gap-2">
+                <Zap className={`w-4 h-4 ${ruleChanged || rateChanged ? 'text-[var(--accent-orange)]' : 'text-muted-foreground'}`} />
+                <p className="text-sm font-medium text-foreground">
+                  {ruleChanged
+                    ? 'Rate updated'
+                    : rateChanged
+                      ? 'Rate adjusted'
+                      : 'Rate unchanged'}
+                </p>
+                <span className="ml-auto">
+                  <RuleBadge rule={confirmedBreakdown.rule} />
+                </span>
+              </div>
+
+              {(ruleChanged || rateChanged) ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Posted · {postedBreakdown.rule}</span>
+                    <span className="tabular-nums">${postedBreakdown.rate.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-foreground font-medium">
+                    <span>Confirmed · {confirmedBreakdown.rule}</span>
+                    <span className="tabular-nums">${confirmedBreakdown.rate.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-[var(--border-color)]">
+                    <span className="text-foreground">New charge</span>
+                    <span className="tabular-nums text-foreground font-semibold">
+                      ${confirmedBreakdown.total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Charge</span>
+                  <span className="tabular-nums text-foreground font-semibold">
+                    ${confirmedBreakdown.total.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

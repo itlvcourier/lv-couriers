@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp } from '@/lib/context'
+import { calculateBreakdown } from '@/lib/billing'
+import { BillingBreakdownCard } from '@/components/shared/CostCalculator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +46,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
     checkDuplicateAddress,
     combineDeliveries,
     upsertSavedContact,
+    getRateCardForLocation,
   } = useApp()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,6 +78,37 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   }
 
   const [form, setForm] = useState(initialFormState)
+
+  // Live billing preview — uses postedQty (not yet picked up) and recalculates
+  // every time the manifest or rush/OOT flags change.
+  const rateCard = currentUser?.locationId ? getRateCardForLocation(currentUser.locationId) : null
+  const previewBreakdown = useMemo(() => {
+    const previewManifest = [
+      ...(form.smallPackages > 0
+        ? [{
+            id: 'preview-small',
+            type: 'small_package' as const,
+            postedQty: form.smallPackages,
+            confirmedQty: null,
+            verificationPhotoUrl: null,
+            notes: '',
+          }]
+        : []),
+      ...(form.bigPackages > 0
+        ? [{
+            id: 'preview-big',
+            type: 'big_package' as const,
+            postedQty: form.bigPackages,
+            confirmedQty: null,
+            verificationPhotoUrl: null,
+            notes: '',
+          }]
+        : []),
+    ]
+    return calculateBreakdown(previewManifest, form.isOutOfTown, form.isRush, rateCard, false)
+  }, [form.smallPackages, form.bigPackages, form.isOutOfTown, form.isRush, rateCard])
+
+  const hasPackages = form.smallPackages + form.bigPackages > 0
 
   const resetForm = () => {
     setForm({
@@ -495,6 +529,35 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 </Label>
               </div>
             </div>
+
+            {/* Live cost preview */}
+            {hasPackages && (
+              <div className="space-y-2 pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm text-foreground">Estimated cost</Label>
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Confirmed at pickup
+                  </span>
+                </div>
+                {rateCard ? (
+                  <BillingBreakdownCard
+                    rule={previewBreakdown.rule}
+                    bigPackageCount={previewBreakdown.bigPackageCount}
+                    outOfTown={form.isOutOfTown}
+                    rush={form.isRush}
+                    rate={previewBreakdown.rate}
+                    gst={previewBreakdown.gst}
+                    total={previewBreakdown.total}
+                    gstApplicable={previewBreakdown.gstApplicable}
+                    hasRateCard={true}
+                  />
+                ) : (
+                  <p className="text-xs text-yellow-500 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+                    No rate card is set for this location — your admin must add one before this delivery can be billed.
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

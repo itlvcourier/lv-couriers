@@ -13,11 +13,14 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { AlertTriangle, Building2, Check, ChevronRight, DollarSign, FileText, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { CostCalculator } from '@/components/shared/CostCalculator'
+import { BillingScenarioTests } from './BillingScenarioTests'
 
 export function AdminRateCards() {
   const { businesses, rateCards, saveRateCard } = useApp()
   const [selectedLocation, setSelectedLocation] = useState<{ business: Business; location: BusinessLocation } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [testRateCardId, setTestRateCardId] = useState<string>('')
 
   // Get all locations with their rate card status
   const allLocations = businesses.flatMap(business =>
@@ -91,6 +94,59 @@ export function AdminRateCards() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Billing Verification Tools */}
+      {(() => {
+        const rateCardOptions = allLocations
+          .filter(l => l.rateCard)
+          .map(l => ({
+            id: l.rateCard!.id,
+            label: `${l.business.name} — ${l.location.name}`,
+            rateCard: l.rateCard as RateCard,
+          }))
+        const selectedId = testRateCardId || rateCardOptions[0]?.id || ''
+        const selected = rateCardOptions.find(o => o.id === selectedId) || rateCardOptions[0]
+
+        if (rateCardOptions.length === 0) return null
+
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="text-base font-semibold text-foreground">Billing Verification</h3>
+                <p className="text-xs text-muted-foreground">
+                  Test the live calculation logic against any store&apos;s rate card.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="test-rate-card" className="text-xs text-muted-foreground">
+                  Test against
+                </label>
+                <select
+                  id="test-rate-card"
+                  value={selectedId}
+                  onChange={(e) => setTestRateCardId(e.target.value)}
+                  className="rounded-md border border-[var(--border-color)] bg-[var(--bg-card-2)] text-foreground text-sm px-3 py-2 min-h-[36px]"
+                >
+                  {rateCardOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <CostCalculator
+              rateCard={selected?.rateCard || null}
+              rateCardLabel={selected?.label}
+            />
+
+            <BillingScenarioTests
+              rateCard={selected?.rateCard || null}
+              rateCardLabel={selected?.label}
+            />
+          </div>
+        )
+      })()}
 
       {/* Rate Card Editor Sheet */}
       <Sheet open={isEditing} onOpenChange={setIsEditing}>

@@ -1,38 +1,86 @@
 import type { ManifestItem, RateCard, Delivery, InvoiceLine, Invoice } from './types'
 
 /**
+ * Count big packages in a manifest.
+ * - `useConfirmed: false` (default) → always use postedQty (for estimates, pre-pickup).
+ * - `useConfirmed: true` → use confirmedQty when it is not null (post-pickup); otherwise
+ *   fall back to postedQty. Note: `confirmedQty === 0` is treated as an explicit zero,
+ *   NOT a fallback to posted.
+ */
+export function countBigPackages(
+  manifest: ManifestItem[],
+  useConfirmed: boolean = false
+): number {
+  return manifest
+    .filter(i => i.type === 'big_package')
+    .reduce((sum, i) => {
+      const qty = useConfirmed && i.confirmedQty !== null ? i.confirmedQty : i.postedQty
+      return sum + qty
+    }, 0)
+}
+
+/**
  * Calculate the rate for a delivery based on priority order:
  * 1. Rush + out of town -> Rush OOT rate
  * 2. Rush only -> Rush rate
- * 3. 2+ big packages + out of town -> OOT big rate
- * 4. 2+ big packages in town -> 2+ big rate
+ * 3. 2+ big packages + out of town (not rush) -> OOT big rate
+ * 4. 2+ big packages in town (not rush) -> 2+ big rate
  * 5. Everything else -> Regular rate
+ *
+ * Rush always overrides package count. Out-of-town only affects price when
+ * combined with rush OR with 2+ big packages.
+ *
+ * Pass `useConfirmed: true` after pickup verification to lock the rate against
+ * the driver-confirmed quantities.
  */
 export function calculateRate(
   manifest: ManifestItem[],
   isOutOfTown: boolean,
   isRush: boolean,
-  rateCard: RateCard
+  rateCard: RateCard,
+  useConfirmed: boolean = false
 ): number {
-  // Priority 1: Rush + out of town
+  // Priority 1: Rush + Out of Town
   if (isRush && isOutOfTown) return rateCard.rateRushOot
 
-  // Priority 2: Rush only
+  // Priority 2: Rush only (in town)
   if (isRush) return rateCard.rateRush
 
-  // Count big packages (use confirmed qty if available, otherwise posted qty)
-  const bigCount = manifest
-    .filter(i => i.type === 'big_package')
-    .reduce((sum, i) => sum + (i.confirmedQty ?? i.postedQty), 0)
+  const bigCount = countBigPackages(manifest, useConfirmed)
 
-  // Priority 3: 2+ big packages + out of town
+  // Priority 3: 2+ big packages + out of town (not rush)
   if (bigCount >= 2 && isOutOfTown) return rateCard.rateOotBig ?? rateCard.rateBigDouble
 
-  // Priority 4: 2+ big packages in town
+  // Priority 4: 2+ big packages in town (not rush)
   if (bigCount >= 2) return rateCard.rateBigDouble
 
-  // Priority 5: Everything else (regular rate)
+  // Priority 5: Everything else
   return rateCard.rateRegular
+}
+
+/**
+ * Human-readable rule name returned by calculateRate for the given inputs.
+ * Matches the exact labels used in the verification spec and the UI.
+ */
+export type BillingRuleName =
+  | 'Regular'
+  | 'Rush'
+  | 'Rush + Out of Town'
+  | '2+ Big Packages — In Town'
+  | '2+ Big Packages — Out of Town'
+
+export function getRuleApplied(
+  manifest: ManifestItem[],
+  isOutOfTown: boolean,
+  isRush: boolean,
+  useConfirmed: boolean = false
+): BillingRuleName {
+  if (isRush && isOutOfTown) return 'Rush + Out of Town'
+  if (isRush) return 'Rush'
+  const bigCount = countBigPackages(manifest, useConfirmed)
+  if (bigCount >= 2 && isOutOfTown) return '2+ Big Packages — Out of Town'
+  if (bigCount >= 2) return '2+ Big Packages — In Town'
+  return 'Regular'
 }
 
 /**
@@ -49,19 +97,67 @@ export function calculateGST(amount: number, applicable: boolean): number {
 export function getDeliveryType(
   manifest: ManifestItem[],
   isOutOfTown: boolean,
-  isRush: boolean
+  isRush: boolean,
+  useConfirmed: boolean = false
 ): InvoiceLine['deliveryType'] {
   if (isRush && isOutOfTown) return 'rush_out_of_town'
   if (isRush) return 'rush'
 
-  const bigCount = manifest
-    .filter(i => i.type === 'big_package')
-    .reduce((sum, i) => sum + (i.confirmedQty ?? i.postedQty), 0)
+  const bigCount = countBigPackages(manifest, useConfirmed)
 
   if (bigCount >= 2 && isOutOfTown) return 'out_of_town_big'
   if (bigCount >= 2) return 'big_double'
 
   return 'regular'
+}
+
+/**
+ * Rule-to-badge-color mapping for UI components.
+ */
+export function getRuleBadgeColor(rule: BillingRuleName): 'red' | 'orange' | 'purple' | 'blue' | 'gray' {
+  switch (rule) {
+    case 'Rush + Out of Town': return 'red'
+    case 'Rush': return 'orange'
+    case '2+ Big Packages — Out of Town': return 'purple'
+    case '2+ Big Packages — In Town': return 'blue'
+    case 'Regular':
+    default: return 'gray'
+  }
+}
+
+/**
+ * Full billing breakdown for display. Handles null rate cards gracefully.
+ */
+export function calculateBreakdown(
+  manifest: ManifestItem[],
+  isOutOfTown: boolean,
+  isRush: boolean,
+  rateCard: RateCard | null,
+  useConfirmed: boolean = false
+): {
+  rule: BillingRuleName
+  rate: number
+  gst: number
+  total: number
+  bigPackageCount: number
+  gstApplicable: boolean
+} {
+  const rule = getRuleApplied(manifest, isOutOfTown, isRush, useConfirmed)
+  const bigPackageCount = countBigPackages(manifest, useConfirmed)
+  if (!rateCard) {
+    return { rule, rate: 0, gst: 0, total: 0, bigPackageCount, gstApplicable: false }
+  }
+  const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard, useConfirmed)
+  const gst = calculateGST(rate, rateCard.gstApplicable)
+  const total = calculateTotal(rate, gst)
+  return { rule, rate, gst, total, bigPackageCount, gstApplicable: rateCard.gstApplicable }
+}
+
+/**
+ * Total = rate + GST rounded to 2 decimal places.
+ */
+export function calculateTotal(rate: number, gst: number): number {
+  return Math.round((rate + gst) * 100) / 100
 }
 
 /**
@@ -115,7 +211,8 @@ export function calculateInvoiceLines(
   const completedDeliveries = deliveries.filter(d => d.status === 'delivered')
 
   completedDeliveries.forEach(delivery => {
-    const type = getDeliveryType(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent)
+    // Completed deliveries use driver-confirmed quantities.
+    const type = getDeliveryType(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, true)
     groups[type].ids.push(delivery.id)
     groups[type].count++
   })
