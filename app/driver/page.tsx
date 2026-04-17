@@ -9,9 +9,10 @@ import { Truck } from 'lucide-react'
 
 export default function DriverPage() {
   const router = useRouter()
-  const { currentUser, activeRole } = useApp()
+  const { currentUser, activeRole, isHydrating } = useApp()
 
   useEffect(() => {
+    if (isHydrating) return
     if (!currentUser) {
       router.replace('/login')
       return
@@ -27,9 +28,9 @@ export default function DriverPage() {
         router.replace('/login')
       }
     }
-  }, [currentUser, activeRole, router])
+  }, [currentUser, activeRole, router, isHydrating])
 
-  if (!currentUser || activeRole !== 'driver') {
+  if (isHydrating || !currentUser || activeRole !== 'driver') {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

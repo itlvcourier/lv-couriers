@@ -32,11 +32,7 @@ export function mapBusinessRow(row: Row): Business {
     id: row.id as string,
     name: row.name as string,
     invoiceFormat: (row.invoice_format as Business['invoiceFormat']) || 'combined',
-    inviteStatus: (row.status === 'suspended'
-      ? 'deactivated'
-      : row.status === 'pending'
-        ? 'pending'
-        : 'active'),
+    inviteStatus: (row.invite_status as Business['inviteStatus']) || 'active',
     locations: Array.isArray(row.locations)
       ? (row.locations as Row[]).map(l => mapLocationRow(l))
       : [],
@@ -52,7 +48,7 @@ export function mapLocationRow(row: Row): BusinessLocation {
     billingEmail: (row.billing_email as string) || '',
     backupEmail: (row.backup_email as string) || '',
     contactName: (row.contact_name as string) || '',
-    phone: (row.contact_phone as string) || '',
+    phone: (row.phone as string) || '',
     savedAddresses: [],
   }
 }
@@ -110,12 +106,16 @@ export function mapRateCardRow(row: Row): RateCard {
 }
 
 export function mapManifestRow(row: Row): ManifestItem {
+  // DB only stores quantity (initially the posted count, overwritten to
+  // the confirmed count at pickup verification). We expose both on the
+  // client type but they point at the same DB column for now.
+  const qty = Number(row.quantity) || 0
   return {
     id: row.id as string,
     type: (row.item_type as ManifestItem['type']) || 'small_package',
-    postedQty: Number(row.quantity) || 0,
-    confirmedQty: row.confirmed_qty != null ? Number(row.confirmed_qty) : null,
-    verificationPhotoUrl: (row.verification_photo_url as string | null) ?? null,
+    postedQty: qty,
+    confirmedQty: qty,
+    verificationPhotoUrl: null,
     notes: (row.notes as string) || '',
   }
 }
@@ -309,7 +309,7 @@ export async function loadDeliveries(profile: {
   }
   const { data, error } = await query
   if (error) throw error
-  return (data || []).map(row => mapDeliveryRow(row as Row))
+  return (data || []).map((row: Row) => mapDeliveryRow(row))
 }
 
 export async function loadInvoices(profile: {
@@ -327,7 +327,7 @@ export async function loadInvoices(profile: {
   }
   const { data, error } = await query
   if (error) throw error
-  return (data || []).map(row => mapInvoiceRow(row as Row))
+  return (data || []).map((row: Row) => mapInvoiceRow(row))
 }
 
 // ============================================================================
@@ -473,15 +473,16 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
 
 export async function saveBusinessToDb(business: Business): Promise<void> {
   const supabase = createClient()
+  const firstLoc = business.locations[0]
   const { error } = await supabase.from('businesses').upsert({
     id: business.id,
     name: business.name,
     invoice_format: business.invoiceFormat,
-    status: business.inviteStatus === 'deactivated'
-      ? 'suspended'
-      : business.inviteStatus === 'pending'
-        ? 'pending'
-        : 'active',
+    invite_status: business.inviteStatus,
+    // Required NOT NULL columns — use first-location contact as sensible default.
+    contact_name: firstLoc?.contactName || business.name,
+    phone: firstLoc?.phone || '',
+    email: firstLoc?.billingEmail || '',
   })
   if (error) throw error
 
@@ -491,10 +492,11 @@ export async function saveBusinessToDb(business: Business): Promise<void> {
       business_id: business.id,
       name: loc.name,
       address: loc.address,
+      area: loc.name, // Use location name as area if not otherwise specified
       billing_email: loc.billingEmail,
       backup_email: loc.backupEmail,
       contact_name: loc.contactName,
-      contact_phone: loc.phone,
+      phone: loc.phone,
     })
     if (le) throw le
   }
@@ -507,10 +509,11 @@ export async function saveLocationToDb(businessId: string, loc: BusinessLocation
     business_id: businessId,
     name: loc.name,
     address: loc.address,
+    area: loc.name,
     billing_email: loc.billingEmail,
     backup_email: loc.backupEmail,
     contact_name: loc.contactName,
-    contact_phone: loc.phone,
+    phone: loc.phone,
   })
   if (error) throw error
 }
@@ -551,13 +554,13 @@ export async function applyPickupVerifications(
   rateCardId: string | null,
 ): Promise<void> {
   const supabase = createClient()
+  // DB has only `quantity` on manifest_items — we overwrite it with the
+  // confirmed count at pickup. Verification photos are stored in
+  // delivery_flags (qty_adjusted) rather than per-item.
   for (const v of verifications) {
     const { error } = await supabase
       .from('manifest_items')
-      .update({
-        confirmed_qty: v.confirmedQty,
-        verification_photo_url: v.photoUrl,
-      })
+      .update({ quantity: v.confirmedQty })
       .eq('id', v.itemId)
     if (error) throw error
   }
@@ -585,7 +588,7 @@ export async function insertDeliveryFlag(flag: {
   const { error: fErr } = await supabase.from('delivery_flags').insert({
     delivery_id: flag.deliveryId,
     flag_type: flag.type,
-    description: flag.description,
+    notes: flag.description,
     photo_url: flag.photoUrl,
     status: 'open',
   })

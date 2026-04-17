@@ -8,10 +8,11 @@ import { Spinner } from '@/components/ui/spinner'
 import { Shield } from 'lucide-react'
 
 export default function AdminPage() {
-  const { currentUser } = useApp()
+  const { currentUser, isHydrating } = useApp()
   const router = useRouter()
 
   useEffect(() => {
+    if (isHydrating) return
     if (!currentUser) {
       router.replace('/login')
       return
@@ -19,9 +20,9 @@ export default function AdminPage() {
     if (currentUser.role !== 'admin') {
       router.replace(`/${currentUser.role}`)
     }
-  }, [currentUser, router])
+  }, [currentUser, router, isHydrating])
 
-  if (!currentUser) {
+  if (isHydrating || !currentUser) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">

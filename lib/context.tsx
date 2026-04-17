@@ -1838,6 +1838,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         currentUser,
         activeRole,
         activeLocationId,
+        isHydrating,
         deliveries,
         drivers,
         businesses,
