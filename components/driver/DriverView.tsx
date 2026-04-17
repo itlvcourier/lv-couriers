@@ -29,8 +29,8 @@ export function DriverView() {
     d => d.driverId === driverId && !['delivered', 'failed_permanent', 'cancelled'].includes(d.status)
   )
 
-  const handleSignOut = () => {
-    logout()
+  const handleSignOut = async () => {
+    await logout()
     router.push('/login')
   }
 

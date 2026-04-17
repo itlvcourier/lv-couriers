@@ -8,9 +8,11 @@ import { Truck } from 'lucide-react'
 
 export default function Home() {
   const router = useRouter()
-  const { currentUser, activeRole } = useApp()
+  const { currentUser, activeRole, isHydrating } = useApp()
 
   useEffect(() => {
+    // Wait for Supabase session check before deciding where to route.
+    if (isHydrating) return
     if (!currentUser) {
       router.replace('/login')
       return
@@ -30,7 +32,7 @@ export default function Home() {
       default:
         router.replace('/login')
     }
-  }, [currentUser, activeRole, router])
+  }, [currentUser, activeRole, router, isHydrating])
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">

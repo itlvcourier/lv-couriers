@@ -55,8 +55,8 @@ export function DriverSettings() {
   // Average rating placeholder (would come from reviews)
   const avgRating = 4.8
 
-  const handleSignOut = () => {
-    logout()
+  const handleSignOut = async () => {
+    await logout()
     router.push('/login')
   }
 

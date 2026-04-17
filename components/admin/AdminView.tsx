@@ -156,7 +156,7 @@ export function AdminView() {
           <Button 
             variant="outline" 
             className="w-full gap-2"
-            onClick={logout}
+            onClick={() => { void logout() }}
           >
             <LogOut className="w-4 h-4" />
             Sign Out

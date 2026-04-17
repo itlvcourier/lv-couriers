@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { ArrowLeft, CheckCircle } from 'lucide-react'
-import { mockUsers } from '@/lib/data'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -21,14 +21,15 @@ export default function ForgotPasswordPage() {
     setError(null)
     setIsLoading(true)
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Use Supabase Auth's native password reset. It always returns success
+    // for security (so we don't leak which emails exist).
+    const supabase = createSupabaseClient()
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined,
+    })
 
-    // Check if email exists in mock users
-    const userExists = mockUsers.some(u => u.email === email)
-    
-    if (!userExists) {
-      setError('No account found with that email address.')
+    if (resetError) {
+      setError(resetError.message)
       setIsLoading(false)
       return
     }

@@ -224,7 +224,7 @@ export function BusinessProfile() {
       <Button 
         variant="destructive" 
         className="w-full"
-        onClick={logout}
+        onClick={() => { void logout() }}
       >
         <LogOut className="w-4 h-4 mr-2" />
         Sign Out

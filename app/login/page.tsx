@@ -25,11 +25,8 @@ export default function LoginPage() {
     setError(null)
     setIsLoading(true)
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 800))
+    const result = await login(email, password)
 
-    const result = login(email, password)
-    
     if (!result.success) {
       setError(result.error || 'Login failed')
       setIsLoading(false)
@@ -150,15 +147,15 @@ export default function LoginPage() {
             <div className="space-y-2 text-xs font-mono">
               <div className="flex justify-between items-center p-2 bg-[var(--bg-card-2)] rounded-lg">
                 <span className="text-muted-foreground">Admin</span>
-                <span className="text-foreground">admin@lvcourier.ca / admin123</span>
+                <span className="text-foreground">admin@lvcourier.ca / lvcourier2026</span>
               </div>
               <div className="flex justify-between items-center p-2 bg-[var(--bg-card-2)] rounded-lg">
                 <span className="text-muted-foreground">Driver</span>
-                <span className="text-foreground">marcus@lvcourier.ca / driver123</span>
+                <span className="text-foreground">marcus@lvcourier.ca / lvcourier2026</span>
               </div>
               <div className="flex justify-between items-center p-2 bg-[var(--bg-card-2)] rounded-lg">
                 <span className="text-muted-foreground">Business</span>
-                <span className="text-foreground">freshmart@lvcourier.ca / business123</span>
+                <span className="text-foreground">freshmart@lvcourier.ca / lvcourier2026</span>
               </div>
             </div>
           </CardContent>
