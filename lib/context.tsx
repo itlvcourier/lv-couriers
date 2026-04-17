@@ -305,16 +305,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const supabase = createSupabaseClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('[v0] signInWithPassword:', { userId: data?.user?.id, email: data?.user?.email, error: error?.message })
     if (error || !data.user) {
       return { success: false, error: 'Incorrect email or password. Please try again.' }
     }
-    const { data: profile } = await supabase
+    // Re-fetch the session so any internal auth-state hydration has completed
+    // before we issue the profile query. Without this there's a brief window
+    // where the JWT isn't yet attached to subsequent REST requests.
+    const { data: sessionData } = await supabase.auth.getSession()
+    console.log('[v0] session after signIn:', {
+      hasSession: !!sessionData.session,
+      accessTokenUserId: sessionData.session?.user?.id,
+    })
+    const { data: profile, error: profileErr } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', data.user.id)
       .maybeSingle()
+    console.log('[v0] profile lookup:', { profile, profileErr: profileErr?.message, code: profileErr?.code, details: profileErr?.details })
     if (!profile) {
-      return { success: false, error: 'No profile found for this account. Contact admin.' }
+      return { success: false, error: `No profile found for this account. ${profileErr?.message || 'Contact admin.'}` }
     }
     const user: MockUser = {
       email: profile.email,
