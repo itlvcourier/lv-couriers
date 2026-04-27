@@ -1,25 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { sendSms } from '@/lib/twilio'
 
 /**
  * Send a "your package is on its way" SMS to the recipient.
  * Triggered when a driver advances a delivery to en_route_dropoff.
  *
- * Auth: any authenticated profile may trigger (driver/business/admin) – the
- * delivery itself is the authority. Server-only validation prevents abuse:
+ * Auth: matches the rest of the app's demo-mode posture — the delivery row
+ * itself is the authority. Server-only validation prevents abuse:
  * - Delivery must exist
  * - Status must be 'en_route_dropoff' (we won't blast SMS for other states)
  * - Recipient phone must be present
  */
 export async function POST(req: Request) {
-  const userClient = await createServerClient()
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -53,6 +46,11 @@ export async function POST(req: Request) {
       { status: 404 },
     )
   }
+  console.log('[v0] sms.pickup-ready loaded', {
+    deliveryId,
+    status: delivery.status,
+    hasRecipientPhone: !!delivery.recipient_phone,
+  })
   if (delivery.status !== 'en_route_dropoff') {
     return NextResponse.json({
       ok: false,

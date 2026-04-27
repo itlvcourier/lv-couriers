@@ -1,31 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { sendSms } from '@/lib/twilio'
 
 /**
  * Broadcast a "new job available" SMS to every on-duty driver.
  * Called from the business client right after a delivery is posted.
  *
- * Auth: must be called by an authenticated business or admin profile.
- * RLS-safe lookups use the admin client because we need to read driver phones
- * regardless of the caller's role.
+ * Auth: matches the rest of the app's demo-mode posture — server-side
+ * validation is the gate (delivery must exist and be in 'posted' state).
+ * RLS-safe lookups use the admin client because we need to read driver
+ * phones regardless of the caller's role.
  */
 export async function POST(req: Request) {
-  const userClient = await createServerClient()
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const { data: profile } = await userClient
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle<{ role: string }>()
-  if (!profile || (profile.role !== 'business' && profile.role !== 'admin')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -78,6 +64,11 @@ export async function POST(req: Request) {
   }
 
   const recipients = (drivers || []).filter(d => !!d.phone)
+  console.log('[v0] sms.job-alert candidates', {
+    deliveryId,
+    totalActiveDrivers: drivers?.length ?? 0,
+    withPhone: recipients.length,
+  })
   if (recipients.length === 0) {
     return NextResponse.json({ ok: true, sent: 0, failed: 0, note: 'no on-duty drivers' })
   }

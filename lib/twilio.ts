@@ -112,6 +112,14 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
 
   const client = getClient()
   const sender = getSender()
+  console.log('[v0] sms.send', {
+    type: input.type,
+    to: intendedTo,
+    redirected: redirect,
+    finalTo,
+    hasClient: !!client,
+    hasSender: !!sender,
+  })
 
   if (!client || !sender) {
     console.log('[v0] sms.disabled missing TWILIO env — would have sent:', {
