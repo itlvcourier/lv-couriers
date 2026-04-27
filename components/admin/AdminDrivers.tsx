@@ -108,11 +108,17 @@ export function AdminDrivers() {
       setForm({ name: '', email: '', phone: '' })
       setShowAddSheet(false)
 
-      if (data.emailSent) {
-        toast.success(`Welcome email sent to ${data.email}`)
+      const channels: string[] = []
+      if (data.emailSent) channels.push('email')
+      if (data.smsSent) channels.push('SMS')
+
+      if (channels.length > 0) {
+        toast.success(
+          `Driver created. Welcome ${channels.join(' + ')} sent to ${data.email}`,
+        )
       } else {
         toast.warning(
-          `Driver created, but email failed. Temp password: ${data.tempPassword}`,
+          `Driver created, but email and SMS both failed. Temp password: ${data.tempPassword}`,
           { duration: 15000 },
         )
       }

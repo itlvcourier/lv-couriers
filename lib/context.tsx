@@ -509,7 +509,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         picked_up: 'en_route_dropoff',
       }
       const next = nextStatusMap[current.status]
-      if (next) persist(updateDeliveryFields(deliveryId, { status: next }), 'advanceStatus')
+      if (next) {
+        persist(updateDeliveryFields(deliveryId, { status: next }), 'advanceStatus')
+        // When the package starts heading to the recipient, SMS them.
+        if (next === 'en_route_dropoff') {
+          void fetch('/api/sms/pickup-ready', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deliveryId }),
+          }).catch(err => console.error('[v0] pickup-ready SMS failed', err))
+        }
+      }
     }
 
     setDeliveries(prev => prev.map(d => {
@@ -766,6 +776,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const bName = businesses.find(b => b.id === saved.businessId)?.name || ''
           return [{ ...saved, businessName: bName }, ...withoutDupe]
         })
+        // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
+        void fetch('/api/sms/job-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deliveryId: saved.id }),
+        }).catch(err => console.error('[v0] job-alert SMS failed', err))
       }),
       'postDelivery',
     )

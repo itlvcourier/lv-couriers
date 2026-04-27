@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { driverWelcomeEmail } from '@/lib/email-templates'
+import { sendSms } from '@/lib/twilio'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -111,21 +112,38 @@ export async function POST(req: NextRequest) {
   const loginUrl = `${origin.replace(/\/$/, '')}/login`
 
   const tpl = driverWelcomeEmail({ name, email, tempPassword, loginUrl })
-  const result = await sendEmail({
-    to: email,
-    subject: tpl.subject,
-    html: tpl.html,
-    text: tpl.text,
-    tag: 'driver.welcome',
-  })
+
+  // Email + SMS in parallel. SMS is best-effort: skip-logged because the
+  // sms_type enum has no "invite" value and the message isn't delivery-bound.
+  const smsBody = `Welcome to Lv Couriers, ${name}. Sign in at ${loginUrl} with email ${email} and temp password: ${tempPassword}. Please change it on first sign-in.`
+  const [emailResult, smsResult] = await Promise.all([
+    sendEmail({
+      to: email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      tag: 'driver.welcome',
+    }),
+    phone
+      ? sendSms({
+          to: phone,
+          body: smsBody,
+          type: 'pickup_alert', // unused since skipLog is true
+          skipLog: true,
+        })
+      : Promise.resolve({ ok: false as const, reason: 'No phone provided', logged: false }),
+  ])
 
   return NextResponse.json({
     ok: true,
     driverId: authId,
     email,
-    emailSent: result.ok,
-    emailError: result.ok ? undefined : result.reason,
-    // Temp password returned so admin can share it out-of-band if email fails.
+    phone,
+    emailSent: emailResult.ok,
+    emailError: emailResult.ok ? undefined : emailResult.reason,
+    smsSent: smsResult.ok,
+    smsError: smsResult.ok ? undefined : smsResult.reason,
+    // Temp password returned so admin can share it out-of-band if email/SMS fails.
     // It's NOT logged anywhere server-side.
     tempPassword,
   })
