@@ -53,10 +53,12 @@ export async function POST(req: Request) {
   }
 
   // Pull phone numbers for every active driver currently on-duty.
+  // driver_status enum is: available | on_delivery | off_duty
+  // We broadcast to everyone except off_duty so on-delivery drivers also see queued work.
   const { data: drivers, error: drvErr } = await supabase
     .from('drivers')
     .select('id, name, phone, status')
-    .in('status', ['idle', 'on_delivery'])
+    .in('status', ['available', 'on_delivery'])
     .eq('invite_status', 'active')
 
   if (drvErr) {
