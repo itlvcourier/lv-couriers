@@ -63,9 +63,11 @@ export async function POST(req: Request) {
 
   const businessName = delivery.businesses?.name || 'Lv Couriers'
   const recipientName = delivery.recipient_name || 'there'
+  const trackingUrl = buildTrackingUrl(deliveryId)
   const message =
     `Hi ${recipientName}, your package from ${businessName} is on its way. ` +
-    `We'll be at ${delivery.dropoff_address || 'your address'} shortly.`
+    `We'll be at ${delivery.dropoff_address || 'your address'} shortly. ` +
+    `Track live: ${trackingUrl}`
 
   const r = await sendSms({
     to: delivery.recipient_phone,
@@ -78,4 +80,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, reason: r.reason }, { status: 502 })
   }
   return NextResponse.json({ ok: true, sid: r.sid, redirected: r.redirected })
+}
+
+function buildTrackingUrl(deliveryId: string): string {
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    'http://localhost:3000'
+  const normalized = base.startsWith('http') ? base : `https://${base}`
+  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
 }

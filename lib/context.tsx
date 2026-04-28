@@ -572,6 +572,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }),
       'completeDelivery',
     )
+    // Fire-and-forget: notify the recipient that the package was delivered.
+    void fetch('/api/sms/delivered', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId }),
+    }).catch(err => console.error('[v0] delivered SMS failed', err))
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
       persist(
