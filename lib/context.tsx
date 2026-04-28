@@ -124,7 +124,12 @@ interface AppContextType {
   claimDelivery: (deliveryId: string, driverId: string) => void
   verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => void
   advanceStatus: (deliveryId: string) => void
-  completeDelivery: (deliveryId: string, photoUrl: string, recipientNote: string | null) => void
+  completeDelivery: (
+    deliveryId: string,
+    photoUrl: string,
+    recipientNote: string | null,
+    signatureUrl?: string | null,
+  ) => void
   failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => void
   flagDelivery: (deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => void
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
@@ -557,7 +562,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [deliveries])
 
-  const completeDelivery = useCallback((deliveryId: string, photoUrl: string, recipientNote: string | null) => {
+  const completeDelivery = useCallback((
+    deliveryId: string,
+    photoUrl: string,
+    recipientNote: string | null,
+    signatureUrl?: string | null,
+  ) => {
     const delivery = deliveries.find(d => d.id === deliveryId)
     const now = new Date()
     const pickedUpAt = delivery?.pickedUpAt ? new Date(delivery.pickedUpAt) : null
@@ -568,11 +578,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         delivered_at: now.toISOString(),
         duration_mins: durationMins,
         proof_photo_url: photoUrl,
+        signature_url: signatureUrl ?? null,
         recipient_note: recipientNote,
       }),
       'completeDelivery',
     )
-    // Fire-and-forget: notify the recipient that the package was delivered.
+    // Fire-and-forget: notify both the recipient and the business that the
+    // package was delivered. Both link to /track/<id> which renders the proof
+    // photo + signature so each side has a verifiable record.
     void fetch('/api/sms/delivered', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -769,6 +782,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isRush: data.isRush ?? false,
         isUrgent: data.isUrgent ?? false,
         isOutOfTown: data.isOutOfTown ?? false,
+        requireSignature: data.requireSignature ?? false,
+        requirePhoto: data.requirePhoto ?? true,
         manifest: (data.manifest || []).map(m => ({
           type: m.type,
           quantity: m.postedQty,

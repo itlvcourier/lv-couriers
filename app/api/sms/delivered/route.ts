@@ -56,29 +56,69 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, reason: 'No recipient phone on file' })
   }
 
-  // Look up business name for friendlier copy.
+  // Look up business name + phone so we can also notify them.
   let businessName = 'LV Courier'
+  let businessPhone: string | null = null
   if (delivery.business_id) {
     const { data: biz } = await supabase
       .from('businesses')
-      .select('name')
+      .select('name, phone')
       .eq('id', delivery.business_id)
-      .maybeSingle<{ name: string }>()
+      .maybeSingle<{ name: string; phone: string | null }>()
     if (biz?.name) businessName = biz.name
+    if (biz?.phone) businessPhone = biz.phone
   }
 
-  const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}, your` : 'Your'
+  if (!delivery.recipient_phone && !businessPhone) {
+    return NextResponse.json({ ok: false, reason: 'No recipient or business phone' })
+  }
+
   const trackingUrl = buildTrackingUrl(deliveryId)
-  const body_ = `${greeting} package from ${businessName} has been delivered. View proof: ${trackingUrl}\n\n— LV Couriers`
+  const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}, your` : 'Your'
 
-  const result = await sendSms({
-    to: delivery.recipient_phone,
-    body: body_,
-    type: 'delivery_confirm',
-    deliveryId,
-  })
+  // Send to recipient + business in parallel. Both get the same tracking link
+  // which renders the proof photo and signature so each side has a verifiable
+  // record of completion.
+  const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
 
-  return NextResponse.json({ ok: result.ok, reason: result.ok ? undefined : result.reason })
+  if (delivery.recipient_phone) {
+    const recipMsg = `${greeting} package from ${businessName} has been delivered. View proof: ${trackingUrl}\n\n— LV Couriers`
+    sends.push(
+      sendSms({
+        to: delivery.recipient_phone,
+        body: recipMsg,
+        type: 'delivery_confirm',
+        deliveryId,
+      }).then(r => ({
+        ok: r.ok,
+        reason: r.ok ? undefined : r.reason,
+        role: 'recipient',
+      })),
+    )
+  }
+
+  if (businessPhone) {
+    const recipientLabel = delivery.recipient_name || 'recipient'
+    const bizMsg =
+      `Delivery to ${recipientLabel} completed. ` +
+      `View proof of delivery (photo + signature): ${trackingUrl}\n\n— LV Couriers`
+    sends.push(
+      sendSms({
+        to: businessPhone,
+        body: bizMsg,
+        type: 'delivery_confirm',
+        deliveryId,
+      }).then(r => ({
+        ok: r.ok,
+        reason: r.ok ? undefined : r.reason,
+        role: 'business',
+      })),
+    )
+  }
+
+  const results = await Promise.all(sends)
+  console.log('[v0] sms.delivered results', results)
+  return NextResponse.json({ ok: true, results })
 }
 
 function buildTrackingUrl(deliveryId: string): string {

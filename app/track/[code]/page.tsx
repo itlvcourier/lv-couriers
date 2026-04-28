@@ -36,6 +36,8 @@ interface TrackedDelivery {
   posted_at: string | null
   claimed_at: string | null
   proof_photo_url: string | null
+  signature_url: string | null
+  recipient_note: string | null
   business: { name: string } | null
   driver: { name: string } | null
 }
@@ -64,6 +66,7 @@ export default function TrackingPage() {
         .select(
           `id, status, recipient_name, dropoff_address, delivered_at,
            picked_up_at, posted_at, claimed_at, proof_photo_url,
+           signature_url, recipient_note,
            business:businesses(name), driver:drivers(name)`,
         )
         .eq('id', code)
@@ -199,16 +202,50 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Proof photo when delivered */}
-        {isDelivered && delivery.proof_photo_url && (
-          <Card className="p-3 mb-6">
-            <p className="text-sm font-medium mb-2">Proof of delivery</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={delivery.proof_photo_url || '/placeholder.svg'}
-              alt="Proof of delivery"
-              className="w-full rounded-md object-cover max-h-[400px]"
-            />
+        {/* Proof of delivery: photo, signature, and recipient note. */}
+        {isDelivered &&
+          (delivery.proof_photo_url ||
+            delivery.signature_url ||
+            delivery.recipient_note) && (
+          <Card className="p-4 mb-6 space-y-4">
+            <p className="text-sm font-medium">Proof of delivery</p>
+
+            {delivery.proof_photo_url && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Photo</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={delivery.proof_photo_url || '/placeholder.svg'}
+                  alt="Proof of delivery"
+                  className="w-full rounded-md object-cover max-h-[400px]"
+                />
+              </div>
+            )}
+
+            {delivery.signature_url && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Recipient signature
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={delivery.signature_url}
+                  alt="Recipient signature"
+                  className="w-full rounded-md bg-white border border-border p-2 max-h-[180px] object-contain"
+                />
+              </div>
+            )}
+
+            {delivery.recipient_note && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Recipient note
+                </p>
+                <p className="text-sm leading-relaxed">
+                  {delivery.recipient_note}
+                </p>
+              </div>
+            )}
           </Card>
         )}
 

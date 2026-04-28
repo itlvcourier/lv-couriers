@@ -174,7 +174,10 @@ export function mapDeliveryRow(row: Row): Delivery {
     durationMins,
     duration: durationMins != null ? `${durationMins}m` : null,
     proofPhotoUrl: (row.proof_photo_url as string | null) ?? null,
+    signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
+    requireSignature: !!(row.require_signature as boolean | null),
+    requirePhoto: (row.require_photo as boolean | null) ?? true,
     trackingCode: (row.tracking_code as string | null) ?? null,
     trackingExpiresAt: (row.tracking_expires_at as string | null) ?? null,
     cancelledAt: (row.cancelled_at as string | null) ?? null,
@@ -360,6 +363,8 @@ export async function createDeliveryInDb(input: {
   isRush: boolean
   isOutOfTown: boolean
   isUrgent?: boolean
+  requireSignature?: boolean
+  requirePhoto?: boolean
   manifest: Array<{ type: ManifestItem['type']; quantity: number; notes?: string }>
 }): Promise<Delivery> {
   const supabase = createClient()
@@ -382,6 +387,8 @@ export async function createDeliveryInDb(input: {
       is_rush: input.isRush,
       is_urgent: input.isUrgent ?? input.isRush,
       is_out_of_town: input.isOutOfTown,
+      require_signature: input.requireSignature ?? false,
+      require_photo: input.requirePhoto ?? true,
       posted_at: new Date().toISOString(),
       retry_count: 0,
     })

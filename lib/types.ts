@@ -160,7 +160,11 @@ export interface Delivery {
   durationMins?: number | null
   duration: string | null // Formatted for display
   proofPhotoUrl: string | null
+  signatureUrl: string | null
   recipientNote: string | null
+  // Capture requirements set by the business at order creation time.
+  requireSignature?: boolean
+  requirePhoto?: boolean
   // Tracking
   trackingCode: string | null
   trackingExpiresAt?: string | null

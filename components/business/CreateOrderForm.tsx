@@ -273,6 +273,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       manifest,
       isUrgent: form.isRush,
       isOutOfTown: form.isOutOfTown,
+      requireSignature: form.requireSignature,
+      requirePhoto: form.requirePhoto,
     })
 
     resetForm()

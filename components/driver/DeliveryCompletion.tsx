@@ -6,8 +6,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { X, Camera, CheckCircle } from 'lucide-react'
+import { X, Camera, CheckCircle, PenLine } from 'lucide-react'
 import type { Delivery } from '@/lib/types'
+import { SignaturePad } from '@/components/shared/SignaturePad'
 
 interface DeliveryCompletionProps {
   delivery: Delivery
@@ -17,7 +18,12 @@ interface DeliveryCompletionProps {
 export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProps) {
   const { completeDelivery } = useApp()
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
   const [recipientNote, setRecipientNote] = useState('')
+
+  // The business set this flag at order creation; we only require a signature
+  // when they explicitly asked for one.
+  const requiresSignature = !!delivery.requireSignature
 
   const handlePhotoCapture = () => {
     // Simulate photo capture - in real app would use camera API
@@ -31,24 +37,33 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
       toast.error('Please take a proof of delivery photo')
       return
     }
+    if (requiresSignature && !signatureDataUrl) {
+      toast.error('A recipient signature is required for this delivery')
+      return
+    }
 
-    completeDelivery(delivery.id, photoUrl, recipientNote || null)
+    completeDelivery(delivery.id, photoUrl, recipientNote || null, signatureDataUrl)
     toast.success('Delivery completed!')
     onClose()
   }
 
   return (
     <Sheet open onOpenChange={onClose}>
-      <SheetContent side="bottom" className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl">
+      <SheetContent
+        side="bottom"
+        className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl max-h-[92vh] overflow-y-auto"
+      >
         <SheetHeader className="mb-6">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-foreground">Complete Delivery</SheetTitle>
-            <button onClick={onClose} className="tap-target">
+            <button onClick={onClose} className="tap-target" aria-label="Close">
               <X className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
           <p className="text-sm text-muted-foreground">
-            Take a proof of delivery photo
+            {requiresSignature
+              ? 'Capture a proof photo and recipient signature'
+              : 'Take a proof of delivery photo'}
           </p>
         </SheetHeader>
 
@@ -60,8 +75,8 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
             </label>
             {photoUrl ? (
               <div className="relative">
-                <img 
-                  src={photoUrl} 
+                <img
+                  src={photoUrl}
                   alt="Proof of delivery"
                   className="w-full h-48 object-cover rounded-xl"
                 />
@@ -88,6 +103,17 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
             )}
           </div>
 
+          {/* Signature (only when business required it) */}
+          {requiresSignature && (
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                <PenLine className="w-4 h-4" />
+                Recipient Signature *
+              </label>
+              <SignaturePad onChange={setSignatureDataUrl} />
+            </div>
+          )}
+
           {/* Recipient note */}
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">
@@ -105,7 +131,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
           {/* Complete button */}
           <Button
             onClick={handleComplete}
-            disabled={!photoUrl}
+            disabled={!photoUrl || (requiresSignature && !signatureDataUrl)}
             className="w-full h-12 rounded-xl tap-target bg-[var(--accent-green)] hover:bg-[var(--accent-green)]/90 text-white font-medium disabled:opacity-50"
           >
             <CheckCircle className="w-5 h-5 mr-2" />
