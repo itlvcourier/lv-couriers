@@ -35,11 +35,12 @@ interface TrackedDelivery {
   picked_up_at: string | null
   posted_at: string | null
   claimed_at: string | null
+  en_route_dropoff_at: string | null
   proof_photo_url: string | null
   signature_url: string | null
   recipient_note: string | null
   business: { name: string } | null
-  driver: { name: string } | null
+  driver: { name: string; phone: string | null } | null
 }
 
 interface StatusStep {
@@ -59,15 +60,16 @@ export default function TrackingPage() {
 
   useEffect(() => {
     let cancelled = false
+    const supabase = createClient()
+
     const load = async () => {
-      const supabase = createClient()
       const { data, error } = await supabase
         .from('deliveries')
         .select(
           `id, status, recipient_name, dropoff_address, delivered_at,
-           picked_up_at, posted_at, claimed_at, proof_photo_url,
-           signature_url, recipient_note,
-           business:businesses(name), driver:drivers(name)`,
+           picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
+           proof_photo_url, signature_url, recipient_note,
+           business:businesses(name), driver:drivers(name, phone)`,
         )
         .eq('id', code)
         .maybeSingle()
@@ -84,12 +86,32 @@ export default function TrackingPage() {
 
     void load()
 
-    // Light-touch refresh every 30s while the page is open so the recipient
-    // sees status changes without manually refreshing.
+    // Subscribe to real-time updates on this specific delivery
+    const channel = supabase
+      .channel(`delivery-track-${code}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'deliveries',
+          filter: `id=eq.${code}`,
+        },
+        (payload: unknown) => {
+          if (cancelled) return
+          // Reload full delivery with joins when status changes
+          void load()
+        },
+      )
+      .subscribe()
+
+    // Fallback polling every 30s in case realtime connection drops
     const interval = setInterval(load, 30000)
+
     return () => {
       cancelled = true
       clearInterval(interval)
+      void supabase.removeChannel(channel)
     }
   }, [code])
 
@@ -309,23 +331,34 @@ export default function TrackingPage() {
           </div>
         </Card>
 
-        {/* Driver strip */}
+        {/* Driver strip with call option */}
         {!isDelivered && delivery.driver?.name && (
           <Card className="p-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Truck className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium">
-                  Your driver: {delivery.driver.name}
-                </p>
-                {delivery.business?.name && (
-                  <p className="text-sm text-muted-foreground">
-                    From {delivery.business.name}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Truck className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium">
+                    Your driver: {delivery.driver.name}
                   </p>
-                )}
+                  {delivery.business?.name && (
+                    <p className="text-sm text-muted-foreground">
+                      From {delivery.business.name}
+                    </p>
+                  )}
+                </div>
               </div>
+              {delivery.driver.phone && (
+                <a
+                  href={`tel:${delivery.driver.phone.replace(/[^\d+]/g, '')}`}
+                  className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+                  aria-label={`Call driver ${delivery.driver.name}`}
+                >
+                  <Phone className="w-5 h-5 text-primary" />
+                </a>
+              )}
             </div>
           </Card>
         )}
@@ -382,7 +415,7 @@ function buildStatusSteps(d: TrackedDelivery): StatusStep[] {
     { id: 'placed', label: 'Order placed', ts: d.posted_at },
     { id: 'assigned', label: 'Driver assigned', ts: d.claimed_at },
     { id: 'picked_up', label: 'Picked up', ts: d.picked_up_at },
-    { id: 'on_the_way', label: 'On the way', ts: null },
+    { id: 'on_the_way', label: 'On the way', ts: d.en_route_dropoff_at },
     { id: 'delivered', label: 'Delivered', ts: d.delivered_at },
   ]
 

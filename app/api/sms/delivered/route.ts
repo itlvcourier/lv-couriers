@@ -44,6 +44,7 @@ export async function POST(req: Request) {
     deliveryId,
     status: delivery.status,
     hasRecipientPhone: !!delivery.recipient_phone,
+    businessId: delivery.business_id,
   })
 
   if (delivery.status !== 'delivered') {
@@ -51,9 +52,6 @@ export async function POST(req: Request) {
       ok: false,
       reason: `Delivery status is ${delivery.status}`,
     })
-  }
-  if (!delivery.recipient_phone) {
-    return NextResponse.json({ ok: false, reason: 'No recipient phone on file' })
   }
 
   // Look up business name + phone so we can also notify them.
@@ -67,8 +65,14 @@ export async function POST(req: Request) {
       .maybeSingle<{ name: string; phone: string | null }>()
     if (biz?.name) businessName = biz.name
     if (biz?.phone) businessPhone = biz.phone
+    console.log('[v0] sms.delivered business lookup', {
+      businessId: delivery.business_id,
+      businessName,
+      businessPhone,
+    })
   }
 
+  // At least one phone must be present
   if (!delivery.recipient_phone && !businessPhone) {
     return NextResponse.json({ ok: false, reason: 'No recipient or business phone' })
   }

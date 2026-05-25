@@ -445,6 +445,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
+
+    // Fire-and-forget: notify driver with job details + notify business that driver assigned
+    void fetch('/api/sms/driver-assigned', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId, driverId }),
+    }).catch(err => console.error('[v0] driver-assigned SMS failed', err))
   }, [drivers])
 
   const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
@@ -515,7 +522,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const next = nextStatusMap[current.status]
       if (next) {
-        persist(updateDeliveryFields(deliveryId, { status: next }), 'advanceStatus')
+        // Build the update payload — add timestamp for en_route_dropoff
+        const updateFields: Record<string, unknown> = { status: next }
+        if (next === 'en_route_dropoff') {
+          updateFields.en_route_dropoff_at = new Date().toISOString()
+        }
+        persist(updateDeliveryFields(deliveryId, updateFields), 'advanceStatus')
         // When the package starts heading to the recipient, SMS them.
         if (next === 'en_route_dropoff') {
           void fetch('/api/sms/pickup-ready', {
@@ -803,6 +815,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deliveryId: saved.id }),
         }).catch(err => console.error('[v0] job-alert SMS failed', err))
+
+        // Fire-and-forget: confirm order to business + send tracking to recipient
+        void fetch('/api/sms/order-confirmed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deliveryId: saved.id }),
+        }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
       }),
       'postDelivery',
     )
