@@ -22,6 +22,15 @@ export type SmsType =
   | 'failed_attempt'
   | 'invoice_reminder'
   | 'overdue_notice'
+  | 'en_route_pickup'
+  | 'picked_up_confirm'
+  | 'order_cancelled'
+  | 'driver_reassigned'
+  | 'feedback_request'
+  | 'invoice_ready'
+  | 'payment_received'
+  | 'weekly_summary'
+  | 'opt_out_confirm'
 
 export type SendSmsInput = {
   to: string
@@ -31,12 +40,19 @@ export type SendSmsInput = {
   deliveryId?: string | null
   /** Optional FK – persisted so we can correlate SMS to the invoice. */
   invoiceId?: string | null
+  /** Optional FK – persisted so we can correlate SMS to the driver. */
+  driverId?: string | null
   /**
    * When true, the send is NOT recorded in public.sms_log. Use for
    * non-delivery messages such as driver invites, where the sms_type enum
    * doesn't have a fitting value.
    */
   skipLog?: boolean
+  /**
+   * When true, the opt-out check is skipped. Use for opt-out confirmation
+   * messages themselves (STOP reply confirmations).
+   */
+  skipOptOutCheck?: boolean
 }
 
 export type SendSmsResult =
@@ -78,12 +94,14 @@ async function recordSms(opts: {
   errorMessage: string | null
   deliveryId: string | null
   invoiceId: string | null
+  driverId: string | null
 }) {
   try {
     const supabase = createAdminClient()
     await supabase.from('sms_log').insert({
       delivery_id: opts.deliveryId,
       invoice_id: opts.invoiceId,
+      driver_id: opts.driverId,
       recipient_phone: opts.to,
       sms_type: opts.type,
       message_body: opts.body,
@@ -101,6 +119,23 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
   const intendedTo = normalize(input.to)
   if (!intendedTo) {
     return { ok: false, reason: 'Invalid phone number', logged: false }
+  }
+
+  // Opt-out check: skip sending to numbers that have replied STOP
+  if (!input.skipOptOutCheck) {
+    try {
+      const supabase = createAdminClient()
+      const { data: optOut } = await supabase
+        .from('sms_opt_outs')
+        .select('is_opted_out')
+        .eq('phone', intendedTo)
+        .maybeSingle()
+      if (optOut?.is_opted_out) {
+        return { ok: false, reason: 'Phone opted out', logged: false }
+      }
+    } catch {
+      // Non-fatal: if opt-out check fails, proceed with send
+    }
   }
 
   const testRecipient = process.env.SMS_TEST_RECIPIENT?.trim()
@@ -138,6 +173,7 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
         errorMessage: null,
         deliveryId: input.deliveryId ?? null,
         invoiceId: input.invoiceId ?? null,
+        driverId: input.driverId ?? null,
       })
     }
     return { ok: true, sid: 'dev-stub', redirected: redirect }
@@ -159,6 +195,7 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
         errorMessage: null,
         deliveryId: input.deliveryId ?? null,
         invoiceId: input.invoiceId ?? null,
+        driverId: input.driverId ?? null,
       })
     }
     return { ok: true, sid: message.sid, redirected: redirect }
@@ -174,8 +211,45 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
         errorMessage: reason,
         deliveryId: input.deliveryId ?? null,
         invoiceId: input.invoiceId ?? null,
+        driverId: input.driverId ?? null,
       })
     }
     return { ok: false, reason, logged: !input.skipLog }
   }
+}
+
+/**
+ * Mark a phone number as opted-out (STOP) or back in (UNSTOP / START).
+ */
+export async function setOptOut(phone: string, optedOut: boolean): Promise<void> {
+  const normalized = phone.replace(/[^\d+]/g, '')
+  const e164 = normalized.startsWith('+')
+    ? normalized
+    : normalized.length === 10
+    ? `+1${normalized}`
+    : normalized.length === 11 && normalized.startsWith('1')
+    ? `+${normalized}`
+    : normalized
+
+  const supabase = createAdminClient()
+  await supabase.from('sms_opt_outs').upsert(
+    {
+      phone: e164,
+      is_opted_out: optedOut,
+      ...(optedOut ? { opted_out_at: new Date().toISOString() } : { opted_in_at: new Date().toISOString() }),
+    },
+    { onConflict: 'phone' },
+  )
+}
+
+/**
+ * Build a public tracking URL for a delivery.
+ */
+export function buildTrackingUrl(deliveryId: string): string {
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    'http://localhost:3000'
+  const normalized = base.startsWith('http') ? base : `https://${base}`
+  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
 }

@@ -215,7 +215,20 @@ export interface SystemSettings {
   sendReminderSms: boolean
   cancellationBeforeDepart: number
   cancellationEnRoute: number
-  }
+  // SMS feature toggles
+  smsNotifyEnRoutePickup: boolean
+  smsNotifyPickedUp: boolean
+  smsNotifyFailedAttempt: boolean
+  smsNotifyCancelled: boolean
+  smsNotifyReassigned: boolean
+  smsNotifyFeedbackRequest: boolean
+  smsNotifyInvoiceReady: boolean
+  smsNotifyPaymentReceived: boolean
+  smsNotifyWeeklySummary: boolean
+  smsOptOutManagement: boolean
+  smsShiftReminder: boolean
+  smsEarningsSummary: boolean
+}
 
 export interface Notification {
   id: string

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms } from '@/lib/twilio'
+import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
 /**
  * Send a "your package has been delivered" SMS to the recipient.
@@ -123,13 +123,4 @@ export async function POST(req: Request) {
   const results = await Promise.all(sends)
   console.log('[v0] sms.delivered results', results)
   return NextResponse.json({ ok: true, results })
-}
-
-function buildTrackingUrl(deliveryId: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    'http://localhost:3000'
-  const normalized = base.startsWith('http') ? base : `https://${base}`
-  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
 }

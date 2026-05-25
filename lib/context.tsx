@@ -85,6 +85,19 @@ const DEFAULT_SETTINGS: SystemSettings = {
   sendReminderSms: false,
   cancellationBeforeDepart: 0,
   cancellationEnRoute: 5,
+  // SMS feature toggles – defaults match the DB column defaults
+  smsNotifyEnRoutePickup: true,
+  smsNotifyPickedUp: true,
+  smsNotifyFailedAttempt: true,
+  smsNotifyCancelled: true,
+  smsNotifyReassigned: true,
+  smsNotifyFeedbackRequest: true,
+  smsNotifyInvoiceReady: true,
+  smsNotifyPaymentReceived: true,
+  smsNotifyWeeklySummary: false,
+  smsOptOutManagement: true,
+  smsShiftReminder: false,
+  smsEarningsSummary: false,
 }
 
 // Fire-and-forget DB persistence. Logs errors so we can diagnose without
@@ -528,6 +541,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           updateFields.en_route_dropoff_at = new Date().toISOString()
         }
         persist(updateDeliveryFields(deliveryId, updateFields), 'advanceStatus')
+        // When driver heads to pickup — notify business
+        if (next === 'en_route_pickup') {
+          void fetch('/api/sms/en-route-pickup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deliveryId }),
+          }).catch(err => console.error('[v0] en-route-pickup SMS failed', err))
+        }
+        // When package is picked up — notify business
+        if (next === 'picked_up') {
+          void fetch('/api/sms/picked-up', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deliveryId }),
+          }).catch(err => console.error('[v0] picked-up SMS failed', err))
+        }
         // When the package starts heading to the recipient, SMS them.
         if (next === 'en_route_dropoff') {
           void fetch('/api/sms/pickup-ready', {
@@ -603,6 +632,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId }),
     }).catch(err => console.error('[v0] delivered SMS failed', err))
+    // Fire-and-forget: send feedback request to recipient 30 minutes after delivery
+    setTimeout(() => {
+      void fetch('/api/sms/feedback-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId }),
+      }).catch(err => console.error('[v0] feedback-request SMS failed', err))
+    }, 30 * 60 * 1000)
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
       persist(
@@ -668,6 +705,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       insertFailureAndFinalize(deliveryId, reason, notes, retriesSoFar + 1 >= 3),
       'failDelivery',
     )
+    // Fire-and-forget: notify recipient and business of failed attempt
+    void fetch('/api/sms/failed-attempt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId, retryCount: retriesSoFar + 1 }),
+    }).catch(err => console.error('[v0] failed-attempt SMS failed', err))
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
@@ -830,6 +873,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reassignDriver = useCallback((deliveryId: string, newDriverId: string) => {
     const newDriver = drivers.find(d => d.id === newDriverId)
     if (!newDriver) return
+    const currentDelivery = deliveries.find(d => d.id === deliveryId)
+    const oldDriverId = currentDelivery?.driverId ?? null
 
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
@@ -851,6 +896,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
+    // Fire-and-forget: notify new driver, old driver (if any), and business
+    void fetch('/api/sms/reassigned', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId, newDriverId, oldDriverId }),
+    }).catch(err => console.error('[v0] reassigned SMS failed', err))
   }, [drivers])
 
   // Business-initiated cancel: only allowed before a driver has claimed the job.
@@ -881,6 +932,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
         'cancelOrderByBusiness',
       )
+      // Fire-and-forget: notify all parties of cancellation
+      void fetch('/api/sms/cancelled', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId }),
+      }).catch(err => console.error('[v0] cancelled SMS failed', err))
       setDeliveries(prev =>
         prev.map(d =>
           d.id === deliveryId
@@ -1315,6 +1372,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return inv
     }))
+    // Fire-and-forget: SMS billing contact that payment was received
+    void fetch('/api/sms/payment-received', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId }),
+    }).catch(err => console.error('[v0] payment-received SMS failed', err))
   }, [])
 
   // ===== Invoice sending & reminder controls =====
@@ -1386,6 +1449,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoiceId, backupEmail: opts?.backupEmail }),
     }).catch(err => console.error('[v0] invoice-sent email failed', err))
+
+    // Fire-and-forget: SMS the billing contact that their invoice is ready
+    void fetch('/api/sms/invoice-ready', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId }),
+    }).catch(err => console.error('[v0] invoice-ready SMS failed', err))
 
     return { ok: true }
   }, [invoices, settings, computeScheduledEvents])

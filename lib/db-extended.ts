@@ -211,6 +211,19 @@ export function mapSettingsRow(row: Row): SystemSettings {
     sendReminderSms: !!row.send_reminder_sms,
     cancellationBeforeDepart: (row.cancel_fee_before_depart as number) ?? 0,
     cancellationEnRoute: (row.cancel_fee_en_route as number) ?? 5,
+    // SMS feature toggles
+    smsNotifyEnRoutePickup: row.sms_notify_en_route_pickup !== false,
+    smsNotifyPickedUp: row.sms_notify_picked_up !== false,
+    smsNotifyFailedAttempt: row.sms_notify_failed_attempt !== false,
+    smsNotifyCancelled: row.sms_notify_cancelled !== false,
+    smsNotifyReassigned: row.sms_notify_reassigned !== false,
+    smsNotifyFeedbackRequest: row.sms_notify_feedback_request !== false,
+    smsNotifyInvoiceReady: row.sms_notify_invoice_ready !== false,
+    smsNotifyPaymentReceived: row.sms_notify_payment_received !== false,
+    smsNotifyWeeklySummary: !!row.sms_notify_weekly_summary,
+    smsOptOutManagement: row.sms_opt_out_management !== false,
+    smsShiftReminder: !!row.sms_shift_reminder,
+    smsEarningsSummary: !!row.sms_earnings_summary,
   }
 }
 
@@ -481,6 +494,19 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.sendReminderSms != null) p.send_reminder_sms = partial.sendReminderSms
   if (partial.cancellationBeforeDepart != null) p.cancel_fee_before_depart = partial.cancellationBeforeDepart
   if (partial.cancellationEnRoute != null) p.cancel_fee_en_route = partial.cancellationEnRoute
+  // SMS feature toggles
+  if (partial.smsNotifyEnRoutePickup != null) p.sms_notify_en_route_pickup = partial.smsNotifyEnRoutePickup
+  if (partial.smsNotifyPickedUp != null) p.sms_notify_picked_up = partial.smsNotifyPickedUp
+  if (partial.smsNotifyFailedAttempt != null) p.sms_notify_failed_attempt = partial.smsNotifyFailedAttempt
+  if (partial.smsNotifyCancelled != null) p.sms_notify_cancelled = partial.smsNotifyCancelled
+  if (partial.smsNotifyReassigned != null) p.sms_notify_reassigned = partial.smsNotifyReassigned
+  if (partial.smsNotifyFeedbackRequest != null) p.sms_notify_feedback_request = partial.smsNotifyFeedbackRequest
+  if (partial.smsNotifyInvoiceReady != null) p.sms_notify_invoice_ready = partial.smsNotifyInvoiceReady
+  if (partial.smsNotifyPaymentReceived != null) p.sms_notify_payment_received = partial.smsNotifyPaymentReceived
+  if (partial.smsNotifyWeeklySummary != null) p.sms_notify_weekly_summary = partial.smsNotifyWeeklySummary
+  if (partial.smsOptOutManagement != null) p.sms_opt_out_management = partial.smsOptOutManagement
+  if (partial.smsShiftReminder != null) p.sms_shift_reminder = partial.smsShiftReminder
+  if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
 
   const { data: rows } = await supabase.from('system_settings').select('id').limit(1)
   if (rows && rows.length > 0) {
