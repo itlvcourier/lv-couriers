@@ -144,7 +144,12 @@ export function AdminSettings() {
 
   const handleSaveSettings = () => {
     updateSettings(localSettings)
-    toast.success('Invoice settings saved')
+    toast.success('Settings saved')
+  }
+
+  const handleSaveDispatchMode = () => {
+    updateSettings({ allowDriverSelfClaim: localSettings.allowDriverSelfClaim })
+    toast.success('Dispatch mode updated')
   }
   
   const handleSaveCapacity = () => {
@@ -230,6 +235,14 @@ export function AdminSettings() {
               </span>
             </div>
           )}
+
+          <Button 
+            onClick={handleSaveDispatchMode}
+            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Dispatch Mode
+          </Button>
         </CardContent>
       </Card>
 

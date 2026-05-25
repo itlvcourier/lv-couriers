@@ -289,7 +289,7 @@ function TripView({
   deliveries: Delivery[]
   onAddJob: () => void
 }) {
-  const { reorderTrip, advanceStatus, getDriverMaxJobs, getDriverActiveJobs, currentUser } = useApp()
+  const { reorderTrip, advanceStatus, getDriverMaxJobs, getDriverActiveJobs, currentUser, settings } = useApp()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showVerification, setShowVerification] = useState<Delivery | null>(null)
   const [showCompletion, setShowCompletion] = useState<Delivery | null>(null)
@@ -297,7 +297,7 @@ function TripView({
   const driverId = currentUser?.driverId || ''
   const maxJobs = getDriverMaxJobs(driverId)
   const activeJobs = getDriverActiveJobs(driverId)
-  const canAddMore = activeJobs < maxJobs
+  const canAddMore = activeJobs < maxJobs && settings.allowDriverSelfClaim
   
   // Order deliveries according to trip order
   const orderedDeliveries = trip.order
