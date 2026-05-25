@@ -53,6 +53,19 @@ export function AdminSettings() {
     reviewReminderDays: settings.reviewReminderDays,
     sendReminderEmail: settings.sendReminderEmail,
     sendReminderSms: settings.sendReminderSms,
+    // SMS feature toggles
+    smsNotifyEnRoutePickup: settings.smsNotifyEnRoutePickup,
+    smsNotifyPickedUp: settings.smsNotifyPickedUp,
+    smsNotifyFailedAttempt: settings.smsNotifyFailedAttempt,
+    smsNotifyCancelled: settings.smsNotifyCancelled,
+    smsNotifyReassigned: settings.smsNotifyReassigned,
+    smsNotifyFeedbackRequest: settings.smsNotifyFeedbackRequest,
+    smsNotifyInvoiceReady: settings.smsNotifyInvoiceReady,
+    smsNotifyPaymentReceived: settings.smsNotifyPaymentReceived,
+    smsNotifyWeeklySummary: settings.smsNotifyWeeklySummary,
+    smsOptOutManagement: settings.smsOptOutManagement,
+    smsShiftReminder: settings.smsShiftReminder,
+    smsEarningsSummary: settings.smsEarningsSummary,
   })
   
   const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>(() => {
@@ -558,6 +571,162 @@ export function AdminSettings() {
                 Enabled
               </Badge>
             )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* SMS Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Smartphone className="w-5 h-5" />
+            SMS Notifications
+          </CardTitle>
+          <CardDescription>Control which SMS notifications are sent to customers, drivers, and businesses.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Delivery Flow */}
+          <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-lg space-y-3">
+            <p className="text-sm font-medium text-foreground">Delivery Flow</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyEnRoutePickup}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyEnRoutePickup: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">En Route to Pickup</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyPickedUp}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyPickedUp: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Package Picked Up</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyFailedAttempt}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyFailedAttempt: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Failed Delivery Attempt</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Customer Experience */}
+          <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-lg space-y-3">
+            <p className="text-sm font-medium text-foreground">Customer Experience</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyFeedbackRequest}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyFeedbackRequest: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Feedback Request (30min after delivery)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyReassigned}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyReassigned: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Driver Reassigned</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyCancelled}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyCancelled: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Order Cancelled</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Business Operations */}
+          <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-lg space-y-3">
+            <p className="text-sm font-medium text-foreground">Business Operations</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyInvoiceReady}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyInvoiceReady: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Invoice Ready</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyPaymentReceived}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyPaymentReceived: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Payment Received</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsNotifyWeeklySummary}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsNotifyWeeklySummary: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Weekly Summary</span>
+              </label>
+            </div>
+          </div>
+
+          {/* System Features */}
+          <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-lg space-y-3">
+            <p className="text-sm font-medium text-foreground">System Features</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsOptOutManagement}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsOptOutManagement: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Opt-Out Management (STOP/START replies)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsShiftReminder}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsShiftReminder: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Shift Reminders (Optional)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.smsEarningsSummary}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsEarningsSummary: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-foreground">Earnings Summary (Optional)</span>
+              </label>
+            </div>
+          </div>
+
+          <Button 
+            onClick={handleSaveSettings}
+            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save SMS Settings
           </Button>
         </CardContent>
       </Card>
