@@ -13,6 +13,7 @@ import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
 import { AdminCommunications } from './AdminCommunications'
 import { AdminDriverReports } from './AdminDriverReports'
+import { DispatchBoard } from './DispatchBoard'
 import { NotificationCenter } from './NotificationCenter'
 import { cn } from '@/lib/utils'
 import { 
@@ -30,12 +31,14 @@ import {
   Bell,
   MessageSquare,
   BarChart3,
+  Radio,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'settings'
 
 const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'dispatch', label: 'Dispatch', icon: Radio },
   { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'businesses', label: 'Businesses', icon: Building2 },
   { id: 'orders', label: 'Orders', icon: Package },
@@ -70,6 +73,7 @@ export function AdminView() {
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard': return <AdminDashboard />
+      case 'dispatch': return <DispatchBoard />
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />

@@ -175,6 +175,9 @@ export interface Delivery {
   cancellationReason?: string | null
   // Trip ordering
   tripOrder?: number | null
+  // Admin assignment tracking
+  assignedAt?: string | null
+  assignedBy?: string | null
   // Relations (for client-side convenience)
   flags: DeliveryFlag[]
   verifications: PickupVerification[]
@@ -228,6 +231,8 @@ export interface SystemSettings {
   smsOptOutManagement: boolean
   smsShiftReminder: boolean
   smsEarningsSummary: boolean
+  // Dispatch mode
+  allowDriverSelfClaim: boolean
 }
 
 export interface Notification {

@@ -186,6 +186,9 @@ export function mapDeliveryRow(row: Row): Delivery {
     cancellationReason: (row.cancellation_reason as string | null) ?? null,
     tripId: (row.trip_id as string | null) ?? null,
     tripOrder: (row.trip_order as number | null) ?? null,
+    // Admin assignment tracking
+    assignedAt: (row.assigned_at as string | null) ?? null,
+    assignedBy: (row.assigned_by as string | null) ?? null,
     flags: [],
     verifications: [],
     statusHistory: [],
@@ -224,6 +227,8 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsOptOutManagement: row.sms_opt_out_management !== false,
     smsShiftReminder: !!row.sms_shift_reminder,
     smsEarningsSummary: !!row.sms_earnings_summary,
+    // Dispatch mode
+    allowDriverSelfClaim: row.allow_driver_self_claim !== false,
   }
 }
 
@@ -507,6 +512,8 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsOptOutManagement != null) p.sms_opt_out_management = partial.smsOptOutManagement
   if (partial.smsShiftReminder != null) p.sms_shift_reminder = partial.smsShiftReminder
   if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
+  // Dispatch mode
+  if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
 
   const { data: rows } = await supabase.from('system_settings').select('id').limit(1)
   if (rows && rows.length > 0) {

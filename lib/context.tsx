@@ -98,6 +98,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   smsOptOutManagement: true,
   smsShiftReminder: false,
   smsEarningsSummary: false,
+  // Dispatch mode – defaults to self-claim (current behavior)
+  allowDriverSelfClaim: true,
 }
 
 // Fire-and-forget DB persistence. Logs errors so we can diagnose without
@@ -149,6 +151,8 @@ interface AppContextType {
   postDelivery: (data: Partial<Delivery>) => void
   reassignDriver: (deliveryId: string, newDriverId: string) => void
   cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
+  // Admin dispatch assignment (bypasses driver limits, records who assigned)
+  assignDelivery: (deliveryId: string, driverId: string, adminUserId: string) => void
 
   // Saved recipients (address book)
   savedContacts: SavedContact[]
@@ -424,6 +428,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Delivery functions
   const claimDelivery = useCallback((deliveryId: string, driverId: string) => {
+    // Block self-claim if admin assignment mode is active
+    if (!settings.allowDriverSelfClaim) {
+      console.warn('[v0] Self-claim blocked: dispatch assignment mode is active')
+      return
+    }
     const driver = drivers.find(d => d.id === driverId)
     if (!driver) return
 
@@ -465,7 +474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, driverId }),
     }).catch(err => console.error('[v0] driver-assigned SMS failed', err))
-  }, [drivers])
+  }, [drivers, settings.allowDriverSelfClaim])
 
   const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
     // Persist the verified qty + rate to the DB. Rate calculation happens
@@ -965,6 +974,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ok: true }
     },
     [deliveries],
+  )
+
+  // Admin dispatch: assign a delivery to a driver (bypasses slot limits)
+  const assignDelivery = useCallback(
+    (deliveryId: string, driverId: string, adminUserId: string) => {
+      const driver = drivers.find(d => d.id === driverId)
+      if (!driver) return
+
+      const now = new Date().toISOString()
+      persist(
+        updateDeliveryFields(deliveryId, {
+          driver_id: driverId,
+          status: 'claimed',
+          claimed_at: now,
+          assigned_at: now,
+          assigned_by: adminUserId,
+        }),
+        'assignDelivery',
+      )
+
+      setDeliveries(prev =>
+        prev.map(d =>
+          d.id === deliveryId
+            ? {
+                ...d,
+                driverId,
+                driverName: driver.name,
+                status: 'claimed' as DeliveryStatus,
+                claimedAt: now,
+                assignedAt: now,
+                assignedBy: adminUserId,
+                statusHistory: [
+                  ...d.statusHistory,
+                  {
+                    status: 'claimed' as DeliveryStatus,
+                    timestamp: now,
+                    note: `Assigned by dispatch to ${driver.name}`,
+                    gpsLat: null,
+                    gpsLng: null,
+                  },
+                ],
+              }
+            : d,
+        ),
+      )
+
+      // Fire-and-forget: notify driver of the assignment
+      void fetch('/api/sms/driver-assigned', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId, driverId }),
+      }).catch(err => console.error('[v0] driver-assigned SMS failed', err))
+    },
+    [drivers],
   )
 
   // Saved recipients (per-business address book)
@@ -2120,6 +2183,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         postDelivery,
         reassignDriver,
         cancelOrderByBusiness,
+      assignDelivery,
         savedContacts,
         getSavedContactsForBusiness,
         upsertSavedContact,

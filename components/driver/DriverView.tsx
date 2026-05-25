@@ -20,7 +20,7 @@ import { FolderOpen, Package, Clock, Settings, LogOut } from 'lucide-react'
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
   const router = useRouter()
-  const { currentUser, logout, deliveries } = useApp()
+  const { currentUser, logout, deliveries, settings } = useApp()
 
   // Get driver's available and active job counts
   const driverId = currentUser?.driverId || ''
@@ -28,6 +28,9 @@ export function DriverView() {
   const activeJobs = deliveries.filter(
     d => d.driverId === driverId && !['delivered', 'failed_permanent', 'cancelled'].includes(d.status)
   )
+
+  // When dispatch mode is active, hide the Available tab
+  const isDispatchMode = !settings.allowDriverSelfClaim
 
   const handleSignOut = async () => {
     await logout()
@@ -38,12 +41,24 @@ export function DriverView() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase()
   }
 
-  const navItems = [
-    { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
-    { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
-    { id: 'history', label: 'History', icon: Clock },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ]
+  // Conditionally build nav items based on dispatch mode
+  const navItems = isDispatchMode
+    ? [
+        { id: 'active', label: 'My Jobs', icon: Package, badge: activeJobs.length > 0 ? activeJobs.length : undefined },
+        { id: 'history', label: 'History', icon: Clock },
+        { id: 'settings', label: 'Settings', icon: Settings },
+      ]
+    : [
+        { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
+        { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
+        { id: 'history', label: 'History', icon: Clock },
+        { id: 'settings', label: 'Settings', icon: Settings },
+      ]
+
+  // If dispatch mode just turned on and user is on 'available' tab, redirect to 'active'
+  if (isDispatchMode && activeTab === 'available') {
+    setActiveTab('active')
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] pb-20">

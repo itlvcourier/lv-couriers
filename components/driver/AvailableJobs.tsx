@@ -283,18 +283,39 @@ function JobCard({
 }
 
 export function AvailableJobs({ onJobClaimed }: AvailableJobsProps) {
-  const { currentUser, deliveries, claimDelivery, claimMultiple, canDriverClaimJob, getDriverActiveJobs, getDriverMaxJobs } = useApp()
+  const { currentUser, deliveries, claimDelivery, claimMultiple, canDriverClaimJob, getDriverActiveJobs, getDriverMaxJobs, settings } = useApp()
   const driverId = currentUser?.driverId || ''
   
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showConfirmSheet, setShowConfirmSheet] = useState(false)
   
+  // When dispatch mode is active, show a message instead of available jobs
+  const isDispatchMode = !settings.allowDriverSelfClaim
+  
   const availableDeliveries = deliveries.filter(d => d.status === 'posted')
-  const canClaim = canDriverClaimJob(driverId)
+  const canClaim = canDriverClaimJob(driverId) && !isDispatchMode
   const activeJobs = getDriverActiveJobs(driverId)
   const maxJobs = getDriverMaxJobs(driverId)
   const remainingSlots = maxJobs - activeJobs
+
+  // If dispatch mode is on, show dispatch message
+  if (isDispatchMode) {
+    return (
+      <div className="p-4">
+        <Empty>
+          <EmptyMedia>
+            <Truck className="w-12 h-12 text-muted-foreground" />
+          </EmptyMedia>
+          <EmptyTitle>Dispatch Assignment Mode</EmptyTitle>
+          <EmptyDescription>
+            Jobs are being assigned by dispatch. Check the &quot;My Jobs&quot; tab for your assigned deliveries.
+            You will receive an SMS notification when a new job is assigned to you.
+          </EmptyDescription>
+        </Empty>
+      </div>
+    )
+  }
 
   const handleClaim = (deliveryId: string) => {
     claimDelivery(deliveryId, driverId)

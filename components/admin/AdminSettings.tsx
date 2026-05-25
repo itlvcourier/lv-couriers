@@ -34,6 +34,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Radio,
 } from 'lucide-react'
 
 export function AdminSettings() {
@@ -66,6 +67,8 @@ export function AdminSettings() {
     smsOptOutManagement: settings.smsOptOutManagement,
     smsShiftReminder: settings.smsShiftReminder,
     smsEarningsSummary: settings.smsEarningsSummary,
+    // Dispatch mode
+    allowDriverSelfClaim: settings.allowDriverSelfClaim,
   })
   
   const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>(() => {
@@ -161,6 +164,75 @@ export function AdminSettings() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Dispatch Mode Section */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Radio className="w-5 h-5" />
+            Dispatch Mode
+          </CardTitle>
+          <CardDescription>
+            Control how drivers receive delivery assignments
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4">
+            <label 
+              className={`flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition-colors ${
+                localSettings.allowDriverSelfClaim 
+                  ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/5' 
+                  : 'border-[var(--border-color)] hover:bg-[var(--bg-card-2)]'
+              }`}
+            >
+              <input
+                type="radio"
+                name="dispatchMode"
+                checked={localSettings.allowDriverSelfClaim}
+                onChange={() => setLocalSettings(prev => ({ ...prev, allowDriverSelfClaim: true }))}
+                className="mt-1 accent-[var(--accent-orange)]"
+              />
+              <div>
+                <p className="font-medium text-foreground">Driver Self-Claim</p>
+                <p className="text-sm text-muted-foreground">
+                  Drivers browse available jobs and claim them independently. Best for flexible workforces.
+                </p>
+              </div>
+            </label>
+            
+            <label 
+              className={`flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition-colors ${
+                !localSettings.allowDriverSelfClaim 
+                  ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/5' 
+                  : 'border-[var(--border-color)] hover:bg-[var(--bg-card-2)]'
+              }`}
+            >
+              <input
+                type="radio"
+                name="dispatchMode"
+                checked={!localSettings.allowDriverSelfClaim}
+                onChange={() => setLocalSettings(prev => ({ ...prev, allowDriverSelfClaim: false }))}
+                className="mt-1 accent-[var(--accent-orange)]"
+              />
+              <div>
+                <p className="font-medium text-foreground">Admin Assignment</p>
+                <p className="text-sm text-muted-foreground">
+                  Dispatch assigns jobs to drivers via the Dispatch Board. Drivers cannot claim jobs themselves.
+                </p>
+              </div>
+            </label>
+          </div>
+          
+          {!localSettings.allowDriverSelfClaim && (
+            <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-600">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                Go to <strong>Dispatch</strong> in the sidebar to assign jobs to drivers.
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Driver Capacity Section */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
