@@ -1029,6 +1029,8 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
   const supabase = createClient()
   const now = new Date().toISOString()
   
+  console.log('[v0] createInvoiceInDb: Creating invoice', invoice.id, invoice.invoiceNumber)
+  
   // Insert the invoice
   const { error: invoiceError } = await supabase
     .from('invoices')
@@ -1056,16 +1058,24 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
       updated_at: now,
     })
   
-  if (invoiceError) throw invoiceError
+  if (invoiceError) {
+    console.error('[v0] createInvoiceInDb: Failed to insert invoice:', invoiceError.message)
+    throw invoiceError
+  }
+  
+  console.log('[v0] createInvoiceInDb: Invoice inserted successfully')
   
   // Insert line items
   if (invoice.lines && invoice.lines.length > 0) {
+    console.log('[v0] createInvoiceInDb: Inserting', invoice.lines.length, 'line items')
     const lineItems = invoice.lines.map((line, idx) => ({
       invoice_id: invoice.id,
       description: line.description,
-      qty: line.qty,
+      delivery_type: line.deliveryType || null,
+      count: line.quantity,
       rate: line.rate,
-      total: line.total,
+      subtotal: line.total,
+      delivery_ids: line.deliveryIds || [],
       sort_order: idx,
     }))
     
@@ -1073,7 +1083,11 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
       .from('invoice_line_items')
       .insert(lineItems)
     
-    if (linesError) throw linesError
+    if (linesError) {
+      console.error('[v0] createInvoiceInDb: Failed to insert line items:', linesError.message)
+      throw linesError
+    }
+    console.log('[v0] createInvoiceInDb: Line items inserted successfully')
   }
   
   // Log the generated event
