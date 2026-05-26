@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -78,6 +78,47 @@ export function AdminSettings() {
     })
     return overrides
   })
+
+  // Sync local settings when context settings change (e.g., after hydration from DB)
+  useEffect(() => {
+    setLocalSettings({
+      globalMaxJobs: settings.globalMaxJobs,
+      rushSlaMins: settings.rushSlaMins,
+      intownTimeoutMins: settings.intownTimeoutMins,
+      outOfTownTimeoutMins: settings.outOfTownTimeoutMins,
+      invoiceDueDays: settings.invoiceDueDays,
+      reminderDay1: settings.reminderDay1,
+      overdueDay: settings.overdueDay,
+      escalationDay: settings.escalationDay,
+      autoGenerateInvoices: settings.autoGenerateInvoices,
+      autoSendInvoices: settings.autoSendInvoices,
+      reviewReminderDays: settings.reviewReminderDays,
+      sendReminderEmail: settings.sendReminderEmail,
+      sendReminderSms: settings.sendReminderSms,
+      smsNotifyEnRoutePickup: settings.smsNotifyEnRoutePickup,
+      smsNotifyPickedUp: settings.smsNotifyPickedUp,
+      smsNotifyFailedAttempt: settings.smsNotifyFailedAttempt,
+      smsNotifyCancelled: settings.smsNotifyCancelled,
+      smsNotifyReassigned: settings.smsNotifyReassigned,
+      smsNotifyFeedbackRequest: settings.smsNotifyFeedbackRequest,
+      smsNotifyInvoiceReady: settings.smsNotifyInvoiceReady,
+      smsNotifyPaymentReceived: settings.smsNotifyPaymentReceived,
+      smsNotifyWeeklySummary: settings.smsNotifyWeeklySummary,
+      smsOptOutManagement: settings.smsOptOutManagement,
+      smsShiftReminder: settings.smsShiftReminder,
+      smsEarningsSummary: settings.smsEarningsSummary,
+      allowDriverSelfClaim: settings.allowDriverSelfClaim,
+    })
+  }, [settings])
+
+  // Sync driver overrides when drivers change (e.g., after hydration from DB)
+  useEffect(() => {
+    const overrides: Record<string, string> = {}
+    drivers.forEach(d => {
+      overrides[d.id] = d.maxJobsOverride?.toString() || ''
+    })
+    setDriverOverrides(overrides)
+  }, [drivers])
 
   // Password change dialog state
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
