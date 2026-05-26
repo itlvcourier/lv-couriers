@@ -438,6 +438,10 @@ export type SMSType =
   | 'failed_attempt' 
   | 'invoice_reminder' 
   | 'overdue_notice'
+  | 'driver_reassigned'
+  | 'en_route_pickup'
+  | 'en_route_dropoff'
+  | 'feedback_request'
 
 export type SMSStatus = 'sent' | 'delivered' | 'failed' | 'bounced'
 
