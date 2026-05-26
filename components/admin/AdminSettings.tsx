@@ -70,6 +70,25 @@ export function AdminSettings() {
     // Dispatch mode
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
   })
+
+  // Notification alert toggles — separate local state so they don't get
+  // wiped back to defaults on re-render (they are purely client-side prefs
+  // stored in localStorage — no DB column needed for these).
+  const [notifToggles, setNotifToggles] = useState(() => {
+    if (typeof window === 'undefined') return { rushJobs: true, timeoutWarnings: true, flagAlerts: true }
+    try {
+      const stored = localStorage.getItem('admin_notif_prefs')
+      return stored ? JSON.parse(stored) : { rushJobs: true, timeoutWarnings: true, flagAlerts: true }
+    } catch {
+      return { rushJobs: true, timeoutWarnings: true, flagAlerts: true }
+    }
+  })
+
+  const setNotifToggle = (key: keyof typeof notifToggles, value: boolean) => {
+    const next = { ...notifToggles, [key]: value }
+    setNotifToggles(next)
+    try { localStorage.setItem('admin_notif_prefs', JSON.stringify(next)) } catch { /* ignore */ }
+  }
   
   const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>(() => {
     const overrides: Record<string, string> = {}
@@ -351,7 +370,7 @@ export function AdminSettings() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-foreground">
             <Zap className="w-5 h-5" />
-            Rush SLA & Timeouts
+            Rush SLA &amp; Timeouts
           </CardTitle>
           <CardDescription>Configure time-based alerts and SLA requirements</CardDescription>
         </CardHeader>
@@ -393,6 +412,20 @@ export function AdminSettings() {
               className="w-1/2 bg-[var(--bg-card-2)] border-[var(--border-color)]"
             />
           </div>
+          <Button
+            onClick={() => {
+              updateSettings({
+                rushSlaMins: localSettings.rushSlaMins,
+                intownTimeoutMins: localSettings.intownTimeoutMins,
+                outOfTownTimeoutMins: localSettings.outOfTownTimeoutMins,
+              })
+              toast.success('SLA & timeout settings saved')
+            }}
+            className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save SLA Settings
+          </Button>
         </CardContent>
       </Card>
 
@@ -602,7 +635,10 @@ export function AdminSettings() {
               <p className="text-sm font-medium text-foreground">Rush Job Alerts</p>
               <p className="text-xs text-muted-foreground">Get notified when rush jobs are posted</p>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={notifToggles.rushJobs}
+              onCheckedChange={(c) => setNotifToggle('rushJobs', c)}
+            />
           </div>
           <Separator className="bg-[var(--border-color)]" />
           <div className="flex items-center justify-between">
@@ -610,7 +646,10 @@ export function AdminSettings() {
               <p className="text-sm font-medium text-foreground">Timeout Warnings</p>
               <p className="text-xs text-muted-foreground">Alerts when drivers have no updates</p>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={notifToggles.timeoutWarnings}
+              onCheckedChange={(c) => setNotifToggle('timeoutWarnings', c)}
+            />
           </div>
           <Separator className="bg-[var(--border-color)]" />
           <div className="flex items-center justify-between">
@@ -618,7 +657,10 @@ export function AdminSettings() {
               <p className="text-sm font-medium text-foreground">Flag Notifications</p>
               <p className="text-xs text-muted-foreground">Alerts when drivers raise flags</p>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={notifToggles.flagAlerts}
+              onCheckedChange={(c) => setNotifToggle('flagAlerts', c)}
+            />
           </div>
         </CardContent>
       </Card>
