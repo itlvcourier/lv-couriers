@@ -1021,3 +1021,69 @@ export async function updateInvoiceStatusOnly(
     .eq('id', invoiceId)
   if (error) throw error
 }
+
+/**
+ * Create a new invoice in the database along with its line items.
+ */
+export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
+  const supabase = createClient()
+  const now = new Date().toISOString()
+  
+  // Insert the invoice
+  const { error: invoiceError } = await supabase
+    .from('invoices')
+    .insert({
+      id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      business_id: invoice.businessId,
+      location_id: invoice.locationId,
+      billing_email: invoice.billingEmail || null,
+      backup_billing_email: invoice.backupBillingEmail || null,
+      period_start: invoice.periodStart,
+      period_end: invoice.periodEnd,
+      subtotal: invoice.subtotal,
+      gst_total: invoice.gstAmount,
+      total: invoice.total,
+      status: invoice.status,
+      due_date: invoice.dueDate,
+      sent_at: invoice.sentAt || null,
+      paid_at: invoice.paidDate || null,
+      payment_method: invoice.paymentMethod || null,
+      payment_reference: invoice.paymentReference || null,
+      reminders_paused: invoice.remindersPaused || false,
+      email_bounced: invoice.emailBounced || false,
+      created_at: now,
+      updated_at: now,
+    })
+  
+  if (invoiceError) throw invoiceError
+  
+  // Insert line items
+  if (invoice.lines && invoice.lines.length > 0) {
+    const lineItems = invoice.lines.map((line, idx) => ({
+      invoice_id: invoice.id,
+      description: line.description,
+      qty: line.qty,
+      rate: line.rate,
+      total: line.total,
+      sort_order: idx,
+    }))
+    
+    const { error: linesError } = await supabase
+      .from('invoice_line_items')
+      .insert(lineItems)
+    
+    if (linesError) throw linesError
+  }
+  
+  // Log the generated event
+  const { error: eventError } = await supabase
+    .from('invoice_events')
+    .insert({
+      invoice_id: invoice.id,
+      event_type: 'generated',
+      occurred_at: now,
+    })
+  
+  if (eventError) console.error('[v0] Failed to log invoice generated event:', eventError)
+}

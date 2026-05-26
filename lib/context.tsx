@@ -66,6 +66,7 @@ import {
   insertDispute,
   resolveDisputeInDb,
   updateInvoiceStatusOnly,
+  createInvoiceInDb,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -1405,8 +1406,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setInvoices(prev => [...prev, newInvoice])
+    
+    // Persist the invoice to the database
+    persist(createInvoiceInDb(newInvoice), 'createInvoice')
+    
     return newInvoice
-  }, [rateCards, businesses, deliveries, invoices])
+  }, [rateCards, businesses, deliveries, invoices, settings.invoiceDueDays])
 
   const markInvoicePaid = useCallback((invoiceId: string, paymentDetails: PaymentDetails) => {
     setInvoices(prev => prev.map(inv => {
