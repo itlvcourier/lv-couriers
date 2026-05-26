@@ -66,6 +66,10 @@ const SMS_CONFIGS: Record<SMSType, { label: string; color: string }> = {
   failed_attempt: { label: 'Failed Attempt', color: 'bg-red-500/10 text-red-400' },
   invoice_reminder: { label: 'Invoice Reminder', color: 'bg-yellow-500/10 text-yellow-400' },
   overdue_notice: { label: 'Overdue Notice', color: 'bg-red-500/10 text-red-400' },
+  driver_reassigned: { label: 'Driver Reassigned', color: 'bg-purple-500/10 text-purple-400' },
+  en_route_pickup: { label: 'En Route Pickup', color: 'bg-blue-500/10 text-blue-400' },
+  en_route_dropoff: { label: 'En Route Dropoff', color: 'bg-cyan-500/10 text-cyan-400' },
+  feedback_request: { label: 'Feedback Request', color: 'bg-indigo-500/10 text-indigo-400' },
 }
 
 // SMS status configs
