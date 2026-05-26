@@ -14,6 +14,42 @@ type InvoiceEmailData = {
   paymentLink?: string
 }
 
+export type CompanySettings = {
+  companyName: string
+  companyAddress: string
+  companyPhone: string
+  companyEmail: string
+  taxNumber: string
+  taxLabel: string
+  taxRate: number
+  paymentTerms: string
+  paymentInstructions: string
+  bankName: string
+  bankAccountName: string
+  bankAccountNumber: string
+  bankTransitNumber: string
+  bankInstitutionNumber: string
+  footerNotes: string
+}
+
+export const defaultCompanySettings: CompanySettings = {
+  companyName: 'LV Couriers',
+  companyAddress: '',
+  companyPhone: '',
+  companyEmail: 'billing@lv-couriers.local',
+  taxNumber: '',
+  taxLabel: 'GST',
+  taxRate: 5,
+  paymentTerms: 'Net 15',
+  paymentInstructions: '',
+  bankName: '',
+  bankAccountName: '',
+  bankAccountNumber: '',
+  bankTransitNumber: '',
+  bankInstitutionNumber: '',
+  footerNotes: '',
+}
+
 const fmtMoney = (n: number) =>
   n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' })
 
@@ -22,7 +58,10 @@ const fmtDate = (iso: string) => {
   return d.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-function baseLayout(title: string, body: string) {
+function baseLayout(title: string, body: string, company: CompanySettings = defaultCompanySettings) {
+  const companyHeader = company.companyName || 'LV COURIERS'
+  const footerEmail = company.companyEmail || 'billing@lv-couriers.local'
+  
   return `<!DOCTYPE html>
 <html>
   <head><meta charset="utf-8" /><title>${escapeHtml(title)}</title></head>
@@ -31,11 +70,15 @@ function baseLayout(title: string, body: string) {
       <tr><td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#151515;border:1px solid #262626;border-radius:12px;overflow:hidden;">
           <tr><td style="padding:24px 32px;border-bottom:1px solid #262626;background:#1a1a1a;">
-            <span style="font-size:14px;font-weight:600;letter-spacing:0.05em;color:#ff6b1a;">LV COURIERS</span>
+            <span style="font-size:14px;font-weight:600;letter-spacing:0.05em;color:#ff6b1a;">${escapeHtml(companyHeader.toUpperCase())}</span>
+            ${company.companyAddress ? `<div style="font-size:11px;color:#737373;margin-top:4px;">${escapeHtml(company.companyAddress)}</div>` : ''}
+            ${company.companyPhone ? `<div style="font-size:11px;color:#737373;">${escapeHtml(company.companyPhone)}</div>` : ''}
+            ${company.taxNumber ? `<div style="font-size:11px;color:#737373;">${escapeHtml(company.taxLabel)} #: ${escapeHtml(company.taxNumber)}</div>` : ''}
           </td></tr>
           <tr><td style="padding:32px;">${body}</td></tr>
           <tr><td style="padding:20px 32px;border-top:1px solid #262626;background:#1a1a1a;font-size:12px;color:#737373;text-align:center;">
-            Questions? Reply to this email or contact billing@lv-couriers.local
+            ${company.footerNotes ? `<div style="margin-bottom:8px;">${escapeHtml(company.footerNotes)}</div>` : ''}
+            Questions? Reply to this email or contact ${escapeHtml(footerEmail)}
           </td></tr>
         </table>
       </td></tr>
@@ -50,7 +93,23 @@ function escapeHtml(s: string) {
   }[c] || c))
 }
 
-function detailsBlock(d: InvoiceEmailData) {
+function detailsBlock(d: InvoiceEmailData, company: CompanySettings = defaultCompanySettings) {
+  const paymentSection = (company.bankName || company.paymentInstructions) ? `
+    <tr><td style="padding:16px 20px;border-top:1px solid #262626;">
+      <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Payment Information</div>
+      ${company.paymentInstructions ? `<div style="font-size:13px;color:#a3a3a3;margin-bottom:8px;">${escapeHtml(company.paymentInstructions)}</div>` : ''}
+      ${company.bankName ? `
+        <table style="font-size:13px;color:#fafafa;">
+          <tr><td style="padding:2px 12px 2px 0;color:#a3a3a3;">Bank:</td><td>${escapeHtml(company.bankName)}</td></tr>
+          ${company.bankAccountName ? `<tr><td style="padding:2px 12px 2px 0;color:#a3a3a3;">Account Name:</td><td>${escapeHtml(company.bankAccountName)}</td></tr>` : ''}
+          ${company.bankAccountNumber ? `<tr><td style="padding:2px 12px 2px 0;color:#a3a3a3;">Account #:</td><td>${escapeHtml(company.bankAccountNumber)}</td></tr>` : ''}
+          ${company.bankTransitNumber ? `<tr><td style="padding:2px 12px 2px 0;color:#a3a3a3;">Transit #:</td><td>${escapeHtml(company.bankTransitNumber)}</td></tr>` : ''}
+          ${company.bankInstitutionNumber ? `<tr><td style="padding:2px 12px 2px 0;color:#a3a3a3;">Institution #:</td><td>${escapeHtml(company.bankInstitutionNumber)}</td></tr>` : ''}
+        </table>
+      ` : ''}
+    </td></tr>
+  ` : ''
+  
   return `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #262626;border-radius:8px;">
       <tr><td style="padding:16px 20px;border-bottom:1px solid #262626;">
@@ -63,27 +122,30 @@ function detailsBlock(d: InvoiceEmailData) {
           <tr><td style="padding:4px 0;color:#a3a3a3;">Period</td><td style="padding:4px 0;color:#fafafa;">${escapeHtml(fmtDate(d.periodStart))} – ${escapeHtml(fmtDate(d.periodEnd))}</td></tr>
           <tr><td style="padding:4px 0;color:#a3a3a3;">Location</td><td style="padding:4px 0;color:#fafafa;">${escapeHtml(d.locationName)}</td></tr>
           <tr><td style="padding:4px 0;color:#a3a3a3;">Due</td><td style="padding:4px 0;color:#fafafa;">${escapeHtml(fmtDate(d.dueDate))}</td></tr>
+          <tr><td style="padding:4px 0;color:#a3a3a3;">Terms</td><td style="padding:4px 0;color:#fafafa;">${escapeHtml(company.paymentTerms || 'Net 15')}</td></tr>
         </table>
       </td></tr>
+      ${paymentSection}
     </table>
   `
 }
 
 // ---------- Templates ----------
 
-export function invoiceSentEmail(d: InvoiceEmailData) {
-  const subject = `Invoice ${d.invoiceNumber} from Lv Couriers - ${fmtMoney(d.total)}`
+export function invoiceSentEmail(d: InvoiceEmailData, company: CompanySettings = defaultCompanySettings) {
+  const companyName = company.companyName || 'Lv Couriers'
+  const subject = `Invoice ${d.invoiceNumber} from ${companyName} - ${fmtMoney(d.total)}`
   const html = baseLayout(subject, `
     <h1 style="font-size:22px;font-weight:600;color:#fafafa;margin:0 0 12px;">New invoice for ${escapeHtml(d.businessName)}</h1>
     <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">Thank you for your business. Your invoice is attached below.</p>
-    ${detailsBlock(d)}
+    ${detailsBlock(d, company)}
     <p style="font-size:13px;line-height:1.5;color:#737373;margin:16px 0 0;">Please remit payment by <strong style="color:#fafafa;">${escapeHtml(fmtDate(d.dueDate))}</strong>.</p>
-  `)
+  `, company)
   const text = `New invoice for ${d.businessName}\n\nInvoice: ${d.invoiceNumber}\nPeriod: ${fmtDate(d.periodStart)} - ${fmtDate(d.periodEnd)}\nAmount Due: ${fmtMoney(d.total)}\nDue Date: ${fmtDate(d.dueDate)}\n\nPlease remit payment by ${fmtDate(d.dueDate)}.`
   return { subject, html, text }
 }
 
-export function invoiceReminderEmail(d: InvoiceEmailData, which: 1 | 2) {
+export function invoiceReminderEmail(d: InvoiceEmailData, which: 1 | 2, company: CompanySettings = defaultCompanySettings) {
   const friendly = which === 1 ? 'Friendly reminder' : 'Payment due soon'
   const subject = which === 1
     ? `Reminder: Invoice ${d.invoiceNumber} - ${fmtMoney(d.total)}`
@@ -93,31 +155,31 @@ export function invoiceReminderEmail(d: InvoiceEmailData, which: 1 | 2) {
     <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">${which === 1
       ? `Just a reminder that invoice ${escapeHtml(d.invoiceNumber)} is still outstanding.`
       : `Invoice ${escapeHtml(d.invoiceNumber)} is due on ${escapeHtml(fmtDate(d.dueDate))}. Please arrange payment to avoid late notices.`}</p>
-    ${detailsBlock(d)}
-  `)
+    ${detailsBlock(d, company)}
+  `, company)
   const text = `${friendly}\n\nInvoice ${d.invoiceNumber} for ${fmtMoney(d.total)} is due ${fmtDate(d.dueDate)}.`
   return { subject, html, text }
 }
 
-export function invoiceOverdueEmail(d: InvoiceEmailData) {
+export function invoiceOverdueEmail(d: InvoiceEmailData, company: CompanySettings = defaultCompanySettings) {
   const subject = `OVERDUE: Invoice ${d.invoiceNumber} - ${fmtMoney(d.total)}`
   const html = baseLayout(subject, `
     <h1 style="font-size:22px;font-weight:600;color:#ef4444;margin:0 0 12px;">Invoice overdue</h1>
     <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">Invoice <strong style="color:#fafafa;">${escapeHtml(d.invoiceNumber)}</strong> was due on ${escapeHtml(fmtDate(d.dueDate))} and is now past due. Please remit payment as soon as possible.</p>
-    ${detailsBlock(d)}
+    ${detailsBlock(d, company)}
     <p style="font-size:13px;line-height:1.5;color:#737373;margin:16px 0 0;">If payment has already been sent, please disregard this notice.</p>
-  `)
+  `, company)
   const text = `OVERDUE: Invoice ${d.invoiceNumber} for ${fmtMoney(d.total)} was due ${fmtDate(d.dueDate)} and is now past due.`
   return { subject, html, text }
 }
 
-export function invoiceEscalatedEmail(d: InvoiceEmailData) {
+export function invoiceEscalatedEmail(d: InvoiceEmailData, company: CompanySettings = defaultCompanySettings) {
   const subject = `FINAL NOTICE: Invoice ${d.invoiceNumber}`
   const html = baseLayout(subject, `
     <h1 style="font-size:22px;font-weight:600;color:#dc2626;margin:0 0 12px;">Final notice</h1>
     <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0;">Invoice <strong style="color:#fafafa;">${escapeHtml(d.invoiceNumber)}</strong> has been escalated. Please contact us immediately to resolve this balance.</p>
-    ${detailsBlock(d)}
-  `)
+    ${detailsBlock(d, company)}
+  `, company)
   const text = `FINAL NOTICE: Invoice ${d.invoiceNumber} for ${fmtMoney(d.total)} has been escalated.`
   return { subject, html, text }
 }

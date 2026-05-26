@@ -229,6 +229,22 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsEarningsSummary: !!row.sms_earnings_summary,
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
+    // Invoice template settings
+    invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
+    invoiceCompanyAddress: (row.invoice_company_address as string) || '',
+    invoiceCompanyPhone: (row.invoice_company_phone as string) || '',
+    invoiceCompanyEmail: (row.invoice_company_email as string) || 'billing@lv-couriers.local',
+    invoiceTaxNumber: (row.invoice_tax_number as string) || '',
+    invoiceTaxLabel: (row.invoice_tax_label as string) || 'GST',
+    invoiceTaxRate: (row.invoice_tax_rate as number) ?? 5,
+    invoicePaymentTerms: (row.invoice_payment_terms as string) || 'Net 15',
+    invoicePaymentInstructions: (row.invoice_payment_instructions as string) || '',
+    invoiceBankName: (row.invoice_bank_name as string) || '',
+    invoiceBankAccountName: (row.invoice_bank_account_name as string) || '',
+    invoiceBankAccountNumber: (row.invoice_bank_account_number as string) || '',
+    invoiceBankTransitNumber: (row.invoice_bank_transit_number as string) || '',
+    invoiceBankInstitutionNumber: (row.invoice_bank_institution_number as string) || '',
+    invoiceFooterNotes: (row.invoice_footer_notes as string) || '',
   }
 }
 
@@ -514,6 +530,22 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
+  // Invoice template settings
+  if (partial.invoiceCompanyName != null) p.invoice_company_name = partial.invoiceCompanyName
+  if (partial.invoiceCompanyAddress != null) p.invoice_company_address = partial.invoiceCompanyAddress
+  if (partial.invoiceCompanyPhone != null) p.invoice_company_phone = partial.invoiceCompanyPhone
+  if (partial.invoiceCompanyEmail != null) p.invoice_company_email = partial.invoiceCompanyEmail
+  if (partial.invoiceTaxNumber != null) p.invoice_tax_number = partial.invoiceTaxNumber
+  if (partial.invoiceTaxLabel != null) p.invoice_tax_label = partial.invoiceTaxLabel
+  if (partial.invoiceTaxRate != null) p.invoice_tax_rate = partial.invoiceTaxRate
+  if (partial.invoicePaymentTerms != null) p.invoice_payment_terms = partial.invoicePaymentTerms
+  if (partial.invoicePaymentInstructions != null) p.invoice_payment_instructions = partial.invoicePaymentInstructions
+  if (partial.invoiceBankName != null) p.invoice_bank_name = partial.invoiceBankName
+  if (partial.invoiceBankAccountName != null) p.invoice_bank_account_name = partial.invoiceBankAccountName
+  if (partial.invoiceBankAccountNumber != null) p.invoice_bank_account_number = partial.invoiceBankAccountNumber
+  if (partial.invoiceBankTransitNumber != null) p.invoice_bank_transit_number = partial.invoiceBankTransitNumber
+  if (partial.invoiceBankInstitutionNumber != null) p.invoice_bank_institution_number = partial.invoiceBankInstitutionNumber
+  if (partial.invoiceFooterNotes != null) p.invoice_footer_notes = partial.invoiceFooterNotes
 
   const { data: rows } = await supabase.from('system_settings').select('id').limit(1)
   if (rows && rows.length > 0) {

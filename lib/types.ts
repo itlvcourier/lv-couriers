@@ -233,6 +233,22 @@ export interface SystemSettings {
   smsEarningsSummary: boolean
   // Dispatch mode
   allowDriverSelfClaim: boolean
+  // Invoice template settings
+  invoiceCompanyName: string
+  invoiceCompanyAddress: string
+  invoiceCompanyPhone: string
+  invoiceCompanyEmail: string
+  invoiceTaxNumber: string // GST/HST number
+  invoiceTaxLabel: string // e.g., "GST", "HST", "VAT"
+  invoiceTaxRate: number // percentage e.g., 5 for 5%
+  invoicePaymentTerms: string
+  invoicePaymentInstructions: string
+  invoiceBankName: string
+  invoiceBankAccountName: string
+  invoiceBankAccountNumber: string
+  invoiceBankTransitNumber: string
+  invoiceBankInstitutionNumber: string
+  invoiceFooterNotes: string
 }
 
 export interface Notification {
