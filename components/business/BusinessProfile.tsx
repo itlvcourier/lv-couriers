@@ -29,13 +29,6 @@ export function BusinessProfile() {
   const [isEditing, setIsEditing] = useState(false)
   const [editedPhone, setEditedPhone] = useState('')
   const [editedAddress, setEditedAddress] = useState('')
-  const [orderNotifications, setOrderNotifications] = useState(() => {
-    if (typeof window === 'undefined') return true
-    try {
-      const stored = localStorage.getItem('biz_order_notifs')
-      return stored === null ? true : stored === 'true'
-    } catch { return true }
-  })
   
   const business = businesses.find(b => b.id === currentUser?.businessId)
   const primaryLocation = business?.locations[0]
@@ -220,13 +213,7 @@ export function BusinessProfile() {
               <Bell className="w-5 h-5 text-muted-foreground" />
               <span className="text-sm">Order Notifications</span>
             </div>
-            <Switch
-              checked={orderNotifications}
-              onCheckedChange={(c) => {
-                setOrderNotifications(c)
-                try { localStorage.setItem('biz_order_notifs', String(c)) } catch { /* ignore */ }
-              }}
-            />
+            <Switch defaultChecked />
           </div>
           <Separator />
           <ThemeToggleRow id="business-dark-mode" />
