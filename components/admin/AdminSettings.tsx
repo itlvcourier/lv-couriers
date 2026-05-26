@@ -194,6 +194,12 @@ export function AdminSettings() {
   }
   
   const handleSaveCapacity = () => {
+    // Save global max jobs setting
+    if (localSettings.globalMaxJobs !== settings.globalMaxJobs) {
+      updateSettings({ globalMaxJobs: localSettings.globalMaxJobs })
+    }
+    
+    // Save per-driver overrides
     drivers.forEach(d => {
       const override = driverOverrides[d.id]
       const value = override === '' ? null : parseInt(override)
