@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms } from '@/lib/twilio'
+import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
 /**
  * Notify recipient and business when a delivery attempt fails.
  * Triggered: failDelivery() in context.tsx
  * Recipients: recipient (retry info) + business (status update)
  * Setting gate: sms_notify_failed_attempt
- * NOTE: No tracking link - customer already has the persistent link
  */
 export async function POST(req: Request) {
   let body: { deliveryId?: string; reason?: string; retryCount?: number }
@@ -51,6 +50,7 @@ export async function POST(req: Request) {
 
   const businessName = delivery.businesses?.name || 'LV Couriers'
   const businessPhone = delivery.businesses?.phone || null
+  const trackingUrl = buildTrackingUrl(deliveryId)
   const retries = delivery.retry_count ?? 0
   const maxRetries = 3
   const attemptsLeft = Math.max(0, maxRetries - retries)
@@ -62,9 +62,10 @@ export async function POST(req: Request) {
     const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
     const recipMsg = attemptsLeft > 0
       ? `${greeting}, we attempted delivery from ${businessName} but were unable to complete it. ` +
-        `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining. — LV Couriers`
+        `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining. ` +
+        `Track your delivery: ${trackingUrl} — LV Couriers`
       : `${greeting}, we were unable to complete your delivery from ${businessName} after ${retries} attempt${retries !== 1 ? 's' : ''}. ` +
-        `Please contact us to arrange redelivery. — LV Couriers`
+        `Please contact us to arrange redelivery. Track: ${trackingUrl} — LV Couriers`
     sends.push(
       sendSms({ to: delivery.recipient_phone, body: recipMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -75,8 +76,10 @@ export async function POST(req: Request) {
   if (businessPhone) {
     const recipientLabel = delivery.recipient_name || 'recipient'
     const bizMsg = attemptsLeft > 0
-      ? `Delivery to ${recipientLabel} failed (attempt ${retries}/${maxRetries}). Driver will retry. — LV Couriers`
-      : `Delivery to ${recipientLabel} permanently failed after ${retries} attempts. Admin review required. — LV Couriers`
+      ? `Delivery to ${recipientLabel} failed (attempt ${retries}/${maxRetries}). ` +
+        `Driver will retry. Track: ${trackingUrl} — LV Couriers`
+      : `Delivery to ${recipientLabel} permanently failed after ${retries} attempts. ` +
+        `Admin review required. Track: ${trackingUrl} — LV Couriers`
     sends.push(
       sendSms({ to: businessPhone, body: bizMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'business' })),

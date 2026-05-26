@@ -151,11 +151,7 @@ export function AdminCommunications() {
                 </div>
               ) : (
                 filteredNotifications.map(notification => {
-                  const config = NOTIFICATION_CONFIGS[notification.type] ?? {
-                    icon: Bell,
-                    color: 'text-gray-400 bg-gray-500/10',
-                    label: notification.type || 'Unknown',
-                  }
+                  const config = NOTIFICATION_CONFIGS[notification.type]
                   const Icon = config.icon
                   
                   return (
@@ -219,14 +215,8 @@ export function AdminCommunications() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {smsLog.map(sms => {
-                      const typeConfig = SMS_CONFIGS[sms.type] ?? {
-                        label: sms.type || 'Unknown',
-                        color: 'bg-gray-500/10 text-gray-400',
-                      }
-                      const statusConfig = SMS_STATUS_CONFIGS[sms.status] ?? {
-                        label: sms.status || 'Unknown',
-                        color: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
-                      }
+                      const typeConfig = SMS_CONFIGS[sms.type]
+                      const statusConfig = SMS_STATUS_CONFIGS[sms.status]
                       const canRetry = sms.status === 'failed' || sms.status === 'bounced'
                       
                       return (
