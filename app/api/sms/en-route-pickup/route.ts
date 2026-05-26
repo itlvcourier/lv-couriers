@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { sendSms } from '@/lib/twilio'
 
 /**
  * Notify business when driver is en route to pick up the package.
  * Triggered: advanceStatus → 'en_route_pickup'
  * Recipients: business only (recipient doesn't need this notification)
  * Setting gate: sms_notify_en_route_pickup
+ * NOTE: No tracking link - customer already has the persistent link from order-confirmed
  */
 export async function POST(req: Request) {
   let body: { deliveryId?: string }
@@ -54,11 +55,9 @@ export async function POST(req: Request) {
   }
 
   const driverName = delivery.drivers?.name || 'Your driver'
-  const trackingUrl = buildTrackingUrl(deliveryId)
   const msg =
     `${driverName} is on the way to pick up your package at ` +
-    `${delivery.pickup_address || 'your location'}. ` +
-    `Track: ${trackingUrl} — LV Couriers`
+    `${delivery.pickup_address || 'your location'}. — LV Couriers`
 
   const result = await sendSms({
     to: businessPhone,

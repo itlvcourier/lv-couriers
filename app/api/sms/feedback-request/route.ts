@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { sendSms } from '@/lib/twilio'
 
 /**
  * Send a post-delivery feedback request to the recipient.
@@ -8,6 +8,7 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * or optionally via a cron job for all deliveries completed in the past hour.
  * Recipients: recipient only
  * Setting gate: sms_notify_feedback_request
+ * NOTE: No tracking link needed - simple feedback request
  */
 export async function POST(req: Request) {
   let body: { deliveryId?: string }
@@ -51,7 +52,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, reason: 'No recipient phone' })
   }
 
-  const trackingUrl = buildTrackingUrl(deliveryId)
   const businessName = delivery.businesses?.name || 'LV Couriers'
   const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
 
@@ -59,8 +59,7 @@ export async function POST(req: Request) {
     to: delivery.recipient_phone,
     body:
       `${greeting}, how was your delivery from ${businessName}? ` +
-      `View your delivery details here: ${trackingUrl}\n` +
-      `Reply STOP to unsubscribe. — LV Couriers`,
+      `We appreciate your feedback! Reply STOP to unsubscribe. — LV Couriers`,
     type: 'feedback_request',
     deliveryId,
   })

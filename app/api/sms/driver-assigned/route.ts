@@ -7,6 +7,7 @@ import { sendSms } from '@/lib/twilio'
  * Called from the client context when claimDelivery completes.
  *
  * Also notifies the business that a driver has been assigned.
+ * NOTE: No tracking link - customer already has the persistent link from order-confirmed
  */
 export async function POST(req: Request) {
   let body: { deliveryId?: string; driverId?: string }
@@ -77,7 +78,6 @@ export async function POST(req: Request) {
   })
 
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
-  const trackingUrl = buildTrackingUrl(deliveryId)
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
   const businessName = delivery.businesses?.name || 'LV Courier'
 
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       `Dropoff: ${delivery.dropoff_address || delivery.dropoff_area || 'See app'}\n` +
       `Recipient: ${delivery.recipient_name || 'N/A'}` +
       (delivery.recipient_phone ? ` (${delivery.recipient_phone})` : '') +
-      `\nTrack: ${trackingUrl}`
+      ` — LV Couriers`
 
     sends.push(
       sendSms({
@@ -110,8 +110,7 @@ export async function POST(req: Request) {
     const bizMsg =
       `Driver ${driver.name} has been assigned to your delivery.\n` +
       `Route: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}\n` +
-      `Recipient: ${delivery.recipient_name || 'N/A'}\n` +
-      `Track live: ${trackingUrl}`
+      `Recipient: ${delivery.recipient_name || 'N/A'} — LV Couriers`
 
     sends.push(
       sendSms({
@@ -134,13 +133,4 @@ export async function POST(req: Request) {
   const results = await Promise.all(sends)
   console.log('[v0] sms.driver-assigned results', results)
   return NextResponse.json({ ok: true, results })
-}
-
-function buildTrackingUrl(deliveryId: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    'http://localhost:3000'
-  const normalized = base.startsWith('http') ? base : `https://${base}`
-  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
 }

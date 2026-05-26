@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { sendSms } from '@/lib/twilio'
 
 /**
  * Notify all parties when a delivery is reassigned to a different driver.
  * Triggered: reassignDriver() in context.tsx
  * Recipients: new driver (job details), old driver (removed), business (updated)
  * Setting gate: sms_notify_reassigned
+ * NOTE: No tracking link - customer already has the persistent link
  */
 export async function POST(req: Request) {
   let body: { deliveryId?: string; newDriverId?: string; oldDriverId?: string | null }
@@ -61,7 +62,6 @@ export async function POST(req: Request) {
 
   const businessName = delivery.businesses?.name || 'LV Couriers'
   const businessPhone = delivery.businesses?.phone || null
-  const trackingUrl = buildTrackingUrl(deliveryId)
   const recipientLabel = delivery.recipient_name || 'recipient'
 
   const sends: Array<Promise<{ ok: boolean; role: string }>> = []
@@ -74,8 +74,7 @@ export async function POST(req: Request) {
         body:
           `Hi ${newDriver.name}, you've been assigned a delivery for ${businessName}. ` +
           `Pickup: ${delivery.pickup_address || 'see app'}. ` +
-          `Dropoff: ${delivery.dropoff_address || 'see app'} (${recipientLabel}). ` +
-          `Track: ${trackingUrl} — LV Couriers`,
+          `Dropoff: ${delivery.dropoff_address || 'see app'} (${recipientLabel}). — LV Couriers`,
         type: 'driver_reassigned',
         deliveryId,
         driverId: newDriver.id,
@@ -102,8 +101,7 @@ export async function POST(req: Request) {
       sendSms({
         to: businessPhone,
         body:
-          `Driver update: ${newDriver.name} is now handling the delivery to ${recipientLabel}. ` +
-          `Track: ${trackingUrl} — LV Couriers`,
+          `Driver update: ${newDriver.name} is now handling the delivery to ${recipientLabel}. — LV Couriers`,
         type: 'driver_reassigned',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'business' })),

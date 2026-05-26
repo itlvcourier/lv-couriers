@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { sendSms } from '@/lib/twilio'
 
 /**
  * Send a "your package is on its way" SMS to the recipient.
  * Triggered when a driver advances a delivery to en_route_dropoff.
+ * NOTE: No tracking link - customer already has the persistent link from order-confirmed
  *
  * Auth: matches the rest of the app's demo-mode posture — the delivery row
  * itself is the authority. Server-only validation prevents abuse:
@@ -62,17 +63,14 @@ export async function POST(req: Request) {
   const businessName = delivery.businesses?.name || 'Lv Couriers'
   const businessPhone = delivery.businesses?.phone || null
   const recipientName = delivery.recipient_name || 'there'
-  const trackingUrl = buildTrackingUrl(deliveryId)
 
-  // Send to recipient + business in parallel. The business gets the same
-  // tracking link so they can monitor progress to the recipient address.
+  // Send to recipient + business in parallel
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
 
   if (delivery.recipient_phone) {
     const recipMsg =
-      `Hi ${recipientName}, your package from ${businessName} is on its way. ` +
-      `We'll be at ${delivery.dropoff_address || 'your address'} shortly. ` +
-      `Track live: ${trackingUrl}`
+      `Hi ${recipientName}, your package from ${businessName} is on its way! ` +
+      `We'll be at ${delivery.dropoff_address || 'your address'} shortly. — LV Couriers`
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
@@ -89,9 +87,7 @@ export async function POST(req: Request) {
 
   if (businessPhone) {
     const bizMsg =
-      `Driver is en route to ${recipientName} (${businessName}). ` +
-      `Address: ${delivery.dropoff_address || 'recipient address'}. ` +
-      `Live tracking: ${trackingUrl}`
+      `Driver is en route to ${recipientName} (${delivery.dropoff_address || 'recipient address'}). — LV Couriers`
     sends.push(
       sendSms({
         to: businessPhone,

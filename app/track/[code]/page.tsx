@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -11,9 +11,30 @@ import {
   Clock,
   Truck,
   CheckCircle,
+  MapPin,
+  Navigation,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import dynamic from 'next/dynamic'
+
+// Dynamically import map to avoid SSR issues
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+)
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+)
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+)
+const Popup = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Popup),
+  { ssr: false }
+)
 
 type TrackingStatus =
   | 'posted'
@@ -31,6 +52,10 @@ interface TrackedDelivery {
   status: TrackingStatus
   recipient_name: string | null
   dropoff_address: string | null
+  dropoff_lat: number | null
+  dropoff_lng: number | null
+  pickup_lat: number | null
+  pickup_lng: number | null
   delivered_at: string | null
   picked_up_at: string | null
   posted_at: string | null
@@ -39,8 +64,15 @@ interface TrackedDelivery {
   proof_photo_url: string | null
   signature_url: string | null
   recipient_note: string | null
+  driver_id: string | null
   business: { name: string } | null
   driver: { name: string; phone: string | null } | null
+}
+
+interface DriverLocation {
+  lat: number
+  lng: number
+  recorded_at: string
 }
 
 interface StatusStep {
@@ -55,8 +87,21 @@ export default function TrackingPage() {
   const code = params.code as string
 
   const [delivery, setDelivery] = useState<TrackedDelivery | null>(null)
+  const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [mapReady, setMapReady] = useState(false)
+
+  // Load leaflet CSS on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      document.head.appendChild(link)
+      setMapReady(true)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -68,7 +113,8 @@ export default function TrackingPage() {
         .select(
           `id, status, recipient_name, dropoff_address, delivered_at,
            picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
-           proof_photo_url, signature_url, recipient_note,
+           proof_photo_url, signature_url, recipient_note, driver_id,
+           dropoff_lat, dropoff_lng, pickup_lat, pickup_lng,
            business:businesses(name), driver:drivers(name, phone)`,
         )
         .eq('id', code)
@@ -82,6 +128,24 @@ export default function TrackingPage() {
       }
       setDelivery(data as unknown as TrackedDelivery)
       setLoading(false)
+
+      // Load driver GPS if there's a driver assigned
+      if (data.driver_id) {
+        const { data: gpsData } = await supabase
+          .from('driver_locations')
+          .select('lat, lng, recorded_at')
+          .eq('driver_id', data.driver_id)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (gpsData && !cancelled) {
+          setDriverLocation({
+            lat: Number(gpsData.lat),
+            lng: Number(gpsData.lng),
+            recorded_at: gpsData.recorded_at,
+          })
+        }
+      }
     }
 
     void load()
@@ -97,7 +161,7 @@ export default function TrackingPage() {
           table: 'deliveries',
           filter: `id=eq.${code}`,
         },
-        (payload: unknown) => {
+        () => {
           if (cancelled) return
           // Reload full delivery with joins when status changes
           void load()
@@ -105,13 +169,56 @@ export default function TrackingPage() {
       )
       .subscribe()
 
-    // Fallback polling every 30s in case realtime connection drops
-    const interval = setInterval(load, 30000)
+    // Subscribe to driver GPS updates (separate channel, filtered by driver_id dynamically)
+    let gpsChannel: ReturnType<typeof supabase.channel> | null = null
+    const setupGpsChannel = (driverId: string) => {
+      if (gpsChannel) {
+        void supabase.removeChannel(gpsChannel)
+      }
+      gpsChannel = supabase
+        .channel(`driver-gps-${driverId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'driver_locations',
+            filter: `driver_id=eq.${driverId}`,
+          },
+          (payload: { new: { lat: string; lng: string; recorded_at: string } }) => {
+            if (cancelled) return
+            const p = payload.new
+            setDriverLocation({
+              lat: Number(p.lat),
+              lng: Number(p.lng),
+              recorded_at: p.recorded_at,
+            })
+          },
+        )
+        .subscribe()
+    }
+
+    // Set up GPS channel once we have delivery data with driver_id
+    const checkAndSetupGps = async () => {
+      const { data } = await supabase
+        .from('deliveries')
+        .select('driver_id')
+        .eq('id', code)
+        .maybeSingle()
+      if (data?.driver_id && !cancelled) {
+        setupGpsChannel(data.driver_id)
+      }
+    }
+    void checkAndSetupGps()
+
+    // Fallback polling every 15s for GPS updates (more frequent than status)
+    const interval = setInterval(load, 15000)
 
     return () => {
       cancelled = true
       clearInterval(interval)
       void supabase.removeChannel(channel)
+      if (gpsChannel) void supabase.removeChannel(gpsChannel)
     }
   }, [code])
 
@@ -183,13 +290,25 @@ export default function TrackingPage() {
 
   const steps = buildStatusSteps(delivery)
   const isDelivered = delivery.status === 'delivered'
+  const showLiveMap = mapReady && 
+    driverLocation && 
+    ['en_route_pickup', 'picked_up', 'en_route_dropoff'].includes(delivery.status)
+
+  // Calculate map center and bounds
+  const mapCenter = useMemo(() => {
+    if (driverLocation) return { lat: driverLocation.lat, lng: driverLocation.lng }
+    if (delivery.dropoff_lat && delivery.dropoff_lng) {
+      return { lat: Number(delivery.dropoff_lat), lng: Number(delivery.dropoff_lng) }
+    }
+    return { lat: 53.5461, lng: -113.4938 } // Edmonton default
+  }, [driverLocation, delivery.dropoff_lat, delivery.dropoff_lng])
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TrackingHeader />
 
       <main className="flex-1 p-4 max-w-2xl mx-auto w-full">
-        {/* Hero */}
+        {/* Hero - Live Map or Status Card */}
         <div className="mb-6">
           {isDelivered ? (
             <Card className="h-[260px] md:h-[320px] flex items-center justify-center bg-gradient-to-br from-green-500/10 to-emerald-500/10">
@@ -205,6 +324,55 @@ export default function TrackingPage() {
                     ? formatTime(delivery.delivered_at)
                     : ''}
                 </p>
+              </div>
+            </Card>
+          ) : showLiveMap ? (
+            <Card className="overflow-hidden">
+              <div className="h-[260px] md:h-[320px] relative">
+                <MapContainer
+                  center={[mapCenter.lat, mapCenter.lng]}
+                  zoom={14}
+                  style={{ height: '100%', width: '100%' }}
+                  zoomControl={false}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  {/* Driver marker */}
+                  {driverLocation && (
+                    <Marker position={[driverLocation.lat, driverLocation.lng]}>
+                      <Popup>
+                        <div className="text-center">
+                          <p className="font-medium">{delivery.driver?.name || 'Driver'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Updated {formatRelativeTime(driverLocation.recorded_at)}
+                          </p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )}
+                  {/* Dropoff marker */}
+                  {delivery.dropoff_lat && delivery.dropoff_lng && (
+                    <Marker position={[Number(delivery.dropoff_lat), Number(delivery.dropoff_lng)]}>
+                      <Popup>Delivery destination</Popup>
+                    </Marker>
+                  )}
+                </MapContainer>
+                {/* Status overlay */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                      <Navigation className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{headlineForStatus(delivery.status)}</p>
+                      <p className="text-xs text-white/70">
+                        Live tracking · Updated {formatRelativeTime(driverLocation?.recorded_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </Card>
           ) : (
@@ -460,4 +628,15 @@ function formatTime(iso: string): string {
   } catch {
     return ''
   }
+}
+
+function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return ''
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime())
+  const secs = Math.floor(diff / 1000)
+  if (secs < 60) return 'just now'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  return `${hrs}h ago`
 }
