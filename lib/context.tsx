@@ -139,7 +139,6 @@ interface AppContextType {
   // Auth state
   currentUser: MockUser | null
   activeRole: UserRole | null
-  activeLocationId: string | null
   
   // Data state
   deliveries: Delivery[]
@@ -1282,10 +1281,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (newBusiness.locations && newBusiness.locations.length > 0) {
       const seeded = newBusiness.locations.map(loc =>
-        buildDefaultRateCard(businessId, loc.id, {
-          billingEmail: loc.billingEmail || '',
-          backupEmail: loc.backupEmail || '',
-        }),
+        buildDefaultRateCard(businessId, loc.id),
       )
       for (const rc of seeded) persist(saveRateCardToDb(rc), 'seedRateCard')
       setRateCards(prev => {
@@ -1367,10 +1363,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   // Check if current user can access a specific location
   const canAccessLocation = useCallback((locationId: string): boolean => {
-    if (!currentUser || currentUser.role !== 'business') return false
+    if (!currentUser) return false
     
     // Admins can access everything
     if (currentUser.role === 'admin') return true
+    
+    // Non-business users can't access locations
+    if (currentUser.role !== 'business') return false
     
     const accessibleLocations = getAccessibleLocations()
     return accessibleLocations.some(loc => loc.id === locationId)
@@ -1474,6 +1473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Filter deliveries for this location and period
     const periodDeliveries = deliveries.filter(d => 
       d.locationId === locationId &&
+      d.createdAt &&
       d.createdAt >= start &&
       d.createdAt <= end
     )
@@ -1486,9 +1486,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     // Calculate average delivery time (from created to delivered)
     const deliveryTimes = completedDeliveries
-      .filter(d => d.deliveredAt)
+      .filter(d => d.deliveredAt && d.createdAt)
       .map(d => {
-        const created = new Date(d.createdAt).getTime()
+        const created = new Date(d.createdAt!).getTime()
         const delivered = new Date(d.deliveredAt!).getTime()
         return (delivered - created) / (1000 * 60) // minutes
       })
@@ -1509,17 +1509,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .reduce((sum, inv) => sum + inv.total, 0)
     
     // Aggregate feedback (from delivery flags)
-    const feedbackFlags = periodDeliveries.flatMap(d => d.flags?.filter(f => 
-      f.type === 'customer_complaint' || f.type === 'late_delivery' || f.type === 'damage'
-    ) || [])
+    const feedbackFlags = periodDeliveries.flatMap(d => d.flags || [])
     
-    // Count issue types
+    // Count issue types from flags
     const issueTypes = new Map<string, number>()
-    failedDeliveries.forEach(d => {
-      if (d.failureReason) {
-        issueTypes.set(d.failureReason, (issueTypes.get(d.failureReason) || 0) + 1)
-      }
-    })
     feedbackFlags.forEach(f => {
       issueTypes.set(f.type, (issueTypes.get(f.type) || 0) + 1)
     })
@@ -2670,7 +2663,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         currentUser,
         activeRole,
-        activeLocationId,
         isHydrating,
         deliveries,
         drivers,

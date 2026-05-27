@@ -173,6 +173,7 @@ export function mapDeliveryRow(row: Row): Delivery {
     invoiceId: (row.invoice_id as string | null) ?? null,
     durationMins,
     duration: durationMins != null ? `${durationMins}m` : null,
+    pickupPhotoUrl: (row.pickup_photo_url as string | null) ?? null,
     proofPhotoUrl: (row.proof_photo_url as string | null) ?? null,
     signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
