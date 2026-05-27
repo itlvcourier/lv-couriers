@@ -68,13 +68,13 @@ export function DriverDocuments() {
 
   // Fetch driver documents from database
   const fetchDocuments = async () => {
-    if (!currentUser?.id) return []
+    if (!currentUser?.driverId) return []
     
     const supabase = createClient()
     const { data, error } = await supabase
       .from('driver_documents')
       .select('*')
-      .eq('driver_id', currentUser.id)
+      .eq('driver_id', currentUser.driverId)
     
     if (error) {
       console.error('Error fetching documents:', error)
@@ -84,7 +84,7 @@ export function DriverDocuments() {
   }
 
   const { data: documents = [], mutate } = useSWR(
-    currentUser?.id ? `driver-documents-${currentUser.id}` : null,
+    currentUser?.driverId ? `driver-documents-${currentUser.driverId}` : null,
     fetchDocuments
   )
 
@@ -104,7 +104,7 @@ export function DriverDocuments() {
   }
 
   const handleFileSelect = async (docType: string, file: File) => {
-    if (!currentUser?.id) {
+    if (!currentUser?.driverId) {
       toast.error('Not logged in')
       return
     }
@@ -115,7 +115,7 @@ export function DriverDocuments() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('documentType', docType)
-      formData.append('driverId', currentUser.id)
+      formData.append('driverId', currentUser.driverId)
 
       const response = await fetch('/api/driver/upload-document', {
         method: 'POST',

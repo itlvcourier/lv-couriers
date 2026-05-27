@@ -108,6 +108,22 @@ const DEFAULT_SETTINGS: SystemSettings = {
   smsEarningsSummary: false,
   // Dispatch mode – defaults to self-claim (current behavior)
   allowDriverSelfClaim: true,
+  // Invoice template settings
+  invoiceCompanyName: '',
+  invoiceCompanyAddress: '',
+  invoiceCompanyPhone: '',
+  invoiceCompanyEmail: '',
+  invoiceTaxNumber: '',
+  invoiceTaxLabel: 'GST',
+  invoiceTaxRate: 0,
+  invoicePaymentTerms: 'Net 15',
+  invoicePaymentInstructions: '',
+  invoiceBankName: '',
+  invoiceBankAccountName: '',
+  invoiceBankAccountNumber: '',
+  invoiceBankTransitNumber: '',
+  invoiceBankInstitutionNumber: '',
+  invoiceFooterNotes: '',
 }
 
 // Fire-and-forget DB persistence. Logs errors so we can diagnose without

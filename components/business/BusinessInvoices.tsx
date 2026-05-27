@@ -301,9 +301,9 @@ function InvoiceDetailView({
             ${invoice.lines.map(line => `
               <tr>
                 <td>${line.description}</td>
-                <td class="amount">${line.qty}</td>
+                <td class="amount">${line.quantity}</td>
                 <td class="amount">$${line.rate.toFixed(2)}</td>
-                <td class="amount">$${line.amount.toFixed(2)}</td>
+                <td class="amount">$${line.total.toFixed(2)}</td>
               </tr>
             `).join('')}
             <tr>

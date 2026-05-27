@@ -161,7 +161,7 @@ export function BusinessOrders() {
       recipient_name: delivery.recipientName || '',
       recipient_phone: delivery.recipientPhone || '',
       buzz_code: delivery.buzzCode || '',
-      special_instructions: delivery.specialInstructions || '',
+      special_instructions: delivery.recipientNote || '',
       is_rush: delivery.isRush || false,
       is_urgent: delivery.isUrgent || false,
     })
@@ -635,7 +635,7 @@ export function BusinessOrders() {
                     recipientName: duplicateTarget.recipientName,
                     recipientPhone: duplicateTarget.recipientPhone,
                     buzzCode: duplicateTarget.buzzCode,
-                    specialInstructions: duplicateTarget.specialInstructions,
+                    specialInstructions: duplicateTarget.recipientNote,
                     isRush: duplicateTarget.isRush,
                     isUrgent: duplicateTarget.isUrgent,
                   }))

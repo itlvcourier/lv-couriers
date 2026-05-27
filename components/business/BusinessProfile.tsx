@@ -153,10 +153,12 @@ export function BusinessProfile() {
       .eq('role', 'business')
     
     if (!error && profiles) {
-      // Filter out the main business owner (billing_email)
-      const members = profiles
-        .filter(p => p.email !== business.billingEmail)
-        .map(p => ({
+      // Filter out the main business owner (primary location's billing_email)
+      const primaryBillingEmail = business.locations[0]?.billingEmail
+      type ProfileRow = { id: string; email: string | null; full_name: string | null; location_id: string | null }
+      const members = (profiles as ProfileRow[])
+        .filter((p) => p.email !== primaryBillingEmail)
+        .map((p) => ({
           id: p.id,
           email: p.email || '',
           name: p.full_name || p.email || '',
@@ -251,7 +253,7 @@ export function BusinessProfile() {
           notes: storeRequestForm.notes,
           location_id: storeRequestType === 'remove' ? storeRequestForm.locationIdToRemove : null,
           status: 'pending',
-          requested_by: currentUser?.id,
+          requested_by: currentUser?.email || 'unknown',
           created_at: new Date().toISOString(),
         })
 

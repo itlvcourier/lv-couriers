@@ -300,36 +300,6 @@ export function BusinessReports() {
         </Card>
       )}
       
-      {/* Issues Summary */}
-      {stats && stats.issues && stats.issues.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
-              Issues Summary
-            </CardTitle>
-            <CardDescription>
-              Common problems during the selected period
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {stats.issues.map((issue) => (
-                <div 
-                  key={issue.type}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
-                >
-                  <span className="text-sm capitalize">
-                    {issue.type.replace(/_/g, ' ')}
-                  </span>
-                  <Badge variant="secondary">{issue.count}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
       {/* Empty State */}
       {(!report || (stats && stats.totalDeliveries === 0)) && (
         <Card className="border-dashed">

@@ -50,7 +50,7 @@ export function DriverEarnings() {
       calculatedPay: calculateDriverPay(settings, {
         is_rush: d.is_rush,
         is_urgent: d.is_urgent,
-        distance_km: d.distance_km || 0,
+        distance_km: (d as DbDelivery & { distance_km?: number }).distance_km || 5, // Default 5km if not tracked
       })
     }))
     
