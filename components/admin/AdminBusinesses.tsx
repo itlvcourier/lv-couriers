@@ -1,14 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { toast } from 'sonner'
 import { Spinner } from '@/components/ui/spinner'
-import { 
+import {
   Sheet, 
   SheetContent, 
   SheetHeader, 
@@ -105,9 +101,12 @@ export function AdminBusinesses() {
   const [inviteForm, setInviteForm] = useState({
     email: '',
     name: '',
+    password: '',
     role: 'manager' as 'owner' | 'manager' | 'viewer',
     locationIds: [] as string[],
   })
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [createdUserCredentials, setCreatedUserCredentials] = useState<{ email: string; password: string } | null>(null)
 
   // Filter businesses
   const filteredBusinesses = businesses.filter((b: BusinessWithLocations) => {
@@ -295,15 +294,54 @@ export function AdminBusinesses() {
   }
 
   const handleInviteUser = async () => {
-    if (!detailBusiness || !inviteForm.email || !inviteForm.name) {
-      toast.error('Please fill in required fields')
+    if (!detailBusiness || !inviteForm.email || !inviteForm.name || !inviteForm.password) {
+      toast.error('Please fill in all required fields')
       return
     }
 
-    // TODO: Implement actual invite via email
-    toast.success(`Invitation sent to ${inviteForm.email}`)
-    setInviteForm({ email: '', name: '', role: 'manager', locationIds: [] })
-    setShowInviteSheet(false)
+    if (inviteForm.password.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+
+    if (inviteForm.role !== 'owner' && inviteForm.locationIds.length === 0) {
+      toast.error('Please select at least one location for non-owner users')
+      return
+    }
+
+    setIsCreatingUser(true)
+
+    try {
+      const response = await fetch('/api/admin/create-business-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteForm.email,
+          password: inviteForm.password,
+          name: inviteForm.name,
+          businessId: detailBusiness.id,
+          locationId: inviteForm.role === 'owner' ? null : inviteForm.locationIds[0], // Primary location
+          role: inviteForm.role,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create user')
+      }
+
+      // Show success with credentials
+      setCreatedUserCredentials({ email: inviteForm.email, password: inviteForm.password })
+      toast.success(`User account created for ${inviteForm.name}`)
+      
+      // Reset form but keep sheet open to show credentials
+      setInviteForm({ email: '', name: '', password: '', role: 'manager', locationIds: [] })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create user')
+    } finally {
+      setIsCreatingUser(false)
+    }
   }
 
   const getBusinessStats = (businessId: string) => {
@@ -765,83 +803,167 @@ export function AdminBusinesses() {
         </Sheet>
 
         {/* Invite Member Sheet */}
-        <Sheet open={showInviteSheet} onOpenChange={setShowInviteSheet}>
+        <Sheet open={showInviteSheet} onOpenChange={(open) => {
+          if (!open) {
+            setCreatedUserCredentials(null)
+            setInviteForm({ email: '', name: '', password: '', role: 'manager', locationIds: [] })
+          }
+          setShowInviteSheet(open)
+        }}>
           <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
             <SheetHeader>
-              <SheetTitle className="text-foreground">Invite Team Member</SheetTitle>
+              <SheetTitle className="text-foreground">
+                {createdUserCredentials ? 'User Created Successfully' : 'Create Store User'}
+              </SheetTitle>
               <SheetDescription>
-                Add a new user to {detailBusiness.name}
+                {createdUserCredentials 
+                  ? 'Share these credentials with the user. They can change their password after first login.'
+                  : `Create a new user account for ${detailBusiness.name}`
+                }
               </SheetDescription>
             </SheetHeader>
             
-            <div className="mt-6 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-foreground">Email *</Label>
-                <Input
-                  type="email"
-                  value={inviteForm.email}
-                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                  placeholder="user@company.com"
-                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-foreground">Name *</Label>
-                <Input
-                  value={inviteForm.name}
-                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
-                  placeholder="John Smith"
-                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-foreground">Role</Label>
-                <Select 
-                  value={inviteForm.role}
-                  onValueChange={(v) => setInviteForm({ ...inviteForm, role: v as 'owner' | 'manager' | 'viewer' })}
-                >
-                  <SelectTrigger className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner">Owner - Full access to all locations</SelectItem>
-                    <SelectItem value="manager">Manager - Can manage assigned locations</SelectItem>
-                    <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {inviteForm.role !== 'owner' && (
-                <div className="space-y-2">
-                  <Label className="text-foreground">Location Access</Label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {detailBusiness.locations.map((location) => (
-                      <div key={location.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`loc-${location.id}`}
-                          checked={inviteForm.locationIds.includes(location.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setInviteForm({ ...inviteForm, locationIds: [...inviteForm.locationIds, location.id] })
-                            } else {
-                              setInviteForm({ ...inviteForm, locationIds: inviteForm.locationIds.filter(id => id !== location.id) })
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`loc-${location.id}`} className="text-sm cursor-pointer">
-                          {location.name}
-                        </Label>
+            {createdUserCredentials ? (
+              // Show credentials after successful creation
+              <div className="mt-6 space-y-4">
+                <Card className="bg-green-500/10 border-green-500/30">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <UserPlus className="w-5 h-5" />
+                      <span className="font-medium">Account Created</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Login Email</Label>
+                        <p className="font-mono text-sm text-foreground bg-[var(--bg-card-2)] p-2 rounded">
+                          {createdUserCredentials.email}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Temporary Password</Label>
+                        <p className="font-mono text-sm text-foreground bg-[var(--bg-card-2)] p-2 rounded">
+                          {createdUserCredentials.password}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <p className="text-xs text-muted-foreground">
+                  The user can now log in at <strong>/business</strong> with these credentials.
+                </p>
+                <Button 
+                  onClick={() => {
+                    setCreatedUserCredentials(null)
+                    setShowInviteSheet(false)
+                  }} 
+                  className="w-full"
+                >
+                  Done
+                </Button>
+              </div>
+            ) : (
+              // Show creation form
+              <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Email *</Label>
+                  <Input
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    placeholder="user@company.com"
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    disabled={isCreatingUser}
+                  />
                 </div>
-              )}
-              
-              <Button onClick={handleInviteUser} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Send Invitation
-              </Button>
-            </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Name *</Label>
+                  <Input
+                    value={inviteForm.name}
+                    onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                    placeholder="John Smith"
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    disabled={isCreatingUser}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Temporary Password *</Label>
+                  <Input
+                    type="text"
+                    value={inviteForm.password}
+                    onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+                    placeholder="Min 6 characters"
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    disabled={isCreatingUser}
+                  />
+                  <p className="text-xs text-muted-foreground">User should change this after first login</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Role</Label>
+                  <Select 
+                    value={inviteForm.role}
+                    onValueChange={(v) => setInviteForm({ ...inviteForm, role: v as 'owner' | 'manager' | 'viewer' })}
+                    disabled={isCreatingUser}
+                  >
+                    <SelectTrigger className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner">Owner - Full access to all locations</SelectItem>
+                      <SelectItem value="manager">Manager - Can post and manage deliveries</SelectItem>
+                      <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {inviteForm.role !== 'owner' && (
+                  <div className="space-y-2">
+                    <Label className="text-foreground">Location Access *</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Select which store(s) this user can access
+                    </p>
+                    <div className="space-y-2 max-h-40 overflow-y-auto border border-[var(--border-color)] rounded-lg p-2">
+                      {detailBusiness.locations.map((location) => (
+                        <div key={location.id} className="flex items-center gap-2 p-2 rounded hover:bg-[var(--bg-card-2)]">
+                          <Checkbox
+                            id={`loc-${location.id}`}
+                            checked={inviteForm.locationIds.includes(location.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setInviteForm({ ...inviteForm, locationIds: [...inviteForm.locationIds, location.id] })
+                              } else {
+                                setInviteForm({ ...inviteForm, locationIds: inviteForm.locationIds.filter(id => id !== location.id) })
+                              }
+                            }}
+                            disabled={isCreatingUser}
+                          />
+                          <Label htmlFor={`loc-${location.id}`} className="text-sm cursor-pointer flex-1">
+                            {location.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <Button 
+                  onClick={handleInviteUser} 
+                  className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+                  disabled={isCreatingUser}
+                >
+                  {isCreatingUser ? (
+                    <>
+                      <Spinner className="w-4 h-4 mr-2" />
+                      Creating User...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create User Account
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </SheetContent>
         </Sheet>
 
