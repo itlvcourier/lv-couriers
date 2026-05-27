@@ -11,6 +11,7 @@ import { BusinessLiveTracking } from './BusinessLiveTracking'
 import { BusinessInvoices } from './BusinessInvoices'
 import { BusinessProfile } from './BusinessProfile'
 import { BusinessReports } from './BusinessReports'
+import { LocationSwitcher } from './LocationSwitcher'
 import {
   Plus,
   Package,
@@ -46,11 +47,14 @@ export function BusinessView() {
                 <p className="text-xs text-muted-foreground">Business Portal</p>
               </div>
             </div>
-            <Avatar className="w-9 h-9">
-              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                {business?.name ? getInitials(business.name) : 'B'}
-              </AvatarFallback>
-            </Avatar>
+            <div className="flex items-center gap-3">
+              <LocationSwitcher />
+              <Avatar className="w-9 h-9">
+                <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                  {business?.name ? getInitials(business.name) : 'B'}
+                </AvatarFallback>
+              </Avatar>
+            </div>
           </div>
         </div>
       </header>

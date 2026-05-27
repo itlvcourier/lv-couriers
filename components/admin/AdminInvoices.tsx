@@ -109,6 +109,7 @@ export function AdminInvoices() {
     businesses,
     rateCards,
     generateInvoice,
+    generateBusinessInvoices,
     markInvoicePaid,
     disputes,
     resolveDispute,
@@ -390,14 +391,15 @@ export function AdminInvoices() {
         </SheetContent>
       </Sheet>
 
-      {/* Generate Invoice Modal */}
-      <GenerateInvoiceModal
-        open={showGenerateModal}
-        onClose={() => setShowGenerateModal(false)}
-        businesses={businesses}
-        rateCards={rateCards}
-        onGenerate={generateInvoice}
-      />
+  {/* Generate Invoice Modal */}
+  <GenerateInvoiceModal
+    open={showGenerateModal}
+    onClose={() => setShowGenerateModal(false)}
+    businesses={businesses}
+    rateCards={rateCards}
+    onGenerate={generateInvoice}
+    onGenerateBusiness={generateBusinessInvoices}
+  />
 
       {/* Mark Paid Modal */}
       {markPaidInvoice && (
@@ -1248,21 +1250,27 @@ function getEventLabel(event: InvoiceEmailEvent): string {
 // Generate Invoice Modal
 // ============================================================================
 
+type InvoiceFormat = 'separate' | 'combined' | 'combined_breakdown'
+
 function GenerateInvoiceModal({
   open,
   onClose,
   businesses,
   rateCards: _rateCards,
   onGenerate,
+  onGenerateBusiness,
 }: {
   open: boolean
   onClose: () => void
   businesses: any[]
   rateCards: any[]
   onGenerate: (businessId: string, locationId: string, periodStart: string, periodEnd: string) => Invoice | null
+  onGenerateBusiness?: (businessId: string, periodStart: string, periodEnd: string, format?: InvoiceFormat) => Invoice[]
 }) {
   const [selectedBusiness, setSelectedBusiness] = useState('')
   const [selectedLocation, setSelectedLocation] = useState('')
+  const [generateMode, setGenerateMode] = useState<'single' | 'all'>('single')
+  const [invoiceFormat, setInvoiceFormat] = useState<InvoiceFormat>('separate')
   const [periodStart, setPeriodStart] = useState(() => {
     const date = new Date()
     date.setMonth(date.getMonth() - 1)
@@ -1277,38 +1285,123 @@ function GenerateInvoiceModal({
 
   const selectedBusinessData = businesses.find(b => b.id === selectedBusiness)
   const locations = selectedBusinessData?.locations || []
+  const hasMultipleLocations = locations.length > 1
 
   const handleGenerate = () => {
-    if (!selectedBusiness || !selectedLocation) {
-      toast.error('Please select a business and location')
+    if (!selectedBusiness) {
+      toast.error('Please select a business')
       return
     }
-    const invoice = onGenerate(selectedBusiness, selectedLocation, periodStart, periodEnd)
-    if (invoice) {
-      toast.success(`Invoice ${invoice.invoiceNumber} generated`)
-      onClose()
+    
+    if (generateMode === 'all' && hasMultipleLocations && onGenerateBusiness) {
+      // Generate for all locations with the selected format
+      const invoices = onGenerateBusiness(selectedBusiness, periodStart, periodEnd, invoiceFormat)
+      if (invoices.length > 0) {
+        if (invoiceFormat === 'separate') {
+          toast.success(`Generated ${invoices.length} invoices (one per location)`)
+        } else {
+          toast.success(`Generated combined invoice for ${locations.length} locations`)
+        }
+        onClose()
+      } else {
+        toast.error('No invoices generated — check deliveries exist for this period')
+      }
     } else {
-      toast.error('Failed to generate invoice — check rate card exists')
+      // Single location mode
+      if (!selectedLocation) {
+        toast.error('Please select a location')
+        return
+      }
+      const invoice = onGenerate(selectedBusiness, selectedLocation, periodStart, periodEnd)
+      if (invoice) {
+        toast.success(`Invoice ${invoice.invoiceNumber} generated`)
+        onClose()
+      } else {
+        toast.error('Failed to generate invoice — check rate card exists')
+      }
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Generate Invoice</DialogTitle>
+          <DialogDescription>
+            Create invoices for business deliveries during the selected period.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Business</Label>
-            <Select value={selectedBusiness} onValueChange={(v) => { setSelectedBusiness(v); setSelectedLocation('') }}>
+            <Select value={selectedBusiness} onValueChange={(v) => { setSelectedBusiness(v); setSelectedLocation(''); setGenerateMode('single') }}>
               <SelectTrigger><SelectValue placeholder="Select business" /></SelectTrigger>
               <SelectContent>
-                {businesses.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                {businesses.map(b => (
+                  <SelectItem key={b.id} value={b.id}>
+                    <div className="flex items-center gap-2">
+                      {b.name}
+                      {b.locations?.length > 1 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {b.locations.length} locations
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          {selectedBusiness && (
+          
+          {/* Multi-location options */}
+          {selectedBusiness && hasMultipleLocations && (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox 
+                  id="generate-all"
+                  checked={generateMode === 'all'}
+                  onCheckedChange={(checked) => setGenerateMode(checked ? 'all' : 'single')}
+                />
+                <Label htmlFor="generate-all" className="text-sm font-medium cursor-pointer">
+                  Generate for all {locations.length} locations
+                </Label>
+              </div>
+              
+              {generateMode === 'all' && (
+                <div className="space-y-2 ml-6">
+                  <Label className="text-xs text-muted-foreground">Invoice Format</Label>
+                  <Select value={invoiceFormat} onValueChange={(v) => setInvoiceFormat(v as InvoiceFormat)}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="separate">
+                        <div className="flex flex-col">
+                          <span>Separate invoices</span>
+                          <span className="text-xs text-muted-foreground">One invoice per location</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="combined">
+                        <div className="flex flex-col">
+                          <span>Combined invoice</span>
+                          <span className="text-xs text-muted-foreground">All locations merged into one</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="combined_breakdown">
+                        <div className="flex flex-col">
+                          <span>Combined with breakdown</span>
+                          <span className="text-xs text-muted-foreground">One invoice showing each location separately</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Single location selector */}
+          {selectedBusiness && generateMode === 'single' && (
             <div className="space-y-2">
               <Label>Location</Label>
               <Select value={selectedLocation} onValueChange={setSelectedLocation}>
@@ -1319,6 +1412,7 @@ function GenerateInvoiceModal({
               </Select>
             </div>
           )}
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Period Start</Label>
@@ -1334,7 +1428,12 @@ function GenerateInvoiceModal({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleGenerate}>
             <FileText className="h-4 w-4 mr-2" />
-            Generate
+            {generateMode === 'all' && hasMultipleLocations
+              ? invoiceFormat === 'separate' 
+                ? `Generate ${locations.length} Invoices`
+                : 'Generate Combined Invoice'
+              : 'Generate Invoice'
+            }
           </Button>
         </DialogFooter>
       </DialogContent>
