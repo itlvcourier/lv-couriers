@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/context'
+import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +11,8 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
+import { AdminUserManagement } from './AdminUserManagement'
+import { DriverPaySettings } from './DriverPaySettings'
 import {
   Dialog,
   DialogContent,
@@ -35,6 +38,10 @@ import {
   Eye,
   EyeOff,
   Radio,
+  FileText,
+  Building2,
+  CreditCard,
+  DollarSign,
 } from 'lucide-react'
 
 export function AdminSettings() {
@@ -69,6 +76,22 @@ export function AdminSettings() {
     smsEarningsSummary: settings.smsEarningsSummary,
     // Dispatch mode
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
+    // Invoice template settings
+    invoiceCompanyName: settings.invoiceCompanyName,
+    invoiceCompanyAddress: settings.invoiceCompanyAddress,
+    invoiceCompanyPhone: settings.invoiceCompanyPhone,
+    invoiceCompanyEmail: settings.invoiceCompanyEmail,
+    invoiceTaxNumber: settings.invoiceTaxNumber,
+    invoiceTaxLabel: settings.invoiceTaxLabel,
+    invoiceTaxRate: settings.invoiceTaxRate,
+    invoicePaymentTerms: settings.invoicePaymentTerms,
+    invoicePaymentInstructions: settings.invoicePaymentInstructions,
+    invoiceBankName: settings.invoiceBankName,
+    invoiceBankAccountName: settings.invoiceBankAccountName,
+    invoiceBankAccountNumber: settings.invoiceBankAccountNumber,
+    invoiceBankTransitNumber: settings.invoiceBankTransitNumber,
+    invoiceBankInstitutionNumber: settings.invoiceBankInstitutionNumber,
+    invoiceFooterNotes: settings.invoiceFooterNotes,
   })
   
   const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>(() => {
@@ -78,6 +101,63 @@ export function AdminSettings() {
     })
     return overrides
   })
+
+  // Sync local settings when context settings change (e.g., after hydration from DB)
+  useEffect(() => {
+    setLocalSettings({
+      globalMaxJobs: settings.globalMaxJobs,
+      rushSlaMins: settings.rushSlaMins,
+      intownTimeoutMins: settings.intownTimeoutMins,
+      outOfTownTimeoutMins: settings.outOfTownTimeoutMins,
+      invoiceDueDays: settings.invoiceDueDays,
+      reminderDay1: settings.reminderDay1,
+      overdueDay: settings.overdueDay,
+      escalationDay: settings.escalationDay,
+      autoGenerateInvoices: settings.autoGenerateInvoices,
+      autoSendInvoices: settings.autoSendInvoices,
+      reviewReminderDays: settings.reviewReminderDays,
+      sendReminderEmail: settings.sendReminderEmail,
+      sendReminderSms: settings.sendReminderSms,
+      smsNotifyEnRoutePickup: settings.smsNotifyEnRoutePickup,
+      smsNotifyPickedUp: settings.smsNotifyPickedUp,
+      smsNotifyFailedAttempt: settings.smsNotifyFailedAttempt,
+      smsNotifyCancelled: settings.smsNotifyCancelled,
+      smsNotifyReassigned: settings.smsNotifyReassigned,
+      smsNotifyFeedbackRequest: settings.smsNotifyFeedbackRequest,
+      smsNotifyInvoiceReady: settings.smsNotifyInvoiceReady,
+      smsNotifyPaymentReceived: settings.smsNotifyPaymentReceived,
+      smsNotifyWeeklySummary: settings.smsNotifyWeeklySummary,
+      smsOptOutManagement: settings.smsOptOutManagement,
+      smsShiftReminder: settings.smsShiftReminder,
+      smsEarningsSummary: settings.smsEarningsSummary,
+      allowDriverSelfClaim: settings.allowDriverSelfClaim,
+      // Invoice template settings
+      invoiceCompanyName: settings.invoiceCompanyName,
+      invoiceCompanyAddress: settings.invoiceCompanyAddress,
+      invoiceCompanyPhone: settings.invoiceCompanyPhone,
+      invoiceCompanyEmail: settings.invoiceCompanyEmail,
+      invoiceTaxNumber: settings.invoiceTaxNumber,
+      invoiceTaxLabel: settings.invoiceTaxLabel,
+      invoiceTaxRate: settings.invoiceTaxRate,
+      invoicePaymentTerms: settings.invoicePaymentTerms,
+      invoicePaymentInstructions: settings.invoicePaymentInstructions,
+      invoiceBankName: settings.invoiceBankName,
+      invoiceBankAccountName: settings.invoiceBankAccountName,
+      invoiceBankAccountNumber: settings.invoiceBankAccountNumber,
+      invoiceBankTransitNumber: settings.invoiceBankTransitNumber,
+      invoiceBankInstitutionNumber: settings.invoiceBankInstitutionNumber,
+      invoiceFooterNotes: settings.invoiceFooterNotes,
+    })
+  }, [settings])
+
+  // Sync driver overrides when drivers change (e.g., after hydration from DB)
+  useEffect(() => {
+    const overrides: Record<string, string> = {}
+    drivers.forEach(d => {
+      overrides[d.id] = d.maxJobsOverride?.toString() || ''
+    })
+    setDriverOverrides(overrides)
+  }, [drivers])
 
   // Password change dialog state
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
@@ -106,12 +186,27 @@ export function AdminSettings() {
       return
     }
     setPwSaving(true)
-    // Simulate network request
-    await new Promise(r => setTimeout(r, 600))
-    setPwSaving(false)
-    setShowPasswordDialog(false)
-    setPwForm({ current: '', next: '', confirm: '' })
-    toast.success('Password changed successfully')
+    
+    try {
+      const supabase = createClient()
+      
+      // Update password via Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: pwForm.next
+      })
+      
+      if (error) {
+        throw error
+      }
+      
+      setShowPasswordDialog(false)
+      setPwForm({ current: '', next: '', confirm: '' })
+      toast.success('Password changed successfully')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to change password')
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   const handleStart2fa = () => {
@@ -151,8 +246,35 @@ export function AdminSettings() {
     updateSettings({ allowDriverSelfClaim: localSettings.allowDriverSelfClaim })
     toast.success('Dispatch mode updated')
   }
+
+  const handleSaveInvoiceTemplate = () => {
+    updateSettings({
+      invoiceCompanyName: localSettings.invoiceCompanyName,
+      invoiceCompanyAddress: localSettings.invoiceCompanyAddress,
+      invoiceCompanyPhone: localSettings.invoiceCompanyPhone,
+      invoiceCompanyEmail: localSettings.invoiceCompanyEmail,
+      invoiceTaxNumber: localSettings.invoiceTaxNumber,
+      invoiceTaxLabel: localSettings.invoiceTaxLabel,
+      invoiceTaxRate: localSettings.invoiceTaxRate,
+      invoicePaymentTerms: localSettings.invoicePaymentTerms,
+      invoicePaymentInstructions: localSettings.invoicePaymentInstructions,
+      invoiceBankName: localSettings.invoiceBankName,
+      invoiceBankAccountName: localSettings.invoiceBankAccountName,
+      invoiceBankAccountNumber: localSettings.invoiceBankAccountNumber,
+      invoiceBankTransitNumber: localSettings.invoiceBankTransitNumber,
+      invoiceBankInstitutionNumber: localSettings.invoiceBankInstitutionNumber,
+      invoiceFooterNotes: localSettings.invoiceFooterNotes,
+    })
+    toast.success('Invoice template saved')
+  }
   
   const handleSaveCapacity = () => {
+    // Save global max jobs setting
+    if (localSettings.globalMaxJobs !== settings.globalMaxJobs) {
+      updateSettings({ globalMaxJobs: localSettings.globalMaxJobs })
+    }
+    
+    // Save per-driver overrides
     drivers.forEach(d => {
       const override = driverOverrides[d.id]
       const value = override === '' ? null : parseInt(override)
@@ -587,6 +709,217 @@ export function AdminSettings() {
         </CardContent>
       </Card>
 
+      {/* Invoice Template Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <FileText className="w-5 h-5" />
+            Invoice Template
+          </CardTitle>
+          <CardDescription>Configure your company details that appear on all invoices. These settings ensure your invoices meet legal requirements.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Company Information */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Building2 className="w-4 h-4" />
+              Company Information
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="invoiceCompanyName" className="text-foreground">Company Name</Label>
+                <Input
+                  id="invoiceCompanyName"
+                  value={localSettings.invoiceCompanyName || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceCompanyName: e.target.value }))}
+                  placeholder="LV Couriers"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceCompanyEmail" className="text-foreground">Billing Email</Label>
+                <Input
+                  id="invoiceCompanyEmail"
+                  type="email"
+                  value={localSettings.invoiceCompanyEmail || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceCompanyEmail: e.target.value }))}
+                  placeholder="billing@company.com"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="invoiceCompanyAddress" className="text-foreground">Company Address</Label>
+                <Input
+                  id="invoiceCompanyAddress"
+                  value={localSettings.invoiceCompanyAddress || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceCompanyAddress: e.target.value }))}
+                  placeholder="123 Main St, Calgary, AB T2P 1A1"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceCompanyPhone" className="text-foreground">Phone Number</Label>
+                <Input
+                  id="invoiceCompanyPhone"
+                  value={localSettings.invoiceCompanyPhone || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceCompanyPhone: e.target.value }))}
+                  placeholder="(403) 555-0123"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Tax Information */}
+          <div className="space-y-4">
+            <p className="text-sm font-medium text-foreground">Tax Information</p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="invoiceTaxLabel" className="text-foreground">Tax Label</Label>
+                <Input
+                  id="invoiceTaxLabel"
+                  value={localSettings.invoiceTaxLabel || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceTaxLabel: e.target.value }))}
+                  placeholder="GST"
+                  className="bg-[var(--bg-card-2)]"
+                />
+                <p className="text-xs text-muted-foreground">e.g., GST, HST, VAT</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceTaxNumber" className="text-foreground">Tax Registration Number</Label>
+                <Input
+                  id="invoiceTaxNumber"
+                  value={localSettings.invoiceTaxNumber || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceTaxNumber: e.target.value }))}
+                  placeholder="123456789RT0001"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceTaxRate" className="text-foreground">Tax Rate (%)</Label>
+                <Input
+                  id="invoiceTaxRate"
+                  type="number"
+                  step="0.1"
+                  value={localSettings.invoiceTaxRate ?? ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceTaxRate: parseFloat(e.target.value) || 0 }))}
+                  placeholder="5"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Payment Information */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <CreditCard className="w-4 h-4" />
+              Payment Information
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="invoicePaymentTerms" className="text-foreground">Payment Terms</Label>
+                <Input
+                  id="invoicePaymentTerms"
+                  value={localSettings.invoicePaymentTerms || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoicePaymentTerms: e.target.value }))}
+                  placeholder="Net 15"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceBankName" className="text-foreground">Bank Name</Label>
+                <Input
+                  id="invoiceBankName"
+                  value={localSettings.invoiceBankName || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceBankName: e.target.value }))}
+                  placeholder="TD Canada Trust"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceBankAccountName" className="text-foreground">Account Name</Label>
+                <Input
+                  id="invoiceBankAccountName"
+                  value={localSettings.invoiceBankAccountName || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceBankAccountName: e.target.value }))}
+                  placeholder="LV Couriers Inc."
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceBankAccountNumber" className="text-foreground">Account Number</Label>
+                <Input
+                  id="invoiceBankAccountNumber"
+                  value={localSettings.invoiceBankAccountNumber || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceBankAccountNumber: e.target.value }))}
+                  placeholder="0123456789"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceBankTransitNumber" className="text-foreground">Transit Number</Label>
+                <Input
+                  id="invoiceBankTransitNumber"
+                  value={localSettings.invoiceBankTransitNumber || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceBankTransitNumber: e.target.value }))}
+                  placeholder="12345"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceBankInstitutionNumber" className="text-foreground">Institution Number</Label>
+                <Input
+                  id="invoiceBankInstitutionNumber"
+                  value={localSettings.invoiceBankInstitutionNumber || ''}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceBankInstitutionNumber: e.target.value }))}
+                  placeholder="004"
+                  className="bg-[var(--bg-card-2)]"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invoicePaymentInstructions" className="text-foreground">Payment Instructions</Label>
+              <textarea
+                id="invoicePaymentInstructions"
+                rows={2}
+                value={localSettings.invoicePaymentInstructions || ''}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, invoicePaymentInstructions: e.target.value }))}
+                placeholder="Please include invoice number as reference when making payment."
+                className="w-full rounded-md border border-[var(--border-color)] bg-[var(--bg-card-2)] text-foreground text-sm px-3 py-2"
+              />
+            </div>
+          </div>
+
+          <Separator className="bg-[var(--border-color)]" />
+
+          {/* Footer Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="invoiceFooterNotes" className="text-foreground">Invoice Footer Notes</Label>
+            <textarea
+              id="invoiceFooterNotes"
+              rows={2}
+              value={localSettings.invoiceFooterNotes || ''}
+              onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceFooterNotes: e.target.value }))}
+              placeholder="Thank you for your business!"
+              className="w-full rounded-md border border-[var(--border-color)] bg-[var(--bg-card-2)] text-foreground text-sm px-3 py-2"
+            />
+          </div>
+
+          <Button
+            onClick={handleSaveInvoiceTemplate}
+            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Invoice Template
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Notifications */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -657,6 +990,34 @@ export function AdminSettings() {
               </Badge>
             )}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Driver Pay Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <DollarSign className="w-5 h-5" />
+            Driver Pay System
+          </CardTitle>
+          <CardDescription>Configure automatic driver pay calculation or disable for manual payments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DriverPaySettings />
+        </CardContent>
+      </Card>
+
+      {/* Admin User Management */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Users className="w-5 h-5" />
+            Admin Users
+          </CardTitle>
+          <CardDescription>Manage administrator accounts</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdminUserManagement />
         </CardContent>
       </Card>
 

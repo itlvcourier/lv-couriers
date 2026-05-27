@@ -105,8 +105,8 @@ export function mapRateCardRow(row: Row): RateCard {
     notifyInvoiceSent: !!row.notify_invoice_sent,
     notifyPaymentReminder: !!row.notify_payment_reminder,
     notifyRecipientSms: !!row.notify_recipient_sms,
-    billingEmail: (row.billing_email as string) || '',
-    backupEmail: (row.backup_email as string) || '',
+    // Note: billingEmail and backupEmail are on business_locations, not rate_cards
+    // They should be fetched from the location data instead
     contractNotes: (row.contract_notes as string) || '',
     createdAt: (row.created_at as string) || new Date().toISOString(),
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
@@ -173,6 +173,7 @@ export function mapDeliveryRow(row: Row): Delivery {
     invoiceId: (row.invoice_id as string | null) ?? null,
     durationMins,
     duration: durationMins != null ? `${durationMins}m` : null,
+    pickupPhotoUrl: (row.pickup_photo_url as string | null) ?? null,
     proofPhotoUrl: (row.proof_photo_url as string | null) ?? null,
     signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
@@ -214,6 +215,8 @@ export function mapSettingsRow(row: Row): SystemSettings {
     sendReminderSms: !!row.send_reminder_sms,
     cancellationBeforeDepart: (row.cancel_fee_before_depart as number) ?? 0,
     cancellationEnRoute: (row.cancel_fee_en_route as number) ?? 5,
+    // Driver pay tracking
+    driverPayEnabled: !!row.driver_pay_enabled,
     // SMS feature toggles
     smsNotifyEnRoutePickup: row.sms_notify_en_route_pickup !== false,
     smsNotifyPickedUp: row.sms_notify_picked_up !== false,
@@ -229,6 +232,22 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsEarningsSummary: !!row.sms_earnings_summary,
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
+    // Invoice template settings
+    invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
+    invoiceCompanyAddress: (row.invoice_company_address as string) || '',
+    invoiceCompanyPhone: (row.invoice_company_phone as string) || '',
+    invoiceCompanyEmail: (row.invoice_company_email as string) || 'billing@lv-couriers.local',
+    invoiceTaxNumber: (row.invoice_tax_number as string) || '',
+    invoiceTaxLabel: (row.invoice_tax_label as string) || 'GST',
+    invoiceTaxRate: (row.invoice_tax_rate as number) ?? 5,
+    invoicePaymentTerms: (row.invoice_payment_terms as string) || 'Net 15',
+    invoicePaymentInstructions: (row.invoice_payment_instructions as string) || '',
+    invoiceBankName: (row.invoice_bank_name as string) || '',
+    invoiceBankAccountName: (row.invoice_bank_account_name as string) || '',
+    invoiceBankAccountNumber: (row.invoice_bank_account_number as string) || '',
+    invoiceBankTransitNumber: (row.invoice_bank_transit_number as string) || '',
+    invoiceBankInstitutionNumber: (row.invoice_bank_institution_number as string) || '',
+    invoiceFooterNotes: (row.invoice_footer_notes as string) || '',
   }
 }
 
@@ -467,8 +486,7 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     notify_invoice_sent: rateCard.notifyInvoiceSent,
     notify_payment_reminder: rateCard.notifyPaymentReminder,
     notify_recipient_sms: rateCard.notifyRecipientSms,
-    billing_email: rateCard.billingEmail,
-    backup_email: rateCard.backupEmail,
+    // billing_email and backup_email are stored on business_locations, not rate_cards
     contract_notes: rateCard.contractNotes,
     updated_at: new Date().toISOString(),
   }
@@ -479,6 +497,27 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     .single()
   if (error) throw error
   return mapRateCardRow(data as Row)
+}
+
+/**
+ * Update billing email info for a business location.
+ * This is separate from rate cards since billing emails live on business_locations table.
+ */
+export async function updateLocationBillingEmails(
+  locationId: string,
+  billingEmail: string,
+  backupEmail: string | null
+): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('business_locations')
+    .update({
+      billing_email: billingEmail,
+      backup_email: backupEmail || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', locationId)
+  if (error) throw error
 }
 
 export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promise<void> {
@@ -499,6 +538,8 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.sendReminderSms != null) p.send_reminder_sms = partial.sendReminderSms
   if (partial.cancellationBeforeDepart != null) p.cancel_fee_before_depart = partial.cancellationBeforeDepart
   if (partial.cancellationEnRoute != null) p.cancel_fee_en_route = partial.cancellationEnRoute
+  // Driver pay tracking
+  if (partial.driverPayEnabled != null) p.driver_pay_enabled = partial.driverPayEnabled
   // SMS feature toggles
   if (partial.smsNotifyEnRoutePickup != null) p.sms_notify_en_route_pickup = partial.smsNotifyEnRoutePickup
   if (partial.smsNotifyPickedUp != null) p.sms_notify_picked_up = partial.smsNotifyPickedUp
@@ -514,6 +555,22 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
+  // Invoice template settings
+  if (partial.invoiceCompanyName != null) p.invoice_company_name = partial.invoiceCompanyName
+  if (partial.invoiceCompanyAddress != null) p.invoice_company_address = partial.invoiceCompanyAddress
+  if (partial.invoiceCompanyPhone != null) p.invoice_company_phone = partial.invoiceCompanyPhone
+  if (partial.invoiceCompanyEmail != null) p.invoice_company_email = partial.invoiceCompanyEmail
+  if (partial.invoiceTaxNumber != null) p.invoice_tax_number = partial.invoiceTaxNumber
+  if (partial.invoiceTaxLabel != null) p.invoice_tax_label = partial.invoiceTaxLabel
+  if (partial.invoiceTaxRate != null) p.invoice_tax_rate = partial.invoiceTaxRate
+  if (partial.invoicePaymentTerms != null) p.invoice_payment_terms = partial.invoicePaymentTerms
+  if (partial.invoicePaymentInstructions != null) p.invoice_payment_instructions = partial.invoicePaymentInstructions
+  if (partial.invoiceBankName != null) p.invoice_bank_name = partial.invoiceBankName
+  if (partial.invoiceBankAccountName != null) p.invoice_bank_account_name = partial.invoiceBankAccountName
+  if (partial.invoiceBankAccountNumber != null) p.invoice_bank_account_number = partial.invoiceBankAccountNumber
+  if (partial.invoiceBankTransitNumber != null) p.invoice_bank_transit_number = partial.invoiceBankTransitNumber
+  if (partial.invoiceBankInstitutionNumber != null) p.invoice_bank_institution_number = partial.invoiceBankInstitutionNumber
+  if (partial.invoiceFooterNotes != null) p.invoice_footer_notes = partial.invoiceFooterNotes
 
   const { data: rows } = await supabase.from('system_settings').select('id').limit(1)
   if (rows && rows.length > 0) {
@@ -1020,4 +1077,84 @@ export async function updateInvoiceStatusOnly(
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', invoiceId)
   if (error) throw error
+}
+
+/**
+ * Create a new invoice in the database along with its line items.
+ */
+export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
+  const supabase = createClient()
+  const now = new Date().toISOString()
+  
+  console.log('[v0] createInvoiceInDb: Creating invoice', invoice.id, invoice.invoiceNumber)
+  
+  // Insert the invoice
+  const { error: invoiceError } = await supabase
+    .from('invoices')
+    .insert({
+      id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      business_id: invoice.businessId,
+      location_id: invoice.locationId,
+      billing_email: invoice.billingEmail || null,
+      backup_billing_email: invoice.backupBillingEmail || null,
+      period_start: invoice.periodStart,
+      period_end: invoice.periodEnd,
+      subtotal: invoice.subtotal,
+      gst_total: invoice.gstAmount,
+      total: invoice.total,
+      status: invoice.status,
+      due_date: invoice.dueDate,
+      sent_at: invoice.sentAt || null,
+      paid_at: invoice.paidDate || null,
+      payment_method: invoice.paymentMethod || null,
+      payment_reference: invoice.paymentReference || null,
+      reminders_paused: invoice.remindersPaused || false,
+      email_bounced: invoice.emailBounced || false,
+      created_at: now,
+      updated_at: now,
+    })
+  
+  if (invoiceError) {
+    console.error('[v0] createInvoiceInDb: Failed to insert invoice:', invoiceError.message)
+    throw invoiceError
+  }
+  
+  console.log('[v0] createInvoiceInDb: Invoice inserted successfully')
+  
+  // Insert line items
+  if (invoice.lines && invoice.lines.length > 0) {
+    console.log('[v0] createInvoiceInDb: Inserting', invoice.lines.length, 'line items')
+    const lineItems = invoice.lines.map((line, idx) => ({
+      invoice_id: invoice.id,
+      description: line.description,
+      delivery_type: line.deliveryType || null,
+      count: line.quantity,
+      rate: line.rate,
+      subtotal: line.total,
+      delivery_ids: line.deliveryIds || [],
+      sort_order: idx,
+    }))
+    
+    const { error: linesError } = await supabase
+      .from('invoice_line_items')
+      .insert(lineItems)
+    
+    if (linesError) {
+      console.error('[v0] createInvoiceInDb: Failed to insert line items:', linesError.message)
+      throw linesError
+    }
+    console.log('[v0] createInvoiceInDb: Line items inserted successfully')
+  }
+  
+  // Log the generated event
+  const { error: eventError } = await supabase
+    .from('invoice_events')
+    .insert({
+      invoice_id: invoice.id,
+      event_type: 'generated',
+      occurred_at: now,
+    })
+  
+  if (eventError) console.error('[v0] Failed to log invoice generated event:', eventError)
 }

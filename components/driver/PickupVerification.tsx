@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { X, Package, Camera, AlertCircle, CheckCircle, Copy, Navigation, Zap } from 'lucide-react'
+import { X, Package, AlertCircle, CheckCircle, Copy, Navigation, Zap, Camera } from 'lucide-react'
 import type { Delivery, PickupVerification as VerificationType, ManifestItem } from '@/lib/types'
 import { calculateBreakdown } from '@/lib/billing'
 import { RuleBadge } from '@/components/shared/CostCalculator'
+import { CameraCapture } from '@/components/shared/CameraCapture'
 
 interface PickupVerificationProps {
   delivery: Delivery
@@ -22,6 +23,8 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
   const rateCard = getRateCardForLocation(delivery.locationId)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [trackingCode, setTrackingCode] = useState<string | null>(null)
+  const [pickupPhoto, setPickupPhoto] = useState<string | null>(null)
+  const [showCamera, setShowCamera] = useState(false)
   const [verifications, setVerifications] = useState<Record<string, { qty: number; photo: string | null; outOfTown: boolean }>>(
     () => {
       const initial: Record<string, { qty: number; photo: string | null; outOfTown: boolean }> = {}
@@ -34,8 +37,6 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
   const [hasDiscrepancy, setHasDiscrepancy] = useState(false)
 
   // Build a pseudo-manifest for "confirmed" using the driver's current inputs.
-  // - postedQty keeps the original estimate.
-  // - confirmedQty is the driver-entered qty (treat 0 as an explicit zero, not a fallback).
   const confirmedManifest: ManifestItem[] = useMemo(
     () =>
       delivery.manifest.map(item => ({
@@ -63,6 +64,31 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
   const ruleChanged = postedBreakdown.rule !== confirmedBreakdown.rule
   const rateChanged = postedBreakdown.rate !== confirmedBreakdown.rate
 
+  // Upload photo to blob storage
+  const uploadProofPhoto = async (imageData: string, photoType: string): Promise<string | null> => {
+    try {
+      const formData = new FormData()
+      formData.append('image', imageData)
+      formData.append('deliveryId', delivery.id)
+      formData.append('photoType', photoType)
+
+      const response = await fetch('/api/delivery/upload-proof', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const data = await response.json()
+      return data.pathname
+    } catch (error) {
+      console.error('Photo upload error:', error)
+      return null
+    }
+  }
+
   const handleQtyChange = (itemId: string, value: string) => {
     const qty = parseInt(value) || 0
     setVerifications(prev => ({
@@ -77,14 +103,23 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     }
   }
 
-  const handlePhotoCapture = (itemId: string) => {
-    // Simulate photo capture - in real app would use camera API
-    const mockPhotoUrl = `https://picsum.photos/400/300?random=${Date.now()}`
+  const handleItemPhotoCapture = async (itemId: string, imageDataUrl: string) => {
+    // Upload to blob storage
+    const pathname = await uploadProofPhoto(imageDataUrl, `pickup_item_${itemId}`)
+    
     setVerifications(prev => ({
       ...prev,
-      [itemId]: { ...prev[itemId], photo: mockPhotoUrl }
+      [itemId]: { ...prev[itemId], photo: imageDataUrl }
     }))
-    toast.success('Photo captured')
+    toast.success('Item photo captured')
+  }
+
+  const handlePickupPhotoCapture = async (imageDataUrl: string) => {
+    // Upload to blob storage
+    await uploadProofPhoto(imageDataUrl, 'pickup')
+    setPickupPhoto(imageDataUrl)
+    setShowCamera(false)
+    toast.success('Pickup photo captured')
   }
 
   const handleOutOfTownToggle = (itemId: string, checked: boolean) => {
@@ -94,7 +129,12 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     }))
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (!pickupPhoto) {
+      toast.error('Please take a pickup photo first')
+      return
+    }
+
     const pickupVerifications: VerificationType[] = delivery.manifest.map(item => ({
       itemId: item.id,
       confirmedQty: verifications[item.id]?.qty ?? item.postedQty,
@@ -199,6 +239,63 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
         </SheetHeader>
 
         <div className="space-y-4">
+          {/* REQUIRED Pickup Photo */}
+          <div className="p-4 rounded-xl bg-[var(--bg-card-2)] border border-[var(--border-color)]">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-muted-foreground" />
+                <span className="font-medium text-foreground">Pickup Photo</span>
+                <span className="text-xs text-red-500 font-medium">Required</span>
+              </div>
+            </div>
+            
+            {pickupPhoto ? (
+              <div className="relative rounded-lg overflow-hidden">
+                <img 
+                  src={pickupPhoto} 
+                  alt="Pickup verification"
+                  className="w-full h-40 object-cover"
+                />
+                <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded bg-[var(--accent-green)]/90 text-white text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Captured
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPickupPhoto(null)}
+                  className="absolute bottom-2 right-2"
+                >
+                  Retake
+                </Button>
+              </div>
+            ) : showCamera ? (
+              <CameraCapture
+                onCapture={handlePickupPhotoCapture}
+                onCancel={() => setShowCamera(false)}
+                label="Take Pickup Photo"
+                required
+              />
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => setShowCamera(true)}
+                className="w-full h-24 rounded-xl border-dashed border-[var(--border-color)] tap-target"
+              >
+                <Camera className="w-6 h-6 mr-2" />
+                Take Pickup Photo
+              </Button>
+            )}
+            
+            {!pickupPhoto && (
+              <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Photo required before confirming pickup
+              </p>
+            )}
+          </div>
+
+          {/* Manifest Items */}
           {delivery.manifest.map((item) => (
             <div 
               key={item.id}
@@ -253,22 +350,28 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
                         alt="Verification"
                         className="w-full h-32 object-cover rounded-lg"
                       />
-                      <button
-                        onClick={() => handlePhotoCapture(item.id)}
-                        className="absolute bottom-2 right-2 px-3 py-1.5 rounded-lg bg-black/50 text-white text-xs"
+                      <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded bg-[var(--accent-green)]/90 text-white text-xs">
+                        <CheckCircle className="w-3 h-3" />
+                        Captured
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setVerifications(prev => ({
+                          ...prev,
+                          [item.id]: { ...prev[item.id], photo: null }
+                        }))}
+                        className="absolute bottom-2 right-2"
                       >
                         Retake
-                      </button>
+                      </Button>
                     </div>
                   ) : (
-                    <Button
-                      variant="outline"
-                      onClick={() => handlePhotoCapture(item.id)}
-                      className="w-full h-11 rounded-xl border-dashed border-[var(--border-color)] tap-target"
-                    >
-                      <Camera className="w-4 h-4 mr-2" />
-                      Take Photo (Required)
-                    </Button>
+                    <CameraCapture
+                      onCapture={(url) => handleItemPhotoCapture(item.id, url)}
+                      label="Take Item Photo (Required)"
+                      required
+                    />
                   )}
                 </div>
               )}
@@ -359,7 +462,7 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
           {/* Confirm button */}
           <Button
             onClick={handleConfirm}
-            disabled={!allItemsVerified}
+            disabled={!allItemsVerified || !pickupPhoto}
             className="w-full h-12 rounded-xl tap-target bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white font-medium disabled:opacity-50"
           >
             Confirm Pickup

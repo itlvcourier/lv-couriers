@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -16,6 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { OrderDetailSheet } from '@/components/shared/OrderDetailSheet'
 import {
@@ -26,23 +35,47 @@ import {
   UserRound,
   XCircle,
   AlertTriangle,
+  Pencil,
+  Copy,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { OrderLike } from '@/components/shared/OrderDetailSheet'
 import type { Delivery } from '@/lib/types'
 import { estimateDeliveryPrice } from '@/lib/billing'
+import { editDeliveryDetails } from '@/lib/db'
 
 export function BusinessOrders() {
-  const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation } = useApp()
+  const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation, activeLocationId } = useApp()
   const [selectedOrder, setSelectedOrder] = useState<OrderLike | null>(null)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
   const [cancelTarget, setCancelTarget] = useState<Delivery | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  
+  // Edit state
+  const [editTarget, setEditTarget] = useState<Delivery | null>(null)
+  const [editForm, setEditForm] = useState({
+    dropoff_address: '',
+    recipient_name: '',
+    recipient_phone: '',
+    buzz_code: '',
+    special_instructions: '',
+    is_rush: false,
+    is_urgent: false,
+  })
+  const [saving, setSaving] = useState(false)
+  
+  // Duplicate state
+  const [duplicateTarget, setDuplicateTarget] = useState<Delivery | null>(null)
 
-  const businessDeliveries = (deliveries || []).filter(
-    d => d.businessId === currentUser?.businessId,
-  )
+  // Filter by business AND location (if a specific location is selected)
+  const businessDeliveries = (deliveries || []).filter(d => {
+    if (d.businessId !== currentUser?.businessId) return false
+    // If "all" locations selected or no location filter, show all business deliveries
+    if (!activeLocationId || activeLocationId === 'all') return true
+    // Otherwise filter by specific location
+    return d.locationId === activeLocationId
+  })
 
   // Keep a map from OrderLike.id -> full Delivery so detail/cancel handlers
   // can access the richer data without extra lookups.
@@ -119,6 +152,51 @@ export function BusinessOrders() {
     setCancelReason('')
     // If the detail sheet was open on this order, close it
     if (selectedOrder?.id === cancelTarget.id) setSelectedOrder(null)
+  }
+
+  // Edit handlers
+  const openEditDialog = (delivery: Delivery) => {
+    setEditForm({
+      dropoff_address: delivery.dropoffAddress,
+      recipient_name: delivery.recipientName || '',
+      recipient_phone: delivery.recipientPhone || '',
+      buzz_code: delivery.buzzCode || '',
+      special_instructions: delivery.recipientNote || '',
+      is_rush: delivery.isRush || false,
+      is_urgent: delivery.isUrgent || false,
+    })
+    setEditTarget(delivery)
+  }
+
+  const confirmEdit = async () => {
+    if (!editTarget) return
+    setSaving(true)
+    
+    try {
+      await editDeliveryDetails(editTarget.id, {
+        dropoff_address: editForm.dropoff_address,
+        recipient_name: editForm.recipient_name || undefined,
+        recipient_phone: editForm.recipient_phone || undefined,
+        buzz_code: editForm.buzz_code || undefined,
+        special_instructions: editForm.special_instructions || undefined,
+        is_rush: editForm.is_rush,
+        is_urgent: editForm.is_urgent,
+      })
+      
+      toast.success('Delivery updated successfully')
+      setEditTarget(null)
+      // Page will reload/re-fetch data on next render cycle
+      window.location.reload()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update delivery')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Duplicate handler - opens create order with pre-filled data
+  const openDuplicateDialog = (delivery: Delivery) => {
+    setDuplicateTarget(delivery)
   }
 
   if (businessOrders.length === 0) {
@@ -257,17 +335,45 @@ export function BusinessOrders() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {canCancel && delivery && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={e => {
+                            e.stopPropagation()
+                            openEditDialog(delivery)
+                          }}
+                        >
+                          <Pencil className="w-3.5 h-3.5 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={e => {
+                            e.stopPropagation()
+                            openCancelDialog(delivery)
+                          }}
+                        >
+                          <XCircle className="w-3.5 h-3.5 mr-1" />
+                          Cancel
+                        </Button>
+                      </>
+                    )}
+                    {delivery && order.status !== 'posted' && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                        variant="ghost"
+                        className="h-8"
                         onClick={e => {
                           e.stopPropagation()
-                          openCancelDialog(delivery)
+                          openDuplicateDialog(delivery)
                         }}
                       >
-                        <XCircle className="w-3.5 h-3.5 mr-1" />
-                        Cancel
+                        <Copy className="w-3.5 h-3.5 mr-1" />
+                        Reorder
                       </Button>
                     )}
                     <span className="text-sm font-semibold text-primary">
@@ -376,6 +482,170 @@ export function BusinessOrders() {
               disabled={cancelling}
             >
               {cancelling ? 'Cancelling...' : 'Cancel Order'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Delivery Sheet */}
+      <Sheet open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Edit Delivery</SheetTitle>
+            <SheetDescription>
+              Update delivery details. Only available before a driver claims the order.
+            </SheetDescription>
+          </SheetHeader>
+          
+          {editTarget && (
+            <div className="mt-6 space-y-4">
+              <div className="space-y-2">
+                <Label>Dropoff Address</Label>
+                <Textarea
+                  value={editForm.dropoff_address}
+                  onChange={(e) => setEditForm({ ...editForm, dropoff_address: e.target.value })}
+                  placeholder="Enter dropoff address"
+                  rows={2}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Recipient Name</Label>
+                <Input
+                  value={editForm.recipient_name}
+                  onChange={(e) => setEditForm({ ...editForm, recipient_name: e.target.value })}
+                  placeholder="Recipient name"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Recipient Phone</Label>
+                  <Input
+                    value={editForm.recipient_phone}
+                    onChange={(e) => setEditForm({ ...editForm, recipient_phone: e.target.value })}
+                    placeholder="Phone number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Buzz Code</Label>
+                  <Input
+                    value={editForm.buzz_code}
+                    onChange={(e) => setEditForm({ ...editForm, buzz_code: e.target.value })}
+                    placeholder="Buzz code"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Special Instructions</Label>
+                <Textarea
+                  value={editForm.special_instructions}
+                  onChange={(e) => setEditForm({ ...editForm, special_instructions: e.target.value })}
+                  placeholder="Any special instructions for the driver"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Rush Delivery</Label>
+                    <p className="text-xs text-muted-foreground">Higher priority, faster delivery</p>
+                  </div>
+                  <Switch
+                    checked={editForm.is_rush}
+                    onCheckedChange={(checked) => setEditForm({ ...editForm, is_rush: checked, is_urgent: checked ? false : editForm.is_urgent })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Urgent Delivery</Label>
+                    <p className="text-xs text-muted-foreground">Highest priority, immediate dispatch</p>
+                  </div>
+                  <Switch
+                    checked={editForm.is_urgent}
+                    onCheckedChange={(checked) => setEditForm({ ...editForm, is_urgent: checked, is_rush: checked ? false : editForm.is_rush })}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setEditTarget(null)} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button className="flex-1" onClick={confirmEdit} disabled={saving}>
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Duplicate/Reorder Confirmation */}
+      <Dialog open={!!duplicateTarget} onOpenChange={(open) => !open && setDuplicateTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Copy className="w-5 h-5 text-primary" />
+              Reorder Delivery
+            </DialogTitle>
+            <DialogDescription>
+              Create a new delivery with the same details as this order.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateTarget && (
+            <div className="space-y-4">
+              <Card className="bg-muted/40 border-border">
+                <CardContent className="p-3 space-y-1.5">
+                  {duplicateTarget.recipientName && (
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      <UserRound className="w-3.5 h-3.5 text-muted-foreground" />
+                      {duplicateTarget.recipientName}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    From: {duplicateTarget.pickupAddress}
+                  </p>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    To: {duplicateTarget.dropoffAddress}
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <p className="text-sm text-muted-foreground">
+                This will open the new order form with all details pre-filled. You can review and modify before posting.
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDuplicateTarget(null)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                // Store duplicate data and navigate to create order
+                if (duplicateTarget) {
+                  sessionStorage.setItem('duplicateOrder', JSON.stringify({
+                    pickupAddress: duplicateTarget.pickupAddress,
+                    dropoffAddress: duplicateTarget.dropoffAddress,
+                    recipientName: duplicateTarget.recipientName,
+                    recipientPhone: duplicateTarget.recipientPhone,
+                    buzzCode: duplicateTarget.buzzCode,
+                    specialInstructions: duplicateTarget.recipientNote,
+                    isRush: duplicateTarget.isRush,
+                    isUrgent: duplicateTarget.isUrgent,
+                  }))
+                  toast.success('Order details copied! Go to New Order to complete.')
+                  setDuplicateTarget(null)
+                }
+              }}
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copy & Create New
             </Button>
           </DialogFooter>
         </DialogContent>

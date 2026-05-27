@@ -17,6 +17,8 @@ import type {
   RateCard,
   Invoice,
   InvoiceEmailEvent,
+  InvoiceLine,
+  LocationBreakdown,
   Dispute,
   UnmatchedPayment,
   PaymentDetails,
@@ -29,6 +31,10 @@ import type {
   TimeoutWarning,
   ManifestItem,
   SavedContact,
+  BusinessUserRole,
+  BusinessUser,
+  LocationReport,
+  BusinessReport,
 } from './types'
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES } from './billing'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
@@ -66,6 +72,8 @@ import {
   insertDispute,
   resolveDisputeInDb,
   updateInvoiceStatusOnly,
+  createInvoiceInDb,
+  updateLocationBillingEmails,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -85,6 +93,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   sendReminderSms: false,
   cancellationBeforeDepart: 0,
   cancellationEnRoute: 5,
+  // Driver pay tracking – disabled by default
+  driverPayEnabled: false,
   // SMS feature toggles – defaults match the DB column defaults
   smsNotifyEnRoutePickup: true,
   smsNotifyPickedUp: true,
@@ -100,6 +110,22 @@ const DEFAULT_SETTINGS: SystemSettings = {
   smsEarningsSummary: false,
   // Dispatch mode – defaults to self-claim (current behavior)
   allowDriverSelfClaim: true,
+  // Invoice template settings
+  invoiceCompanyName: '',
+  invoiceCompanyAddress: '',
+  invoiceCompanyPhone: '',
+  invoiceCompanyEmail: '',
+  invoiceTaxNumber: '',
+  invoiceTaxLabel: 'GST',
+  invoiceTaxRate: 0,
+  invoicePaymentTerms: 'Net 15',
+  invoicePaymentInstructions: '',
+  invoiceBankName: '',
+  invoiceBankAccountName: '',
+  invoiceBankAccountNumber: '',
+  invoiceBankTransitNumber: '',
+  invoiceBankInstitutionNumber: '',
+  invoiceFooterNotes: '',
 }
 
 // Fire-and-forget DB persistence. Logs errors so we can diagnose without
@@ -115,7 +141,6 @@ interface AppContextType {
   // Auth state
   currentUser: MockUser | null
   activeRole: UserRole | null
-  activeLocationId: string | null
   
   // Data state
   deliveries: Delivery[]
@@ -178,6 +203,21 @@ interface AppContextType {
   addBusiness: (business: Omit<Business, 'id'>) => Business
   addLocation: (businessId: string, location: Omit<BusinessLocation, 'id' | 'businessId'>) => BusinessLocation | null
   
+  // Multi-store access control
+  getAccessibleLocations: () => BusinessLocation[]
+  canAccessLocation: (locationId: string) => boolean
+  isOwner: () => boolean
+  getBusinessUsers: (businessId: string) => BusinessUser[]
+  inviteBusinessUser: (email: string, role: BusinessUserRole, locationIds: string[]) => Promise<{ success: boolean; error?: string }>
+  removeBusinessUser: (userId: string) => Promise<{ success: boolean; error?: string }>
+  updateUserLocationAccess: (userId: string, locationIds: string[]) => Promise<{ success: boolean; error?: string }>
+  setActiveLocation: (locationId: string | 'all') => void
+  activeLocationId: string | 'all'  // Current selected location filter
+  
+  // Reports
+  getLocationReport: (locationId: string, start: string, end: string) => LocationReport
+  getBusinessReport: (businessId: string, start: string, end: string) => BusinessReport
+  
   // Settings functions
   updateSettings: (settings: Partial<SystemSettings>) => void
   
@@ -186,8 +226,15 @@ interface AppContextType {
   
   // Billing functions
   saveRateCard: (locationId: string, rateCard: Partial<RateCard>) => void
+  updateLocationEmails: (locationId: string, billingEmail: string, backupEmail: string | null) => void
   getRateCardForLocation: (locationId: string) => RateCard | null
   generateInvoice: (businessId: string, locationId: string, periodStart: string, periodEnd: string) => Invoice | null
+  generateBusinessInvoices: (
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+    formatOverride?: 'combined' | 'separate' | 'combined_breakdown'
+  ) => Invoice[]
   markInvoicePaid: (invoiceId: string, paymentDetails: PaymentDetails) => void
   disputeLineItem: (invoiceId: string, lineItemId: string, claim: string, photoUrl: string | null) => void
   resolveDispute: (disputeId: string, action: 'accept' | 'reject', adminNote: string, creditAmount?: number) => void
@@ -242,8 +289,9 @@ const AppContext = createContext<AppContextType | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null)
   const [activeRole, setActiveRole] = useState<UserRole | null>(null)
-  const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
+  const [activeLocationId, setActiveLocationId] = useState<string | 'all' | null>(null)
   const [isHydrating, setIsHydrating] = useState<boolean>(true)
+  const [businessUsers, setBusinessUsers] = useState<BusinessUser[]>([])
   // Core entities are loaded from Supabase on login and refreshed on mutations.
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -1201,8 +1249,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         locationId,
         effectiveDate: overrides.effectiveDate || now.split('T')[0],
         ...DEFAULT_RATE_CARD_VALUES,
-        billingEmail: '',
-        backupEmail: '',
         contractNotes: '',
         createdAt: now,
         updatedAt: now,
@@ -1237,10 +1283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (newBusiness.locations && newBusiness.locations.length > 0) {
       const seeded = newBusiness.locations.map(loc =>
-        buildDefaultRateCard(businessId, loc.id, {
-          billingEmail: loc.billingEmail || '',
-          backupEmail: loc.backupEmail || '',
-        }),
+        buildDefaultRateCard(businessId, loc.id),
       )
       for (const rc of seeded) persist(saveRateCardToDb(rc), 'seedRateCard')
       setRateCards(prev => {
@@ -1275,10 +1318,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       )
 
-      const seeded = buildDefaultRateCard(businessId, newLocation.id, {
-        billingEmail: newLocation.billingEmail || '',
-        backupEmail: newLocation.backupEmail || '',
-      })
+      // Seed a default rate card for the new location
+      const seeded = buildDefaultRateCard(businessId, newLocation.id)
       persist(saveRateCardToDb(seeded), 'seedRateCardForNewLocation')
       setRateCards(prev => (prev.some(rc => rc.locationId === newLocation.id) ? prev : [...prev, seeded]))
 
@@ -1286,6 +1327,296 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [businesses, buildDefaultRateCard],
   )
+
+  // ---- Multi-store access control functions ----
+  
+  // Check if current user is an owner
+  const isOwner = useCallback(() => {
+    if (!currentUser || currentUser.role !== 'business') return false
+    return currentUser.businessRole === 'owner' || !currentUser.businessRole // Legacy users default to owner
+  }, [currentUser])
+  
+  // Get all locations the current user can access
+  const getAccessibleLocations = useCallback((): BusinessLocation[] => {
+    if (!currentUser || currentUser.role !== 'business') return []
+    
+    const business = businesses.find(b => b.id === currentUser.businessId)
+    if (!business) return []
+    
+    // Owners and legacy users (no businessRole) can access all locations
+    if (isOwner()) {
+      return business.locations
+    }
+    
+    // Managers and viewers can only access assigned locations
+    if (currentUser.managedLocationIds && currentUser.managedLocationIds.length > 0) {
+      return business.locations.filter(loc => 
+        currentUser.managedLocationIds?.includes(loc.id)
+      )
+    }
+    
+    // Fallback: if single location assigned, use that
+    if (currentUser.locationId) {
+      return business.locations.filter(loc => loc.id === currentUser.locationId)
+    }
+    
+    return []
+  }, [currentUser, businesses, isOwner])
+  
+  // Check if current user can access a specific location
+  const canAccessLocation = useCallback((locationId: string): boolean => {
+    if (!currentUser) return false
+    
+    // Admins can access everything
+    if (currentUser.role === 'admin') return true
+    
+    // Non-business users can't access locations
+    if (currentUser.role !== 'business') return false
+    
+    const accessibleLocations = getAccessibleLocations()
+    return accessibleLocations.some(loc => loc.id === locationId)
+  }, [currentUser, getAccessibleLocations])
+  
+  // Get all business users for a business
+  const getBusinessUsers = useCallback((businessId: string): BusinessUser[] => {
+    return businessUsers.filter(u => u.businessId === businessId)
+  }, [businessUsers])
+  
+  // Set the active location filter (for multi-store views)
+  const setActiveLocation = useCallback((locationId: string | 'all') => {
+    // Validate access
+    if (locationId !== 'all' && !canAccessLocation(locationId)) {
+      console.warn('[v0] User does not have access to location:', locationId)
+      return
+    }
+    // Only owners can view 'all'
+    if (locationId === 'all' && !isOwner()) {
+      console.warn('[v0] Only owners can view all locations')
+      return
+    }
+    setActiveLocationId(locationId)
+  }, [canAccessLocation, isOwner])
+  
+  // Invite a new user to the business
+  const inviteBusinessUser = useCallback(async (
+    email: string,
+    role: BusinessUserRole,
+    locationIds: string[]
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser || !currentUser.businessId) {
+      return { success: false, error: 'Not logged in as business user' }
+    }
+    if (!isOwner()) {
+      return { success: false, error: 'Only owners can invite users' }
+    }
+    
+    // TODO: Implement actual invitation logic with Supabase
+    // For now, just log the attempt
+    console.log('[v0] Would invite user:', { email, role, locationIds })
+    
+    // Create a mock invitation record
+    const newUser: BusinessUser = {
+      id: `bu-${Date.now()}`,
+      userId: `pending-${Date.now()}`,
+      businessId: currentUser.businessId,
+      email,
+      name: email.split('@')[0],
+      businessRole: role,
+      managedLocationIds: role === 'owner' ? [] : locationIds,
+      createdAt: new Date().toISOString(),
+    }
+    
+    setBusinessUsers(prev => [...prev, newUser])
+    return { success: true }
+  }, [currentUser, isOwner])
+  
+  // Remove a user from the business
+  const removeBusinessUser = useCallback(async (
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!isOwner()) {
+      return { success: false, error: 'Only owners can remove users' }
+    }
+    
+    // TODO: Implement actual removal logic with Supabase
+    setBusinessUsers(prev => prev.filter(u => u.userId !== userId))
+    return { success: true }
+  }, [isOwner])
+  
+  // Update a user's location access
+  const updateUserLocationAccess = useCallback(async (
+    userId: string,
+    locationIds: string[]
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!isOwner()) {
+      return { success: false, error: 'Only owners can modify user access' }
+    }
+    
+    // TODO: Implement actual update logic with Supabase
+    setBusinessUsers(prev => prev.map(u => 
+      u.userId === userId 
+        ? { ...u, managedLocationIds: locationIds }
+        : u
+    ))
+    return { success: true }
+  }, [isOwner])
+
+  // ---- Reporting functions ----
+  
+  // Generate a report for a single location
+  const getLocationReport = useCallback((
+    locationId: string,
+    start: string,
+    end: string
+  ): LocationReport => {
+    const business = businesses.find(b => b.locations.some(l => l.id === locationId))
+    const location = business?.locations.find(l => l.id === locationId)
+    
+    // Filter deliveries for this location and period
+    const periodDeliveries = deliveries.filter(d => 
+      d.locationId === locationId &&
+      d.createdAt &&
+      d.createdAt >= start &&
+      d.createdAt <= end
+    )
+    
+    const completedDeliveries = periodDeliveries.filter(d => d.status === 'delivered')
+    const failedDeliveries = periodDeliveries.filter(d => 
+      d.status === 'failed_permanent' || d.status === 'failed_retry'
+    )
+    const cancelledDeliveries = periodDeliveries.filter(d => d.status === 'cancelled')
+    
+    // Calculate average delivery time (from created to delivered)
+    const deliveryTimes = completedDeliveries
+      .filter(d => d.deliveredAt && d.createdAt)
+      .map(d => {
+        const created = new Date(d.createdAt!).getTime()
+        const delivered = new Date(d.deliveredAt!).getTime()
+        return (delivered - created) / (1000 * 60) // minutes
+      })
+    const avgDeliveryMins = deliveryTimes.length > 0
+      ? Math.round(deliveryTimes.reduce((a, b) => a + b, 0) / deliveryTimes.length)
+      : 0
+    
+    // Get invoices for this location
+    const locationInvoices = invoices.filter(inv => 
+      inv.locationId === locationId &&
+      inv.periodStart >= start &&
+      inv.periodEnd <= end
+    )
+    const pendingInvoices = locationInvoices.filter(inv => 
+      inv.status === 'draft' || inv.status === 'sent' || inv.status === 'overdue'
+    ).reduce((sum, inv) => sum + inv.total, 0)
+    const paidInvoices = locationInvoices.filter(inv => inv.status === 'paid')
+      .reduce((sum, inv) => sum + inv.total, 0)
+    
+    // Aggregate feedback (from delivery flags)
+    const feedbackFlags = periodDeliveries.flatMap(d => d.flags || [])
+    
+    // Count issue types from flags
+    const issueTypes = new Map<string, number>()
+    feedbackFlags.forEach(f => {
+      issueTypes.set(f.type, (issueTypes.get(f.type) || 0) + 1)
+    })
+    
+    return {
+      locationId,
+      locationName: location?.name || 'Unknown',
+      period: { start, end },
+      totalDeliveries: periodDeliveries.length,
+      completedDeliveries: completedDeliveries.length,
+      failedDeliveries: failedDeliveries.length,
+      cancelledDeliveries: cancelledDeliveries.length,
+      avgDeliveryMins,
+      totalSpend: paidInvoices + pendingInvoices,
+      pendingInvoices,
+      paidInvoices,
+      avgRating: null, // TODO: Implement when ratings are added
+      feedbackCount: feedbackFlags.length,
+      positiveCount: 0, // TODO: Implement when positive feedback is tracked
+      negativeCount: feedbackFlags.length,
+      issues: Array.from(issueTypes.entries()).map(([type, count]) => ({ type, count })),
+    }
+  }, [businesses, deliveries, invoices])
+  
+  // Generate a consolidated report for a business (all locations)
+  const getBusinessReport = useCallback((
+    businessId: string,
+    start: string,
+    end: string
+  ): BusinessReport => {
+    const business = businesses.find(b => b.id === businessId)
+    if (!business) {
+      return {
+        businessId,
+        businessName: 'Unknown',
+        period: { start, end },
+        locations: [],
+        totals: {
+          totalDeliveries: 0,
+          completedDeliveries: 0,
+          failedDeliveries: 0,
+          cancelledDeliveries: 0,
+          avgDeliveryMins: 0,
+          totalSpend: 0,
+          pendingInvoices: 0,
+          paidInvoices: 0,
+          avgRating: null,
+          feedbackCount: 0,
+          positiveCount: 0,
+          negativeCount: 0,
+        },
+      }
+    }
+    
+    // Get reports for each location
+    const locationReports = business.locations.map(loc => 
+      getLocationReport(loc.id, start, end)
+    )
+    
+    // Aggregate totals
+    const totals = locationReports.reduce((acc, r) => ({
+      totalDeliveries: acc.totalDeliveries + r.totalDeliveries,
+      completedDeliveries: acc.completedDeliveries + r.completedDeliveries,
+      failedDeliveries: acc.failedDeliveries + r.failedDeliveries,
+      cancelledDeliveries: acc.cancelledDeliveries + r.cancelledDeliveries,
+      avgDeliveryMins: acc.avgDeliveryMins + r.avgDeliveryMins,
+      totalSpend: acc.totalSpend + r.totalSpend,
+      pendingInvoices: acc.pendingInvoices + r.pendingInvoices,
+      paidInvoices: acc.paidInvoices + r.paidInvoices,
+      avgRating: null as number | null,
+      feedbackCount: acc.feedbackCount + r.feedbackCount,
+      positiveCount: acc.positiveCount + r.positiveCount,
+      negativeCount: acc.negativeCount + r.negativeCount,
+    }), {
+      totalDeliveries: 0,
+      completedDeliveries: 0,
+      failedDeliveries: 0,
+      cancelledDeliveries: 0,
+      avgDeliveryMins: 0,
+      totalSpend: 0,
+      pendingInvoices: 0,
+      paidInvoices: 0,
+      avgRating: null as number | null,
+      feedbackCount: 0,
+      positiveCount: 0,
+      negativeCount: 0,
+    })
+    
+    // Calculate average of averages for delivery time
+    const avgMins = locationReports.filter(r => r.avgDeliveryMins > 0)
+    totals.avgDeliveryMins = avgMins.length > 0
+      ? Math.round(avgMins.reduce((sum, r) => sum + r.avgDeliveryMins, 0) / avgMins.length)
+      : 0
+    
+    return {
+      businessId,
+      businessName: business.name,
+      period: { start, end },
+      locations: locationReports,
+      totals,
+    }
+  }, [businesses, getLocationReport])
 
   // Settings functions
   const updateSettings = useCallback((newSettings: Partial<SystemSettings>) => {
@@ -1335,6 +1666,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return rateCards.find(rc => rc.locationId === locationId) || null
   }, [rateCards])
 
+  // Update billing emails on a location (separate from rate card)
+  const updateLocationEmails = useCallback((
+    locationId: string,
+    billingEmail: string,
+    backupEmail: string | null
+  ) => {
+    setBusinesses(prev => prev.map(business => ({
+      ...business,
+      locations: business.locations.map(loc => 
+        loc.id === locationId
+          ? { ...loc, billingEmail, backupEmail: backupEmail || '' }
+          : loc
+      ),
+    })))
+    // Persist to database
+    persist(updateLocationBillingEmails(locationId, billingEmail, backupEmail), 'updateLocationEmails')
+  }, [])
+
   const generateInvoice = useCallback((
     businessId: string,
     locationId: string,
@@ -1373,7 +1722,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       locationId,
       locationName: location.name,
       locationAddress: location.address,
-      billingEmail: rateCard.billingEmail,
+      billingEmail: location.billingEmail,
       periodStart,
       periodEnd,
       lines,
@@ -1391,7 +1740,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       remindersPaused: false,
       remindersSkipCount: 0,
       emailBounced: false,
-      backupBillingEmail: rateCard.backupEmail || null,
+      backupBillingEmail: location.backupEmail || null,
       recipientPhone: null,
       emailLog: [
         {
@@ -1405,8 +1754,161 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setInvoices(prev => [...prev, newInvoice])
+    
+    // Persist the invoice to the database
+    persist(createInvoiceInDb(newInvoice), 'createInvoice')
+    
     return newInvoice
-  }, [rateCards, businesses, deliveries, invoices])
+  }, [rateCards, businesses, deliveries, invoices, settings.invoiceDueDays])
+
+  // Generate invoices for a business using the specified format
+  // - separate: One invoice per location (default, existing behavior)
+  // - combined: Single invoice with all location lines merged
+  // - combined_breakdown: Single invoice with location-specific breakdowns
+  const generateBusinessInvoices = useCallback((
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+    formatOverride?: 'combined' | 'separate' | 'combined_breakdown'
+  ): Invoice[] => {
+    const business = businesses.find(b => b.id === businessId)
+    if (!business) return []
+    
+    const format = formatOverride || business.invoiceFormat || 'separate'
+    const generatedInvoices: Invoice[] = []
+    
+    const dueDate = new Date()
+    dueDate.setDate(dueDate.getDate() + (settings.invoiceDueDays || 15))
+    const dueDateStr = dueDate.toISOString().split('T')[0]
+    const now = new Date().toISOString()
+    
+    if (format === 'separate') {
+      // Generate one invoice per location (existing behavior)
+      for (const location of business.locations) {
+        const invoice = generateInvoice(businessId, location.id, periodStart, periodEnd)
+        if (invoice) generatedInvoices.push(invoice)
+      }
+    } else {
+      // Combined formats - gather all deliveries and lines first
+      const locationData: Array<{
+        location: BusinessLocation
+        rateCard: RateCard
+        lines: InvoiceLine[]
+        subtotal: number
+        gstAmount: number
+        total: number
+      }> = []
+      
+      let allLines: InvoiceLine[] = []
+      let grandSubtotal = 0
+      let grandGstAmount = 0
+      
+      for (const location of business.locations) {
+        const rateCard = rateCards.find(rc => rc.locationId === location.id)
+        if (!rateCard) continue
+        
+        const periodDeliveries = deliveries.filter(d => 
+          d.locationId === location.id &&
+          d.status === 'delivered' &&
+          d.deliveredAt &&
+          d.deliveredAt >= periodStart &&
+          d.deliveredAt <= periodEnd
+        )
+        
+        if (periodDeliveries.length === 0) continue
+        
+        const lines = calculateInvoiceLines(periodDeliveries, rateCard)
+        const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
+        const gstAmount = calculateGST(subtotal, rateCard.gstApplicable)
+        
+        locationData.push({
+          location,
+          rateCard,
+          lines,
+          subtotal,
+          gstAmount,
+          total: subtotal + gstAmount,
+        })
+        
+        // For combined format, merge lines with location prefix
+        const prefixedLines = lines.map((line, idx) => ({
+          ...line,
+          id: `${location.id}-${line.id}-${idx}`,
+          description: format === 'combined' 
+            ? `${location.name}: ${line.description}`
+            : line.description,
+        }))
+        
+        allLines = [...allLines, ...prefixedLines]
+        grandSubtotal += subtotal
+        grandGstAmount += gstAmount
+      }
+      
+      if (locationData.length === 0) return []
+      
+      // Use first location's billing email for the combined invoice
+      // (Admin can override this per-invoice)
+      const primaryLocation = locationData[0].location
+      
+      const combinedInvoice: Invoice = {
+        id: `inv-${Date.now()}`,
+        invoiceNumber: generateInvoiceNumber(invoices),
+        businessId,
+        businessName: business.name,
+        locationId: primaryLocation.id, // Primary location
+        locationName: locationData.length > 1 
+          ? `${business.name} (${locationData.length} locations)`
+          : primaryLocation.name,
+        locationAddress: primaryLocation.address,
+        billingEmail: primaryLocation.billingEmail,
+        periodStart,
+        periodEnd,
+        lines: allLines,
+        subtotal: grandSubtotal,
+        gstAmount: grandGstAmount,
+        total: grandSubtotal + grandGstAmount,
+        status: 'draft',
+        dueDate: dueDateStr,
+        paidDate: null,
+        paymentMethod: null,
+        paymentReference: null,
+        amountReceived: null,
+        sentAt: null,
+        openedAt: null,
+        remindersPaused: false,
+        remindersSkipCount: 0,
+        emailBounced: false,
+        backupBillingEmail: primaryLocation.backupEmail || null,
+        recipientPhone: null,
+        // For combined_breakdown: include location breakdowns
+        locationBreakdowns: format === 'combined_breakdown' 
+          ? locationData.map(ld => ({
+              locationId: ld.location.id,
+              locationName: ld.location.name,
+              lines: ld.lines,
+              subtotal: ld.subtotal,
+              gstAmount: ld.gstAmount,
+              total: ld.total,
+            }))
+          : undefined,
+        emailLog: [
+          {
+            id: `e-${Date.now()}`,
+            type: 'generated',
+            timestamp: now,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      }
+      
+      setInvoices(prev => [...prev, combinedInvoice])
+      persist(createInvoiceInDb(combinedInvoice), 'createInvoice:combined')
+      generatedInvoices.push(combinedInvoice)
+    }
+    
+    return generatedInvoices
+  }, [businesses, rateCards, deliveries, invoices, settings.invoiceDueDays, generateInvoice])
 
   const markInvoicePaid = useCallback((invoiceId: string, paymentDetails: PaymentDetails) => {
     setInvoices(prev => prev.map(inv => {
@@ -2163,7 +2665,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         currentUser,
         activeRole,
-        activeLocationId,
         isHydrating,
         deliveries,
         drivers,
@@ -2192,18 +2693,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deactivateDriver,
         reactivateDriver,
         addDriver,
-        addBusiness,
+    addBusiness,
     addLocation,
-        updateSettings,
+    // Multi-store access control
+    getAccessibleLocations,
+    canAccessLocation,
+    isOwner,
+    getBusinessUsers,
+    inviteBusinessUser,
+    removeBusinessUser,
+    updateUserLocationAccess,
+    setActiveLocation,
+    activeLocationId: activeLocationId || 'all',
+    getLocationReport,
+    getBusinessReport,
+    updateSettings,
         markNotificationRead,
         rateCards,
         invoices,
         disputes,
         unmatchedPayments,
-        saveRateCard,
-        getRateCardForLocation,
-        generateInvoice,
-        markInvoicePaid,
+    saveRateCard,
+    updateLocationEmails,
+    getRateCardForLocation,
+    generateInvoice,
+    generateBusinessInvoices,
+    markInvoicePaid,
         disputeLineItem,
         resolveDispute,
         matchPayment,

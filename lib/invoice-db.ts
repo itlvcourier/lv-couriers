@@ -13,6 +13,8 @@ import {
   invoiceReminderEmail,
   invoiceOverdueEmail,
   invoiceEscalatedEmail,
+  type CompanySettings,
+  defaultCompanySettings,
 } from '@/lib/email-templates'
 
 export type CronInvoiceRow = {
@@ -43,6 +45,22 @@ export type InvoiceSettingsRow = {
   invoice_escalation_day: number
   send_reminder_email: boolean
   send_reminder_sms: boolean
+  // Invoice template settings
+  invoice_company_name: string | null
+  invoice_company_address: string | null
+  invoice_company_phone: string | null
+  invoice_company_email: string | null
+  invoice_tax_number: string | null
+  invoice_tax_label: string | null
+  invoice_tax_rate: number | null
+  invoice_payment_terms: string | null
+  invoice_payment_instructions: string | null
+  invoice_bank_name: string | null
+  invoice_bank_account_name: string | null
+  invoice_bank_account_number: string | null
+  invoice_bank_transit_number: string | null
+  invoice_bank_institution_number: string | null
+  invoice_footer_notes: string | null
 }
 
 export async function getInvoiceSettings(): Promise<InvoiceSettingsRow> {
@@ -50,7 +68,10 @@ export async function getInvoiceSettings(): Promise<InvoiceSettingsRow> {
   const { data, error } = await supabase
     .from('system_settings')
     .select(
-      'auto_generate_invoices,auto_send_invoices,invoice_due_days,invoice_reminder_day_1,invoice_overdue_notice_day,invoice_escalation_day,send_reminder_email,send_reminder_sms',
+      `auto_generate_invoices,auto_send_invoices,invoice_due_days,invoice_reminder_day_1,invoice_overdue_notice_day,invoice_escalation_day,send_reminder_email,send_reminder_sms,
+       invoice_company_name,invoice_company_address,invoice_company_phone,invoice_company_email,
+       invoice_tax_number,invoice_tax_label,invoice_tax_rate,invoice_payment_terms,invoice_payment_instructions,
+       invoice_bank_name,invoice_bank_account_name,invoice_bank_account_number,invoice_bank_transit_number,invoice_bank_institution_number,invoice_footer_notes`,
     )
     .limit(1)
     .maybeSingle()
@@ -67,8 +88,44 @@ export async function getInvoiceSettings(): Promise<InvoiceSettingsRow> {
       invoice_escalation_day: 14,
       send_reminder_email: true,
       send_reminder_sms: false,
+      invoice_company_name: null,
+      invoice_company_address: null,
+      invoice_company_phone: null,
+      invoice_company_email: null,
+      invoice_tax_number: null,
+      invoice_tax_label: null,
+      invoice_tax_rate: null,
+      invoice_payment_terms: null,
+      invoice_payment_instructions: null,
+      invoice_bank_name: null,
+      invoice_bank_account_name: null,
+      invoice_bank_account_number: null,
+      invoice_bank_transit_number: null,
+      invoice_bank_institution_number: null,
+      invoice_footer_notes: null,
     }
   )
+}
+
+/** Convert InvoiceSettingsRow to CompanySettings for email templates */
+export function settingsToCompanySettings(settings: InvoiceSettingsRow): CompanySettings {
+  return {
+    companyName: settings.invoice_company_name || defaultCompanySettings.companyName,
+    companyAddress: settings.invoice_company_address || defaultCompanySettings.companyAddress,
+    companyPhone: settings.invoice_company_phone || defaultCompanySettings.companyPhone,
+    companyEmail: settings.invoice_company_email || defaultCompanySettings.companyEmail,
+    taxNumber: settings.invoice_tax_number || defaultCompanySettings.taxNumber,
+    taxLabel: settings.invoice_tax_label || defaultCompanySettings.taxLabel,
+    taxRate: settings.invoice_tax_rate ?? defaultCompanySettings.taxRate,
+    paymentTerms: settings.invoice_payment_terms || defaultCompanySettings.paymentTerms,
+    paymentInstructions: settings.invoice_payment_instructions || defaultCompanySettings.paymentInstructions,
+    bankName: settings.invoice_bank_name || defaultCompanySettings.bankName,
+    bankAccountName: settings.invoice_bank_account_name || defaultCompanySettings.bankAccountName,
+    bankAccountNumber: settings.invoice_bank_account_number || defaultCompanySettings.bankAccountNumber,
+    bankTransitNumber: settings.invoice_bank_transit_number || defaultCompanySettings.bankTransitNumber,
+    bankInstitutionNumber: settings.invoice_bank_institution_number || defaultCompanySettings.bankInstitutionNumber,
+    footerNotes: settings.invoice_footer_notes || defaultCompanySettings.footerNotes,
+  }
 }
 
 /** Log a realized event (not scheduled). */
@@ -117,7 +174,11 @@ export async function scheduleInvoiceEvent(params: {
 export async function sendInvoiceAndRecord(
   row: CronInvoiceRow,
   kind: 'sent' | 'reminder_1' | 'reminder_2' | 'overdue_notice' | 'escalated',
+  companySettings?: CompanySettings,
 ): Promise<{ result: EmailResult; event: string }> {
+  // Fetch company settings if not provided
+  const company = companySettings || settingsToCompanySettings(await getInvoiceSettings())
+  
   const data = {
     invoiceNumber: row.invoice_number,
     businessName: row.business_name,
@@ -129,11 +190,11 @@ export async function sendInvoiceAndRecord(
   }
 
   let tpl: { subject: string; html: string; text: string }
-  if (kind === 'sent') tpl = invoiceSentEmail(data)
-  else if (kind === 'reminder_1') tpl = invoiceReminderEmail(data, 1)
-  else if (kind === 'reminder_2') tpl = invoiceReminderEmail(data, 2)
-  else if (kind === 'overdue_notice') tpl = invoiceOverdueEmail(data)
-  else tpl = invoiceEscalatedEmail(data)
+  if (kind === 'sent') tpl = invoiceSentEmail(data, company)
+  else if (kind === 'reminder_1') tpl = invoiceReminderEmail(data, 1, company)
+  else if (kind === 'reminder_2') tpl = invoiceReminderEmail(data, 2, company)
+  else if (kind === 'overdue_notice') tpl = invoiceOverdueEmail(data, company)
+  else tpl = invoiceEscalatedEmail(data, company)
 
   const to = row.billing_email || ''
   if (!to) {

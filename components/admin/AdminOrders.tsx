@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { 
   Package, 
   Search,
@@ -19,14 +20,28 @@ import {
   Zap,
   Globe,
   UserRound,
+  Download,
+  Check,
+  X,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
 import type { DeliveryStatus } from '@/lib/types'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
 
 export function AdminOrders() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DeliveryStatus | 'all'>('all')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectedDelivery, setSelectedDelivery] = useState<DbDelivery | null>(null)
 
   // Fetch deliveries from Supabase
   const { data: deliveries = [], isLoading } = useSWR('all-deliveries', () => getAllDeliveries(), {
@@ -71,6 +86,50 @@ export function AdminOrders() {
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   }
 
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Tracking Code', 'Status', 'Pickup Address', 'Dropoff Address', 'Recipient', 'Priority', 'Created', 'Delivered']
+    const rows = filteredDeliveries.map((d: DbDelivery) => [
+      d.id.slice(-8),
+      d.tracking_code || '',
+      d.status,
+      d.pickup_address,
+      d.dropoff_address,
+      d.recipient_name || '',
+      d.is_urgent ? 'Urgent' : d.is_rush ? 'Rush' : 'Standard',
+      format(new Date(d.created_at), 'yyyy-MM-dd HH:mm'),
+      d.delivered_at ? format(new Date(d.delivered_at), 'yyyy-MM-dd HH:mm') : '',
+    ])
+    
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `deliveries-${statusFilter}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${filteredDeliveries.length} deliveries`)
+  }
+
+  // Bulk selection handlers
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredDeliveries.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredDeliveries.map((d: DbDelivery) => d.id)))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      newSet.add(id)
+    }
+    setSelectedIds(newSet)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -82,9 +141,15 @@ export function AdminOrders() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-semibold">Deliveries</h2>
-        <p className="text-sm text-muted-foreground">{deliveries.length} total deliveries</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">Deliveries</h2>
+          <p className="text-sm text-muted-foreground">{deliveries.length} total deliveries</p>
+        </div>
+        <Button onClick={handleExportCSV} variant="outline">
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Quick Stats */}
@@ -158,6 +223,27 @@ export function AdminOrders() {
         </Select>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {filteredDeliveries.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
+          <Checkbox
+            checked={selectedIds.size === filteredDeliveries.length && filteredDeliveries.length > 0}
+            onCheckedChange={toggleSelectAll}
+          />
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+          </span>
+          {selectedIds.size > 0 && (
+            <div className="flex gap-2 ml-auto">
+              <Button size="sm" variant="outline" onClick={handleExportCSV}>
+                <Download className="w-4 h-4 mr-1" />
+                Export Selected
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Deliveries List */}
       {filteredDeliveries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
@@ -168,10 +254,16 @@ export function AdminOrders() {
       ) : (
         <div className="space-y-3">
           {filteredDeliveries.map((delivery: DbDelivery) => (
-            <Card 
-              key={delivery.id} 
-              className="bg-[var(--bg-card)] border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card-hover)] transition-colors"
-            >
+            <div key={delivery.id} className="flex items-start gap-3">
+              <Checkbox
+                checked={selectedIds.has(delivery.id)}
+                onCheckedChange={() => toggleSelect(delivery.id)}
+                className="mt-4"
+              />
+              <Card 
+                className="flex-1 bg-[var(--bg-card)] border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card-hover)] transition-colors"
+                onClick={() => setSelectedDelivery(delivery)}
+              >
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   {/* Delivery Info */}
@@ -265,9 +357,169 @@ export function AdminOrders() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           ))}
         </div>
       )}
+
+      {/* Delivery Detail Sheet */}
+      <Sheet open={!!selectedDelivery} onOpenChange={() => setSelectedDelivery(null)}>
+        <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-foreground flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              {selectedDelivery?.tracking_code || `#${selectedDelivery?.id.slice(0, 8).toUpperCase()}`}
+            </SheetTitle>
+            <SheetDescription>
+              Delivery details and timeline
+            </SheetDescription>
+          </SheetHeader>
+          
+          {selectedDelivery && (
+            <div className="mt-6 space-y-6">
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={`${getStatusColor(selectedDelivery.status)}`}>
+                  {formatStatus(selectedDelivery.status)}
+                </Badge>
+                {selectedDelivery.is_rush && (
+                  <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20">
+                    <Zap className="w-3 h-3 mr-1" />
+                    Rush
+                  </Badge>
+                )}
+                {selectedDelivery.is_urgent && (
+                  <Badge variant="destructive">Urgent</Badge>
+                )}
+                {selectedDelivery.is_out_of_town && (
+                  <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+                    <Globe className="w-3 h-3 mr-1" />
+                    OOT
+                  </Badge>
+                )}
+              </div>
+
+              {/* Business & Driver */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                  <Building2 className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{selectedDelivery.business?.name || 'Unknown Business'}</p>
+                    <p className="text-xs text-muted-foreground">Business</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                  <Truck className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {selectedDelivery.driver?.name || 'Awaiting driver'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Driver</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Addresses */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-foreground">Route</h4>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Pickup</p>
+                      <p className="text-xs text-muted-foreground break-words">{selectedDelivery.pickup_address}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                    <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Dropoff</p>
+                      <p className="text-xs text-muted-foreground break-words">{selectedDelivery.dropoff_address}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipient Info */}
+              {(selectedDelivery.recipient_name || selectedDelivery.recipient_phone || selectedDelivery.buzz_code) && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground">Recipient</h4>
+                  <div className="p-3 rounded-lg bg-[var(--bg-card-2)] space-y-2">
+                    {selectedDelivery.recipient_name && (
+                      <div className="flex items-center gap-2">
+                        <UserRound className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground">{selectedDelivery.recipient_name}</span>
+                      </div>
+                    )}
+                    {selectedDelivery.recipient_phone && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Phone:</span>
+                        <span className="text-sm text-foreground">{selectedDelivery.recipient_phone}</span>
+                      </div>
+                    )}
+                    {selectedDelivery.buzz_code && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Buzz:</span>
+                        <Badge variant="outline" className="text-xs">{selectedDelivery.buzz_code}</Badge>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Special Instructions */}
+              {selectedDelivery.recipient_note && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground">Special Instructions</h4>
+                  <div className="p-3 rounded-lg bg-[var(--bg-card-2)]">
+                    <p className="text-sm text-muted-foreground">{selectedDelivery.recipient_note}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-foreground">Timeline</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                    <span className="text-muted-foreground">Posted</span>
+                    <span className="text-foreground">{format(new Date(selectedDelivery.posted_at), 'MMM d, h:mm a')}</span>
+                  </div>
+                  {selectedDelivery.claimed_at && (
+                    <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                      <span className="text-muted-foreground">Claimed</span>
+                      <span className="text-foreground">{format(new Date(selectedDelivery.claimed_at), 'MMM d, h:mm a')}</span>
+                    </div>
+                  )}
+                  {selectedDelivery.picked_up_at && (
+                    <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                      <span className="text-muted-foreground">Picked Up</span>
+                      <span className="text-foreground">{format(new Date(selectedDelivery.picked_up_at), 'MMM d, h:mm a')}</span>
+                    </div>
+                  )}
+                  {selectedDelivery.delivered_at && (
+                    <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                      <span className="text-muted-foreground">Delivered</span>
+                      <span className="text-foreground">{format(new Date(selectedDelivery.delivered_at), 'MMM d, h:mm a')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rate */}
+              {selectedDelivery.calculated_rate && (
+                <div className="flex justify-between items-center p-3 rounded-lg bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/20">
+                  <span className="text-sm font-medium text-foreground">Total Rate</span>
+                  <span className="text-lg font-bold text-[var(--accent-orange)]">
+                    ${selectedDelivery.calculated_rate.toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

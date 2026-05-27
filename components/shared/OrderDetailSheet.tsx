@@ -14,6 +14,9 @@ import {
   UserRound,
   KeyRound,
   AlertTriangle,
+  Camera,
+  PenLine,
+  ImageIcon,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import type { Driver, Business } from '@/lib/types'
@@ -43,6 +46,11 @@ export interface OrderLike {
   recipientPhone?: string | null
   buzzCode?: string | null
   cancellationReason?: string | null
+  // Proof of delivery
+  proofPhotoUrl?: string | null
+  pickupPhotoUrl?: string | null
+  signatureUrl?: string | null
+  recipientNote?: string | null
 }
 
 interface OrderDetailSheetProps {
@@ -241,6 +249,93 @@ export function OrderDetailSheet({
               )}
             </div>
           </div>
+
+          {/* Proof of Delivery Section */}
+          {(order.status === 'completed' || order.proofPhotoUrl || order.pickupPhotoUrl || order.signatureUrl) && (
+            <>
+              <Separator />
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Camera className="w-4 h-4" />
+                  Proof of Delivery
+                </h4>
+                
+                {/* Pickup Photo */}
+                {order.pickupPhotoUrl && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3" />
+                      Pickup Photo
+                    </p>
+                    <div className="relative rounded-lg overflow-hidden border border-border">
+                      <img 
+                        src={order.pickupPhotoUrl} 
+                        alt="Pickup proof" 
+                        className="w-full h-40 object-cover"
+                      />
+                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-blue-500/90 text-white text-xs font-medium">
+                        Pickup
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Delivery Photo */}
+                {order.proofPhotoUrl && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3" />
+                      Delivery Photo
+                    </p>
+                    <div className="relative rounded-lg overflow-hidden border border-border">
+                      <img 
+                        src={order.proofPhotoUrl} 
+                        alt="Delivery proof" 
+                        className="w-full h-40 object-cover"
+                      />
+                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
+                        Delivered
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Signature */}
+                {order.signatureUrl && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <PenLine className="w-3 h-3" />
+                      Recipient Signature
+                    </p>
+                    <div className="rounded-lg overflow-hidden border border-border bg-white p-2">
+                      <img 
+                        src={order.signatureUrl} 
+                        alt="Recipient signature" 
+                        className="w-full h-24 object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recipient Note */}
+                {order.recipientNote && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Delivery Note</p>
+                    <p className="text-sm text-foreground bg-muted/50 p-3 rounded-lg">
+                      {order.recipientNote}
+                    </p>
+                  </div>
+                )}
+                
+                {/* No proof available yet */}
+                {!order.proofPhotoUrl && !order.pickupPhotoUrl && !order.signatureUrl && order.status !== 'completed' && (
+                  <p className="text-sm text-muted-foreground italic">
+                    Proof photos will be available after delivery is completed.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Action Buttons */}

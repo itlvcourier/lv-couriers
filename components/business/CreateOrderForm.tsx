@@ -47,6 +47,9 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
     combineDeliveries,
     upsertSavedContact,
     getRateCardForLocation,
+    activeLocationId,
+    isOwner,
+    getAccessibleLocations,
   } = useApp()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +59,19 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const [fromSavedContactId, setFromSavedContactId] = useState<string | null>(null)
 
   const business = businesses.find(b => b.id === currentUser?.businessId)
-  const location = business?.locations.find(l => l.id === currentUser?.locationId)
+  const userIsOwner = isOwner()
+  const accessibleLocations = getAccessibleLocations()
+  
+  // Determine which location to use for posting
+  // - If owner and "all" is selected, default to first location
+  // - If specific location is selected, use that
+  // - If non-owner, use their only accessible location
+  const effectiveLocationId = 
+    activeLocationId && activeLocationId !== 'all' 
+      ? activeLocationId 
+      : accessibleLocations[0]?.id || currentUser?.locationId
+      
+  const location = business?.locations.find(l => l.id === effectiveLocationId)
   const businessId = currentUser?.businessId || ''
 
   const initialFormState = {
@@ -83,7 +98,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
   // Live billing preview — uses postedQty (not yet picked up) and recalculates
   // every time the manifest or rush/OOT flags change.
-  const rateCard = currentUser?.locationId ? getRateCardForLocation(currentUser.locationId) : null
+  const rateCard = effectiveLocationId ? getRateCardForLocation(effectiveLocationId) : null
   const previewBreakdown = useMemo(() => {
     const previewManifest = [
       ...(form.smallPackages > 0

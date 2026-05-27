@@ -222,6 +222,20 @@ export async function getDriverHistory(driverId: string, limit = 50) {
   return data as DbDelivery[]
 }
 
+// Get all completed deliveries for a driver (for earnings calculations)
+export async function getDriverDeliveries(driverId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select('*')
+    .eq('driver_id', driverId)
+    .eq('status', 'delivered')
+    .order('delivered_at', { ascending: false })
+
+  if (error) throw error
+  return data as DbDelivery[]
+}
+
 export async function getBusinessDeliveries(businessId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -332,6 +346,43 @@ export async function claimDelivery(deliveryId: string, driverId: string) {
     `)
     .single()
 
+  if (error) throw error
+  return data as DbDelivery
+}
+
+export interface EditDeliveryFields {
+  dropoff_address?: string
+  recipient_name?: string
+  recipient_phone?: string
+  buzz_code?: string
+  special_instructions?: string
+  is_rush?: boolean
+  is_urgent?: boolean
+  package_count?: number
+}
+
+export async function editDeliveryDetails(deliveryId: string, fields: EditDeliveryFields) {
+  const supabase = createClient()
+  
+  // First check if delivery is in 'posted' status
+  const { data: delivery, error: fetchError } = await supabase
+    .from('deliveries')
+    .select('status')
+    .eq('id', deliveryId)
+    .single()
+  
+  if (fetchError) throw fetchError
+  if (delivery.status !== 'posted') {
+    throw new Error('Can only edit deliveries that have not been claimed yet')
+  }
+  
+  const { data, error } = await supabase
+    .from('deliveries')
+    .update(fields)
+    .eq('id', deliveryId)
+    .select()
+    .single()
+  
   if (error) throw error
   return data as DbDelivery
 }

@@ -8,6 +8,7 @@ import { AvailableJobs } from './AvailableJobs'
 import { ActiveDelivery } from './ActiveDelivery'
 import { DriverHistory } from './DriverHistory'
 import { DriverSettings } from './DriverSettings'
+import { DriverEarnings } from './DriverEarnings'
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FolderOpen, Package, Clock, Settings, LogOut } from 'lucide-react'
+import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign } from 'lucide-react'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
@@ -31,6 +32,9 @@ export function DriverView() {
 
   // When dispatch mode is active, hide the Available tab
   const isDispatchMode = !settings.allowDriverSelfClaim
+  
+  // Check if driver earnings/pay tracking is enabled
+  const showEarnings = settings.driverPayEnabled ?? false
 
   const handleSignOut = async () => {
     await logout()
@@ -41,23 +45,32 @@ export function DriverView() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase()
   }
 
-  // Conditionally build nav items based on dispatch mode
-  const navItems = isDispatchMode
+  // Conditionally build nav items based on dispatch mode and earnings setting
+  const baseNavItems = isDispatchMode
     ? [
         { id: 'active', label: 'My Jobs', icon: Package, badge: activeJobs.length > 0 ? activeJobs.length : undefined },
+        ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
       ]
     : [
         { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
         { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
+        ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
       ]
+  
+  const navItems = baseNavItems
 
   // If dispatch mode just turned on and user is on 'available' tab, redirect to 'active'
   if (isDispatchMode && activeTab === 'available') {
     setActiveTab('active')
+  }
+  
+  // If earnings is disabled and user is on 'earnings' tab, redirect to 'history'
+  if (!showEarnings && activeTab === 'earnings') {
+    setActiveTab('history')
   }
 
   return (
@@ -105,6 +118,9 @@ export function DriverView() {
         )}
         {activeTab === 'active' && (
           <ActiveDelivery />
+        )}
+        {activeTab === 'earnings' && (
+          <DriverEarnings />
         )}
         {activeTab === 'history' && (
           <DriverHistory />
