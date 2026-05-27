@@ -6,13 +6,16 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Fixed UUID for main settings row
+const SETTINGS_ID = '00000000-0000-0000-0000-000000000001'
+
 export async function GET() {
   try {
     // Try to get the current settings
     const { data, error } = await supabaseAdmin
       .from('system_settings')
       .select('*')
-      .eq('id', 'main')
+      .eq('id', SETTINGS_ID)
       .single()
 
     if (error) {
@@ -21,7 +24,7 @@ export async function GET() {
         const { data: insertData, error: insertError } = await supabaseAdmin
           .from('system_settings')
           .insert({
-            id: 'main',
+            id: SETTINGS_ID,
             driver_pay_enabled: false,
             driver_base_rate: 5.00,
             driver_rush_bonus: 2.00,
@@ -54,7 +57,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabaseAdmin
       .from('system_settings')
       .upsert({
-        id: 'main',
+        id: SETTINGS_ID,
         ...body,
         updated_at: new Date().toISOString(),
       })

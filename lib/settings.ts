@@ -13,8 +13,11 @@ export interface SystemSettings {
   updated_by: string | null
 }
 
+// Fixed UUID for main settings row
+const SETTINGS_ID = '00000000-0000-0000-0000-000000000001'
+
 export const defaultSettings: SystemSettings = {
-  id: 'main',
+  id: SETTINGS_ID,
   driver_pay_enabled: false,
   driver_base_rate: 5.00,
   driver_rush_bonus: 2.00,
@@ -30,7 +33,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
   const { data, error } = await supabase
     .from('system_settings')
     .select('*')
-    .eq('id', 'main')
+    .eq('id', SETTINGS_ID)
     .single()
   
   if (error || !data) {
@@ -51,7 +54,7 @@ export async function updateSystemSettings(
   const { error } = await supabase
     .from('system_settings')
     .upsert({
-      id: 'main',
+      id: SETTINGS_ID,
       ...settings,
       updated_at: new Date().toISOString(),
       updated_by: userData?.user?.id || null,
