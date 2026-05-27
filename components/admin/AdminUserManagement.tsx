@@ -77,20 +77,19 @@ export function AdminUserManagement() {
   })
   const [newPassword, setNewPassword] = useState('')
 
-  // Fetch admin users
+  // Fetch admin users via API
   const fetchAdminUsers = async () => {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('role', 'admin')
-      .order('created_at', { ascending: false })
-    
-    if (error) {
+    try {
+      const response = await fetch('/api/admin/list-users')
+      if (!response.ok) {
+        return []
+      }
+      const data = await response.json()
+      return Array.isArray(data) ? data : []
+    } catch (error) {
       console.error('Error fetching admin users:', error)
       return []
     }
-    return data || []
   }
 
   const { data: adminUsers = [], isLoading } = useSWR('admin-users', fetchAdminUsers)

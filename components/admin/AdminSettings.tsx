@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { AdminUserManagement } from './AdminUserManagement'
+import { DriverPaySettings } from './DriverPaySettings'
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ import {
   FileText,
   Building2,
   CreditCard,
+  DollarSign,
 } from 'lucide-react'
 
 export function AdminSettings() {
@@ -988,6 +990,20 @@ export function AdminSettings() {
               </Badge>
             )}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Driver Pay Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <DollarSign className="w-5 h-5" />
+            Driver Pay System
+          </CardTitle>
+          <CardDescription>Configure automatic driver pay calculation or disable for manual payments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DriverPaySettings />
         </CardContent>
       </Card>
 
