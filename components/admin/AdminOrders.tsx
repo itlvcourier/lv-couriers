@@ -29,11 +29,19 @@ import { getAllDeliveries, type DbDelivery } from '@/lib/db'
 import type { DeliveryStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
 
 export function AdminOrders() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DeliveryStatus | 'all'>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectedDelivery, setSelectedDelivery] = useState<DbDelivery | null>(null)
 
   // Fetch deliveries from Supabase
   const { data: deliveries = [], isLoading } = useSWR('all-deliveries', () => getAllDeliveries(), {
@@ -254,6 +262,7 @@ export function AdminOrders() {
               />
               <Card 
                 className="flex-1 bg-[var(--bg-card)] border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card-hover)] transition-colors"
+                onClick={() => setSelectedDelivery(delivery)}
               >
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -352,6 +361,165 @@ export function AdminOrders() {
           ))}
         </div>
       )}
+
+      {/* Delivery Detail Sheet */}
+      <Sheet open={!!selectedDelivery} onOpenChange={() => setSelectedDelivery(null)}>
+        <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-foreground flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              {selectedDelivery?.tracking_code || `#${selectedDelivery?.id.slice(0, 8).toUpperCase()}`}
+            </SheetTitle>
+            <SheetDescription>
+              Delivery details and timeline
+            </SheetDescription>
+          </SheetHeader>
+          
+          {selectedDelivery && (
+            <div className="mt-6 space-y-6">
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={`${getStatusColor(selectedDelivery.status)}`}>
+                  {formatStatus(selectedDelivery.status)}
+                </Badge>
+                {selectedDelivery.is_rush && (
+                  <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20">
+                    <Zap className="w-3 h-3 mr-1" />
+                    Rush
+                  </Badge>
+                )}
+                {selectedDelivery.is_urgent && (
+                  <Badge variant="destructive">Urgent</Badge>
+                )}
+                {selectedDelivery.is_out_of_town && (
+                  <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+                    <Globe className="w-3 h-3 mr-1" />
+                    OOT
+                  </Badge>
+                )}
+              </div>
+
+              {/* Business & Driver */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                  <Building2 className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{selectedDelivery.business?.name || 'Unknown Business'}</p>
+                    <p className="text-xs text-muted-foreground">Business</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                  <Truck className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {selectedDelivery.driver?.name || 'Awaiting driver'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Driver</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Addresses */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-foreground">Route</h4>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Pickup</p>
+                      <p className="text-xs text-muted-foreground break-words">{selectedDelivery.pickup_address}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
+                    <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Dropoff</p>
+                      <p className="text-xs text-muted-foreground break-words">{selectedDelivery.dropoff_address}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipient Info */}
+              {(selectedDelivery.recipient_name || selectedDelivery.recipient_phone || selectedDelivery.buzz_code) && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground">Recipient</h4>
+                  <div className="p-3 rounded-lg bg-[var(--bg-card-2)] space-y-2">
+                    {selectedDelivery.recipient_name && (
+                      <div className="flex items-center gap-2">
+                        <UserRound className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground">{selectedDelivery.recipient_name}</span>
+                      </div>
+                    )}
+                    {selectedDelivery.recipient_phone && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Phone:</span>
+                        <span className="text-sm text-foreground">{selectedDelivery.recipient_phone}</span>
+                      </div>
+                    )}
+                    {selectedDelivery.buzz_code && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Buzz:</span>
+                        <Badge variant="outline" className="text-xs">{selectedDelivery.buzz_code}</Badge>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Special Instructions */}
+              {selectedDelivery.recipient_note && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground">Special Instructions</h4>
+                  <div className="p-3 rounded-lg bg-[var(--bg-card-2)]">
+                    <p className="text-sm text-muted-foreground">{selectedDelivery.recipient_note}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-foreground">Timeline</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                    <span className="text-muted-foreground">Posted</span>
+                    <span className="text-foreground">{format(new Date(selectedDelivery.posted_at), 'MMM d, h:mm a')}</span>
+                  </div>
+                  {selectedDelivery.claimed_at && (
+                    <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                      <span className="text-muted-foreground">Claimed</span>
+                      <span className="text-foreground">{format(new Date(selectedDelivery.claimed_at), 'MMM d, h:mm a')}</span>
+                    </div>
+                  )}
+                  {selectedDelivery.picked_up_at && (
+                    <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                      <span className="text-muted-foreground">Picked Up</span>
+                      <span className="text-foreground">{format(new Date(selectedDelivery.picked_up_at), 'MMM d, h:mm a')}</span>
+                    </div>
+                  )}
+                  {selectedDelivery.delivered_at && (
+                    <div className="flex justify-between p-2 rounded bg-[var(--bg-card-2)]">
+                      <span className="text-muted-foreground">Delivered</span>
+                      <span className="text-foreground">{format(new Date(selectedDelivery.delivered_at), 'MMM d, h:mm a')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rate */}
+              {selectedDelivery.calculated_rate && (
+                <div className="flex justify-between items-center p-3 rounded-lg bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/20">
+                  <span className="text-sm font-medium text-foreground">Total Rate</span>
+                  <span className="text-lg font-bold text-[var(--accent-orange)]">
+                    ${selectedDelivery.calculated_rate.toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
