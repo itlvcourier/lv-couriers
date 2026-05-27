@@ -74,6 +74,7 @@ export function AdminBusinesses() {
   const [showAddLocationSheet, setShowAddLocationSheet] = useState(false)
   const [editingLocation, setEditingLocation] = useState<DbLocation | null>(null)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
+  const [locationToDelete, setLocationToDelete] = useState<DbLocation | null>(null)
 
   // Fetch businesses from Supabase
   const { data: businesses = [], isLoading } = useSWR('all-businesses', getBusinesses, {
@@ -289,6 +290,7 @@ export function AdminBusinesses() {
     }
 
     mutate('all-businesses')
+    setLocationToDelete(null)
     toast.success('Location deleted')
   }
 
