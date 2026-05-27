@@ -465,7 +465,7 @@ export function AdminBusinesses() {
                             Edit Location
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => handleDeleteLocation(location.id)}
+                            onClick={() => setLocationToDelete(location)}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
@@ -823,6 +823,30 @@ export function AdminBusinesses() {
             </div>
           </SheetContent>
         </Sheet>
+
+        {/* Delete Location Confirmation */}
+        <AlertDialog open={!!locationToDelete} onOpenChange={() => setLocationToDelete(null)}>
+          <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-foreground">Delete Location</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{locationToDelete?.name}</strong>? 
+                This action cannot be undone and may fail if the location has existing deliveries.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => locationToDelete && handleDeleteLocation(locationToDelete.id)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete Location
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
