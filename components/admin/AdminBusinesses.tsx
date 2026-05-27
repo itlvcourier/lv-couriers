@@ -57,6 +57,10 @@ import {
   UserPlus,
   FileText,
   Settings,
+  Store,
+  Check,
+  X,
+  Clock,
 } from 'lucide-react'
 import { getBusinesses, getAllDeliveries, type DbBusiness, type DbLocation, type DbDelivery } from '@/lib/db'
 import { createClient } from '@/lib/supabase/client'
@@ -75,6 +79,7 @@ export function AdminBusinesses() {
   const [editingLocation, setEditingLocation] = useState<DbLocation | null>(null)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
   const [locationToDelete, setLocationToDelete] = useState<DbLocation | null>(null)
+  const [mainTab, setMainTab] = useState<'businesses' | 'requests'>('businesses')
 
   // Fetch businesses from Supabase
   const { data: businesses = [], isLoading } = useSWR('all-businesses', getBusinesses, {
@@ -85,6 +90,23 @@ export function AdminBusinesses() {
   const { data: deliveries = [] } = useSWR('all-deliveries', () => getAllDeliveries(), {
     refreshInterval: 60000,
   })
+
+  // Fetch store requests from businesses
+  const fetchStoreRequests = async () => {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('store_requests')
+      .select('*, businesses(name)')
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      // Table might not exist yet - return empty array
+      return []
+    }
+    return data || []
+  }
+  const { data: storeRequests = [], isLoading: requestsLoading } = useSWR('store-requests', fetchStoreRequests)
+  const pendingRequests = storeRequests.filter((r: { status: string }) => r.status === 'pending')
 
   const [form, setForm] = useState({
     name: '',
@@ -293,6 +315,60 @@ export function AdminBusinesses() {
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
+
+  // Handle store request actions
+  const handleStoreRequestAction = async (requestId: string, action: 'approved' | 'rejected', request: { request_type: string; business_id: string; store_name: string; store_address?: string; store_phone?: string; location_id?: string }) => {
+    const supabase = createClient()
+    
+    // Update request status
+    const { error: updateError } = await supabase
+      .from('store_requests')
+      .update({ 
+        status: action,
+        processed_at: new Date().toISOString(),
+      })
+      .eq('id', requestId)
+    
+    if (updateError) {
+      toast.error('Failed to update request')
+      return
+    }
+    
+    // If approved and it's an add request, create the location
+    if (action === 'approved' && request.request_type === 'add') {
+      const { error: locationError } = await supabase
+        .from('business_locations')
+        .insert({
+          business_id: request.business_id,
+          name: request.store_name,
+          address: request.store_address || '',
+          phone: request.store_phone || null,
+          is_active: true,
+        })
+      
+      if (locationError) {
+        toast.error('Request approved but failed to create location')
+        return
+      }
+    }
+    
+    // If approved and it's a remove request, deactivate the location
+    if (action === 'approved' && request.request_type === 'remove' && request.location_id) {
+      const { error: deactivateError } = await supabase
+        .from('business_locations')
+        .update({ is_active: false })
+        .eq('id', request.location_id)
+      
+      if (deactivateError) {
+        toast.error('Request approved but failed to deactivate location')
+        return
+      }
+    }
+    
+    mutate('store-requests')
+    mutate('all-businesses')
+    toast.success(`Store request ${action}`)
   }
 
   // Location management functions
@@ -1127,55 +1203,186 @@ export function AdminBusinesses() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">Businesses</h2>
-          <p className="text-sm text-muted-foreground">{businesses.length} registered businesses</p>
+        <div className="flex items-center gap-4">
+          <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'businesses' | 'requests')}>
+            <TabsList>
+              <TabsTrigger value="businesses" className="gap-2">
+                <Building2 className="w-4 h-4" />
+                Businesses
+              </TabsTrigger>
+              <TabsTrigger value="requests" className="gap-2 relative">
+                <Store className="w-4 h-4" />
+                Store Requests
+                {pendingRequests.length > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-orange-500 text-white text-xs">
+                    {pendingRequests.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-        <Button onClick={() => setShowAddSheet(true)} className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
-          <Plus className="w-4 h-4" />
-          Add Business
-        </Button>
+        {mainTab === 'businesses' && (
+          <Button onClick={() => setShowAddSheet(true)} className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
+            <Plus className="w-4 h-4" />
+            Add Business
+          </Button>
+        )}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search businesses..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-[var(--bg-card)] border-[var(--border-color)]"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['status'] | 'all')}>
-          <SelectTrigger className="w-full sm:w-40 bg-[var(--bg-card)] border-[var(--border-color)]">
-            <Filter className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Businesses Grid */}
-      {filteredBusinesses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16">
-          <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-1">No businesses found</h3>
-          <p className="text-sm text-muted-foreground">Try adjusting your search or filters</p>
+      {mainTab === 'requests' ? (
+        /* Store Requests Tab */
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {storeRequests.length} total requests ({pendingRequests.length} pending)
+          </p>
+          
+          {requestsLoading ? (
+            <div className="flex justify-center py-12">
+              <Spinner className="w-8 h-8" />
+            </div>
+          ) : storeRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Store className="w-12 h-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-1">No store requests</h3>
+              <p className="text-sm text-muted-foreground">Businesses can request to add or remove store locations</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {storeRequests.map((request: {
+                id: string
+                request_type: 'add' | 'remove'
+                business_id: string
+                store_name: string
+                store_address?: string
+                store_phone?: string
+                location_id?: string
+                notes?: string
+                status: 'pending' | 'approved' | 'rejected'
+                created_at: string
+                businesses?: { name: string }
+              }) => (
+                <Card key={request.id} className="bg-[var(--bg-card)] border-[var(--border-color)]">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          request.request_type === 'add' 
+                            ? 'bg-green-500/10 text-green-500' 
+                            : 'bg-red-500/10 text-red-500'
+                        }`}>
+                          {request.request_type === 'add' ? <Plus className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-foreground">
+                              {request.request_type === 'add' ? 'Add Store' : 'Remove Store'}
+                            </span>
+                            <Badge variant="outline" className={
+                              request.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' :
+                              request.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/30' :
+                              'bg-red-500/10 text-red-500 border-red-500/30'
+                            }>
+                              {request.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            <span className="text-foreground">{request.businesses?.name || 'Unknown Business'}</span>
+                          </p>
+                          <p className="text-sm font-medium">{request.store_name}</p>
+                          {request.store_address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                              <MapPin className="w-3 h-3" />
+                              {request.store_address}
+                            </p>
+                          )}
+                          {request.notes && (
+                            <p className="text-xs text-muted-foreground mt-2 italic">&quot;{request.notes}&quot;</p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(request.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {request.status === 'pending' && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-500 border-green-500/30 hover:bg-green-500/10"
+                            onClick={() => handleStoreRequestAction(request.id, 'approved', request)}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-500 border-red-500/30 hover:bg-red-500/10"
+                            onClick={() => handleStoreRequestAction(request.id, 'rejected', request)}
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredBusinesses.map((business: BusinessWithLocations) => {
-            const stats = getBusinessStats(business.id)
-            return (
+        /* Businesses Tab */
+        <>
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search businesses..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 bg-[var(--bg-card)] border-[var(--border-color)]"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['status'] | 'all')}>
+              <SelectTrigger className="w-full sm:w-40 bg-[var(--bg-card)] border-[var(--border-color)]">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="suspended">Suspended</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Businesses Grid */}
+          {filteredBusinesses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-1">No businesses found</h3>
+              <p className="text-sm text-muted-foreground">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredBusinesses.map((business: BusinessWithLocations) => {
+                const stats = getBusinessStats(business.id)
+                return (
               <Card 
                 key={business.id} 
                 className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden cursor-pointer hover:border-[var(--accent-orange)]/50 transition-colors"
@@ -1266,6 +1473,8 @@ export function AdminBusinesses() {
             )
           })}
         </div>
+      )}
+        </>
       )}
 
       {/* Add Business Sheet */}
