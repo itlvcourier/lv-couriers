@@ -12,6 +12,7 @@ import { BusinessInvoices } from './BusinessInvoices'
 import { BusinessProfile } from './BusinessProfile'
 import { BusinessReports } from './BusinessReports'
 import { LocationSwitcher } from './LocationSwitcher'
+import { BusinessNotificationCenter } from './BusinessNotificationCenter'
 import {
   Plus,
   Package,
@@ -49,6 +50,7 @@ export function BusinessView() {
             </div>
             <div className="flex items-center gap-3">
               <LocationSwitcher />
+              <BusinessNotificationCenter />
               <Avatar className="w-9 h-9">
                 <AvatarFallback className="bg-primary/10 text-primary text-sm">
                   {business?.name ? getInitials(business.name) : 'B'}

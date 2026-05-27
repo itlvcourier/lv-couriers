@@ -19,10 +19,13 @@ import {
   Zap,
   Globe,
   UserRound,
+  Download,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
 import type { DeliveryStatus } from '@/lib/types'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 export function AdminOrders() {
   const [search, setSearch] = useState('')
@@ -71,6 +74,31 @@ export function AdminOrders() {
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   }
 
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Tracking Code', 'Status', 'Pickup Address', 'Dropoff Address', 'Recipient', 'Priority', 'Created', 'Delivered']
+    const rows = filteredDeliveries.map((d: DbDelivery) => [
+      d.id.slice(-8),
+      d.tracking_code || '',
+      d.status,
+      d.pickup_address,
+      d.dropoff_address,
+      d.recipient_name || '',
+      d.is_urgent ? 'Urgent' : d.is_rush ? 'Rush' : 'Standard',
+      format(new Date(d.created_at), 'yyyy-MM-dd HH:mm'),
+      d.delivered_at ? format(new Date(d.delivered_at), 'yyyy-MM-dd HH:mm') : '',
+    ])
+    
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `deliveries-${statusFilter}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${filteredDeliveries.length} deliveries`)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -82,9 +110,15 @@ export function AdminOrders() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-semibold">Deliveries</h2>
-        <p className="text-sm text-muted-foreground">{deliveries.length} total deliveries</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">Deliveries</h2>
+          <p className="text-sm text-muted-foreground">{deliveries.length} total deliveries</p>
+        </div>
+        <Button onClick={handleExportCSV} variant="outline">
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Quick Stats */}

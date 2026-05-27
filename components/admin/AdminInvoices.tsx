@@ -227,6 +227,34 @@ export function AdminInvoices() {
     toast.success(`Invoice resent to ${newEmail}`)
   }
 
+  const handleExportCSV = () => {
+    const headers = ['Invoice #', 'Business', 'Period', 'Due Date', 'Subtotal', 'GST', 'Total', 'Status', 'Created']
+    const rows = filteredInvoices.map(inv => {
+      const business = businesses.find(b => b.id === inv.businessId)
+      return [
+        inv.invoiceNumber,
+        business?.name || 'Unknown',
+        `${new Date(inv.periodStart).toLocaleDateString()} - ${new Date(inv.periodEnd).toLocaleDateString()}`,
+        new Date(inv.dueDate).toLocaleDateString(),
+        inv.subtotal.toFixed(2),
+        inv.gstAmount.toFixed(2),
+        inv.total.toFixed(2),
+        inv.status,
+        new Date(inv.createdAt).toLocaleDateString(),
+      ]
+    })
+    
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `invoices-${filter}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${filteredInvoices.length} invoices`)
+  }
+
   return (
     <div className="space-y-6">
       {/* Auto-send status indicator */}
@@ -297,10 +325,16 @@ export function AdminInvoices() {
           <h2 className="text-xl font-semibold">Invoices</h2>
           <p className="text-sm text-muted-foreground">{filteredInvoices.length} invoice{filteredInvoices.length === 1 ? '' : 's'}</p>
         </div>
-        <Button onClick={() => setShowGenerateModal(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Generate Invoice
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleExportCSV} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button onClick={() => setShowGenerateModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Generate Invoice
+          </Button>
+        </div>
       </div>
 
       {/* Filter Tabs */}

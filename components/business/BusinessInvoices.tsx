@@ -225,6 +225,119 @@ function InvoiceDetailView({
   onDispute: (lineId: string) => void
   onClose: () => void
 }) {
+  const handleDownloadPDF = () => {
+    // Generate a printable invoice HTML and trigger print/save as PDF
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      toast.error('Please allow popups to download invoice')
+      return
+    }
+    
+    const invoiceHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice ${invoice.invoiceNumber}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; }
+          .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #f97316; padding-bottom: 20px; }
+          .logo { font-size: 24px; font-weight: bold; color: #f97316; }
+          .invoice-info { text-align: right; }
+          .invoice-number { font-size: 24px; font-weight: bold; }
+          .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+          .meta-section h3 { margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #666; }
+          .meta-section p { margin: 4px 0; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th { text-align: left; padding: 12px; border-bottom: 2px solid #ddd; font-size: 12px; text-transform: uppercase; color: #666; }
+          td { padding: 12px; border-bottom: 1px solid #eee; }
+          .amount { text-align: right; }
+          .total-row { font-weight: bold; font-size: 18px; }
+          .total-row td { border-top: 2px solid #333; border-bottom: none; padding-top: 20px; }
+          .payment-info { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-top: 40px; }
+          .payment-info h3 { margin: 0 0 10px 0; }
+          .status { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+          .status-paid { background: #dcfce7; color: #166534; }
+          .status-sent { background: #dbeafe; color: #1e40af; }
+          .status-overdue { background: #fee2e2; color: #dc2626; }
+          .status-draft { background: #f3f4f6; color: #6b7280; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">LV Courier</div>
+            <p>Delivery Operations Management</p>
+          </div>
+          <div class="invoice-info">
+            <div class="invoice-number">${invoice.invoiceNumber}</div>
+            <span class="status status-${invoice.status}">${invoice.status.toUpperCase()}</span>
+          </div>
+        </div>
+        
+        <div class="meta">
+          <div class="meta-section">
+            <h3>Invoice Period</h3>
+            <p>${new Date(invoice.periodStart).toLocaleDateString()} - ${new Date(invoice.periodEnd).toLocaleDateString()}</p>
+            <p><strong>Due Date:</strong> ${new Date(invoice.dueDate).toLocaleDateString()}</p>
+          </div>
+          <div class="meta-section">
+            <h3>Payment Instructions</h3>
+            <p>E-transfer to: lvcourieralberta@gmail.com</p>
+            <p>Reference: ${invoice.invoiceNumber}</p>
+          </div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="amount">Qty</th>
+              <th class="amount">Rate</th>
+              <th class="amount">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoice.lines.map(line => `
+              <tr>
+                <td>${line.description}</td>
+                <td class="amount">${line.qty}</td>
+                <td class="amount">$${line.rate.toFixed(2)}</td>
+                <td class="amount">$${line.amount.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+            <tr>
+              <td colspan="3" class="amount">Subtotal</td>
+              <td class="amount">$${invoice.subtotal.toFixed(2)}</td>
+            </tr>
+            ${invoice.gstAmount > 0 ? `
+              <tr>
+                <td colspan="3" class="amount">GST (5%)</td>
+                <td class="amount">$${invoice.gstAmount.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr class="total-row">
+              <td colspan="3" class="amount">Total</td>
+              <td class="amount">$${invoice.total.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="payment-info">
+          <h3>Payment Instructions</h3>
+          <p>Please send e-transfer to: <strong>lvcourieralberta@gmail.com</strong></p>
+          <p>Include reference: <strong>${invoice.invoiceNumber}</strong></p>
+        </div>
+        
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `
+    
+    printWindow.document.write(invoiceHTML)
+    printWindow.document.close()
+  }
+
   return (
     <div className="space-y-6">
       <SheetHeader>
@@ -325,7 +438,7 @@ function InvoiceDetailView({
 
       {/* Actions */}
       <div className="flex gap-3 pt-4">
-        <Button variant="outline" className="flex-1">
+        <Button variant="outline" className="flex-1" onClick={handleDownloadPDF}>
           <Download className="h-4 w-4 mr-2" />
           Download PDF
         </Button>
