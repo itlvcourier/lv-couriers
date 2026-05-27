@@ -336,6 +336,43 @@ export async function claimDelivery(deliveryId: string, driverId: string) {
   return data as DbDelivery
 }
 
+export interface EditDeliveryFields {
+  dropoff_address?: string
+  recipient_name?: string
+  recipient_phone?: string
+  buzz_code?: string
+  special_instructions?: string
+  is_rush?: boolean
+  is_urgent?: boolean
+  package_count?: number
+}
+
+export async function editDeliveryDetails(deliveryId: string, fields: EditDeliveryFields) {
+  const supabase = createClient()
+  
+  // First check if delivery is in 'posted' status
+  const { data: delivery, error: fetchError } = await supabase
+    .from('deliveries')
+    .select('status')
+    .eq('id', deliveryId)
+    .single()
+  
+  if (fetchError) throw fetchError
+  if (delivery.status !== 'posted') {
+    throw new Error('Can only edit deliveries that have not been claimed yet')
+  }
+  
+  const { data, error } = await supabase
+    .from('deliveries')
+    .update(fields)
+    .eq('id', deliveryId)
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data as DbDelivery
+}
+
 export async function updateDeliveryStatus(deliveryId: string, status: DeliveryStatus, additionalFields?: Record<string, unknown>) {
   const supabase = createClient()
   const { data, error } = await supabase
