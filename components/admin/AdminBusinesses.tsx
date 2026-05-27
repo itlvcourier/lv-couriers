@@ -1188,6 +1188,120 @@ export function AdminBusinesses() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Edit Business Sheet - for detail view */}
+        <Sheet open={!!selectedBusiness} onOpenChange={() => setSelectedBusiness(null)}>
+          <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
+            <SheetHeader>
+              <SheetTitle className="text-foreground">Edit Business</SheetTitle>
+              <SheetDescription>
+                Update business information
+              </SheetDescription>
+            </SheetHeader>
+            
+            {selectedBusiness && (
+              <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Business Name</Label>
+                  <Input
+                    value={selectedBusiness.name}
+                    onChange={(e) => setSelectedBusiness({ ...selectedBusiness, name: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Billing Email</Label>
+                  <Input
+                    type="email"
+                    value={selectedBusiness.billing_email}
+                    onChange={(e) => setSelectedBusiness({ ...selectedBusiness, billing_email: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Contact Name</Label>
+                  <Input
+                    value={selectedBusiness.contact_name || ''}
+                    onChange={(e) => setSelectedBusiness({ ...selectedBusiness, contact_name: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Contact Phone</Label>
+                  <Input
+                    value={selectedBusiness.contact_phone || ''}
+                    onChange={(e) => setSelectedBusiness({ ...selectedBusiness, contact_phone: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Invoice Format</Label>
+                  <Select 
+                    value={selectedBusiness.invoice_format}
+                    onValueChange={(v) => setSelectedBusiness({ ...selectedBusiness, invoice_format: v as DbBusiness['invoice_format'] })}
+                  >
+                    <SelectTrigger className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="combined">Combined</SelectItem>
+                      <SelectItem value="separate">Separate</SelectItem>
+                      <SelectItem value="combined_breakdown">Combined with Breakdown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={handleUpdateBusiness}
+                  className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+                >
+                  Save Changes
+                </Button>
+
+                <div className="pt-4 mt-2 border-t border-[var(--border-color)] space-y-2">
+                  <Button
+                    variant="destructive"
+                    className="w-full gap-2"
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Permanently
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                    Suspend keeps the business and its history. Delete is only allowed for businesses with no deliveries or invoices.
+                  </p>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+
+        {/* Delete Business Confirmation - for detail view */}
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-foreground">
+                Delete {selectedBusiness?.name} permanently?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the business, all its locations, rate cards, and saved
+                contacts. It will fail if any deliveries or invoices exist for the
+                business — suspend it instead to preserve records.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteBusiness}
+                disabled={isDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Business'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
