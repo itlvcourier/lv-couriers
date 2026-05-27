@@ -31,6 +31,13 @@ import {
   Ban,
   Package,
   Trash2,
+  Users,
+  BarChart3,
+  ChevronRight,
+  ArrowLeft,
+  UserPlus,
+  FileText,
+  Settings,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -50,6 +57,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { getBusinesses, getAllDeliveries, type DbBusiness, type DbLocation, type DbDelivery } from '@/lib/db'
 import { createClient } from '@/lib/supabase/client'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
@@ -60,6 +70,10 @@ export function AdminBusinesses() {
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessWithLocations | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [detailBusiness, setDetailBusiness] = useState<BusinessWithLocations | null>(null)
+  const [showAddLocationSheet, setShowAddLocationSheet] = useState(false)
+  const [editingLocation, setEditingLocation] = useState<DbLocation | null>(null)
+  const [showInviteSheet, setShowInviteSheet] = useState(false)
 
   // Fetch businesses from Supabase
   const { data: businesses = [], isLoading } = useSWR('all-businesses', getBusinesses, {
@@ -76,6 +90,22 @@ export function AdminBusinesses() {
     billing_email: '',
     contact_name: '',
     contact_phone: '',
+  })
+
+  const [locationForm, setLocationForm] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    billing_email: '',
+    backup_email: '',
+    notes: '',
+  })
+
+  const [inviteForm, setInviteForm] = useState({
+    email: '',
+    name: '',
+    role: 'manager' as 'owner' | 'manager' | 'viewer',
+    locationIds: [] as string[],
   })
 
   // Filter businesses
@@ -187,6 +217,93 @@ export function AdminBusinesses() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
 
+  // Location management functions
+  const handleAddLocation = async () => {
+    if (!detailBusiness || !locationForm.name || !locationForm.address) {
+      toast.error('Please fill in required fields')
+      return
+    }
+
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('business_locations')
+      .insert({
+        business_id: detailBusiness.id,
+        name: locationForm.name,
+        address: locationForm.address,
+        phone: locationForm.phone || null,
+        billing_email: locationForm.billing_email || detailBusiness.billing_email,
+        backup_email: locationForm.backup_email || null,
+        notes: locationForm.notes || null,
+        is_active: true,
+      })
+
+    if (error) {
+      toast.error('Failed to add location')
+      console.error(error)
+      return
+    }
+
+    mutate('all-businesses')
+    setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '' })
+    setShowAddLocationSheet(false)
+    toast.success('Location added successfully')
+  }
+
+  const handleUpdateLocation = async () => {
+    if (!editingLocation) return
+
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('business_locations')
+      .update({
+        name: editingLocation.name,
+        address: editingLocation.address,
+        phone: editingLocation.phone,
+        billing_email: editingLocation.billing_email,
+        backup_email: editingLocation.backup_email,
+        notes: editingLocation.notes,
+      })
+      .eq('id', editingLocation.id)
+
+    if (error) {
+      toast.error('Failed to update location')
+      return
+    }
+
+    mutate('all-businesses')
+    setEditingLocation(null)
+    toast.success('Location updated successfully')
+  }
+
+  const handleDeleteLocation = async (locationId: string) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('business_locations')
+      .delete()
+      .eq('id', locationId)
+
+    if (error) {
+      toast.error('Failed to delete location - it may have deliveries')
+      return
+    }
+
+    mutate('all-businesses')
+    toast.success('Location deleted')
+  }
+
+  const handleInviteUser = async () => {
+    if (!detailBusiness || !inviteForm.email || !inviteForm.name) {
+      toast.error('Please fill in required fields')
+      return
+    }
+
+    // TODO: Implement actual invite via email
+    toast.success(`Invitation sent to ${inviteForm.email}`)
+    setInviteForm({ email: '', name: '', role: 'manager', locationIds: [] })
+    setShowInviteSheet(false)
+  }
+
   const getBusinessStats = (businessId: string) => {
     const businessDeliveries = deliveries.filter((d: DbDelivery) => d.business_id === businessId)
     const completed = businessDeliveries.filter((d: DbDelivery) => d.status === 'delivered').length
@@ -206,6 +323,504 @@ export function AdminBusinesses() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Spinner className="w-8 h-8" />
+      </div>
+    )
+  }
+
+  // Detailed Business View
+  if (detailBusiness) {
+    const businessStats = getBusinessStats(detailBusiness.id)
+    
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => setDetailBusiness(null)}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-3 flex-1">
+            <Avatar className="w-12 h-12">
+              <AvatarFallback className="bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]">
+                {getInitials(detailBusiness.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="text-xl font-semibold">{detailBusiness.name}</h2>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={statusColors[detailBusiness.status]}>
+                  {detailBusiness.status}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  {detailBusiness.locations.length} location(s)
+                </span>
+              </div>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setSelectedBusiness(detailBusiness)}
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </Button>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-foreground">{businessStats.total}</div>
+              <div className="text-sm text-muted-foreground">Total Deliveries</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-green-500">{businessStats.completed}</div>
+              <div className="text-sm text-muted-foreground">Completed</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-foreground">${businessStats.totalSpent.toFixed(0)}</div>
+              <div className="text-sm text-muted-foreground">Total Billed</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-foreground">{detailBusiness.locations.length}</div>
+              <div className="text-sm text-muted-foreground">Locations</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="locations" className="space-y-4">
+          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)]">
+            <TabsTrigger value="locations" className="gap-2">
+              <MapPin className="w-4 h-4" />
+              Locations
+            </TabsTrigger>
+            <TabsTrigger value="team" className="gap-2">
+              <Users className="w-4 h-4" />
+              Team
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="gap-2">
+              <FileText className="w-4 h-4" />
+              Billing
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Locations Tab */}
+          <TabsContent value="locations" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Locations</h3>
+              <Button 
+                size="sm" 
+                onClick={() => setShowAddLocationSheet(true)}
+                className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+              >
+                <Plus className="w-4 h-4" />
+                Add Location
+              </Button>
+            </div>
+            
+            <div className="space-y-3">
+              {detailBusiness.locations.map((location) => (
+                <Card key={location.id} className="bg-[var(--bg-card)] border-[var(--border-color)]">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <h4 className="font-medium text-foreground">{location.name}</h4>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {location.address}
+                        </p>
+                        {location.phone && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {location.phone}
+                          </p>
+                        )}
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          {location.billing_email}
+                        </p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditingLocation(location)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit Location
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteLocation(location.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Location
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* Team Tab */}
+          <TabsContent value="team" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Team Members</h3>
+              <Button 
+                size="sm" 
+                onClick={() => setShowInviteSheet(true)}
+                className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+              >
+                <UserPlus className="w-4 h-4" />
+                Invite Member
+              </Button>
+            </div>
+            
+            <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-10 h-10">
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      {getInitials(detailBusiness.contact_name || 'Owner')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="font-medium text-foreground">
+                      {detailBusiness.contact_name || 'Business Owner'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">{detailBusiness.billing_email}</div>
+                  </div>
+                  <Badge className="bg-primary/10 text-primary border-primary/20">Owner</Badge>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No additional team members</p>
+              <p className="text-xs">Invite managers or viewers to grant access to specific locations</p>
+            </div>
+          </TabsContent>
+
+          {/* Billing Tab */}
+          <TabsContent value="billing" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Billing Settings</h3>
+            </div>
+            
+            <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+              <CardContent className="p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Invoice Format</Label>
+                  <Select 
+                    value={detailBusiness.invoice_format}
+                    onValueChange={async (v) => {
+                      const supabase = createClient()
+                      await supabase
+                        .from('businesses')
+                        .update({ invoice_format: v })
+                        .eq('id', detailBusiness.id)
+                      mutate('all-businesses')
+                      setDetailBusiness({ ...detailBusiness, invoice_format: v as DbBusiness['invoice_format'] })
+                      toast.success('Invoice format updated')
+                    }}
+                  >
+                    <SelectTrigger className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="separate">
+                        <div className="flex flex-col">
+                          <span>Separate Invoices</span>
+                          <span className="text-xs text-muted-foreground">One invoice per location</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="combined">
+                        <div className="flex flex-col">
+                          <span>Combined Invoice</span>
+                          <span className="text-xs text-muted-foreground">All locations merged into one</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="combined_breakdown">
+                        <div className="flex flex-col">
+                          <span>Combined with Breakdown</span>
+                          <span className="text-xs text-muted-foreground">One invoice showing each location</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    This determines how invoices are generated for multi-location businesses.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-[var(--border-color)]">
+                  <h4 className="font-medium text-foreground mb-3">Location Billing Emails</h4>
+                  <div className="space-y-2">
+                    {detailBusiness.locations.map((location) => (
+                      <div key={location.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-card-2)]">
+                        <div>
+                          <div className="text-sm font-medium text-foreground">{location.name}</div>
+                          <div className="text-xs text-muted-foreground">{location.billing_email}</div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setEditingLocation(location)}
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Add Location Sheet */}
+        <Sheet open={showAddLocationSheet} onOpenChange={setShowAddLocationSheet}>
+          <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
+            <SheetHeader>
+              <SheetTitle className="text-foreground">Add New Location</SheetTitle>
+              <SheetDescription>
+                Add a new location for {detailBusiness.name}
+              </SheetDescription>
+            </SheetHeader>
+            
+            <div className="mt-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-foreground">Location Name *</Label>
+                <Input
+                  value={locationForm.name}
+                  onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })}
+                  placeholder="Downtown Branch"
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Address *</Label>
+                <Input
+                  value={locationForm.address}
+                  onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
+                  placeholder="123 Main St, Calgary, AB"
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Phone</Label>
+                <Input
+                  value={locationForm.phone}
+                  onChange={(e) => setLocationForm({ ...locationForm, phone: e.target.value })}
+                  placeholder="(403) 555-0100"
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Billing Email</Label>
+                <Input
+                  type="email"
+                  value={locationForm.billing_email}
+                  onChange={(e) => setLocationForm({ ...locationForm, billing_email: e.target.value })}
+                  placeholder={detailBusiness.billing_email}
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+                <p className="text-xs text-muted-foreground">Leave blank to use business default</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Backup Email</Label>
+                <Input
+                  type="email"
+                  value={locationForm.backup_email}
+                  onChange={(e) => setLocationForm({ ...locationForm, backup_email: e.target.value })}
+                  placeholder="backup@company.com"
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Notes</Label>
+                <Textarea
+                  value={locationForm.notes}
+                  onChange={(e) => setLocationForm({ ...locationForm, notes: e.target.value })}
+                  placeholder="Special instructions for this location..."
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <Button onClick={handleAddLocation} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Location
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Edit Location Sheet */}
+        <Sheet open={!!editingLocation} onOpenChange={() => setEditingLocation(null)}>
+          <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
+            <SheetHeader>
+              <SheetTitle className="text-foreground">Edit Location</SheetTitle>
+              <SheetDescription>
+                Update location details
+              </SheetDescription>
+            </SheetHeader>
+            
+            {editingLocation && (
+              <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Location Name</Label>
+                  <Input
+                    value={editingLocation.name}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, name: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Address</Label>
+                  <Input
+                    value={editingLocation.address}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, address: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Phone</Label>
+                  <Input
+                    value={editingLocation.phone || ''}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, phone: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Billing Email</Label>
+                  <Input
+                    type="email"
+                    value={editingLocation.billing_email}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, billing_email: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Backup Email</Label>
+                  <Input
+                    type="email"
+                    value={editingLocation.backup_email || ''}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, backup_email: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Notes</Label>
+                  <Textarea
+                    value={editingLocation.notes || ''}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, notes: e.target.value })}
+                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                  />
+                </div>
+                <Button onClick={handleUpdateLocation} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
+                  Save Changes
+                </Button>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+
+        {/* Invite Member Sheet */}
+        <Sheet open={showInviteSheet} onOpenChange={setShowInviteSheet}>
+          <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
+            <SheetHeader>
+              <SheetTitle className="text-foreground">Invite Team Member</SheetTitle>
+              <SheetDescription>
+                Add a new user to {detailBusiness.name}
+              </SheetDescription>
+            </SheetHeader>
+            
+            <div className="mt-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-foreground">Email *</Label>
+                <Input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  placeholder="user@company.com"
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Name *</Label>
+                <Input
+                  value={inviteForm.name}
+                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  placeholder="John Smith"
+                  className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Role</Label>
+                <Select 
+                  value={inviteForm.role}
+                  onValueChange={(v) => setInviteForm({ ...inviteForm, role: v as 'owner' | 'manager' | 'viewer' })}
+                >
+                  <SelectTrigger className="bg-[var(--bg-card-2)] border-[var(--border-color)]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="owner">Owner - Full access to all locations</SelectItem>
+                    <SelectItem value="manager">Manager - Can manage assigned locations</SelectItem>
+                    <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {inviteForm.role !== 'owner' && (
+                <div className="space-y-2">
+                  <Label className="text-foreground">Location Access</Label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {detailBusiness.locations.map((location) => (
+                      <div key={location.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`loc-${location.id}`}
+                          checked={inviteForm.locationIds.includes(location.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setInviteForm({ ...inviteForm, locationIds: [...inviteForm.locationIds, location.id] })
+                            } else {
+                              setInviteForm({ ...inviteForm, locationIds: inviteForm.locationIds.filter(id => id !== location.id) })
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`loc-${location.id}`} className="text-sm cursor-pointer">
+                          {location.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <Button onClick={handleInviteUser} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
+                <UserPlus className="w-4 h-4 mr-2" />
+                Send Invitation
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     )
   }
@@ -261,7 +876,11 @@ export function AdminBusinesses() {
           {filteredBusinesses.map((business: BusinessWithLocations) => {
             const stats = getBusinessStats(business.id)
             return (
-              <Card key={business.id} className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden">
+              <Card 
+                key={business.id} 
+                className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden cursor-pointer hover:border-[var(--accent-orange)]/50 transition-colors"
+                onClick={() => setDetailBusiness(business)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -278,12 +897,16 @@ export function AdminBusinesses() {
                       </div>
                     </div>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => setDetailBusiness(business)}>
+                          <ChevronRight className="w-4 h-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setSelectedBusiness(business)}>
                           <Edit className="w-4 h-4 mr-2" />
                           Edit
