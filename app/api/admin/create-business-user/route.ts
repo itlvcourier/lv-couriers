@@ -49,7 +49,9 @@ export async function POST(request: Request) {
 
     // Store ALL business users in profiles table
     if (authData.user) {
-      // First, create/update the profile record
+      // Create/update the profile record with only columns that exist
+      // Note: business_role and managed_location_ids may not exist in all schemas
+      // We use location_id to determine role: null = owner, set = manager
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .upsert({
@@ -59,14 +61,13 @@ export async function POST(request: Request) {
           role: 'business',
           business_id: businessId,
           location_id: role === 'owner' ? null : locationId,
-          business_role: role,
-          managed_location_ids: role === 'owner' ? [] : (locationId ? [locationId] : []),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
 
       if (profileError) {
         console.error('Error storing profile:', profileError)
+        // Don't fail - user was created in auth, profile insert might fail due to schema
       }
 
       // If not owner, also create location assignment records

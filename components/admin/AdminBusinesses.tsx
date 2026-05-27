@@ -125,28 +125,58 @@ export function AdminBusinesses() {
   const fetchTeamMembers = async (businessId: string) => {
     setLoadingTeam(true)
     const supabase = createClient()
-    // Fetch from profiles table where business_id matches
-    const { data, error } = await supabase
+    
+    // Get the business to know the owner's email
+    const { data: businessData } = await supabase
+      .from('businesses')
+      .select('billing_email, contact_name')
+      .eq('id', businessId)
+      .single()
+    
+    // Get all profiles with this business_id (using only columns that exist)
+    const { data: profiles, error: profileError } = await supabase
       .from('profiles')
-      .select('id, email, full_name, business_role, managed_location_ids, created_at')
+      .select('id, email, full_name, role, business_id, location_id, created_at')
       .eq('business_id', businessId)
       .eq('role', 'business')
-      .order('created_at', { ascending: false })
     
-    if (!error && data) {
-      // Map to expected format
-      setTeamMembers(data.map(p => ({
-        id: p.id,
-        email: p.email || '',
-        name: p.full_name || p.email || '',
-        business_role: p.business_role || 'viewer',
-        managed_location_ids: p.managed_location_ids || [],
-        created_at: p.created_at,
-      })))
-    } else {
-      console.error('Error fetching team members:', error)
+    if (profileError) {
+      console.error('Error fetching profiles:', profileError)
       setTeamMembers([])
+      setLoadingTeam(false)
+      return
     }
+    
+    // Build team members list
+    const members: Array<{
+      id: string
+      email: string
+      name: string
+      business_role: string
+      managed_location_ids: string[]
+      created_at: string
+    }> = []
+    
+    if (profiles) {
+      profiles.forEach(profile => {
+        // Skip the main business account (billing_email) - shown separately as owner card
+        if (profile.email === businessData?.billing_email) return
+        
+        // Determine role: if location_id is null, they're an owner; otherwise manager
+        const isOwner = !profile.location_id
+        
+        members.push({
+          id: profile.id,
+          email: profile.email || '',
+          name: profile.full_name || profile.email || '',
+          business_role: isOwner ? 'owner' : 'manager',
+          managed_location_ids: profile.location_id ? [profile.location_id] : [],
+          created_at: profile.created_at || new Date().toISOString(),
+        })
+      })
+    }
+    
+    setTeamMembers(members)
     setLoadingTeam(false)
   }
 
