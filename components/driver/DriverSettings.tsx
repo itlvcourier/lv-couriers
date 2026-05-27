@@ -3,13 +3,23 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/context'
+import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import { 
   User, 
@@ -25,7 +35,8 @@ import {
   DollarSign,
   Edit2,
   Check,
-  X
+  X,
+  KeyRound
 } from 'lucide-react'
 
 export function DriverSettings() {
@@ -35,6 +46,14 @@ export function DriverSettings() {
   const [editedPhone, setEditedPhone] = useState('')
   const [notifications, setNotifications] = useState(true)
   const [locationSharing, setLocationSharing] = useState(true)
+  
+  // Password change state
+  const [showPasswordSheet, setShowPasswordSheet] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   
   const driverId = currentUser?.driverId || ''
   const driver = drivers.find(d => d.id === driverId)
@@ -78,6 +97,45 @@ export function DriverSettings() {
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase()
+  }
+
+  // Handle password change
+  const handlePasswordChange = async () => {
+    if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
+      toast.error('Please fill in all fields')
+      return
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+
+    setIsChangingPassword(true)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.updateUser({
+        password: passwordForm.newPassword
+      })
+
+      if (error) {
+        throw error
+      }
+
+      toast.success('Password changed successfully')
+      setShowPasswordSheet(false)
+      setPasswordForm({ newPassword: '', confirmPassword: '' })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to change password')
+    } finally {
+      setIsChangingPassword(false)
+    }
   }
 
   return (
@@ -256,6 +314,23 @@ export function DriverSettings() {
           </div>
           <Separator className="bg-[var(--border-color)]" />
           <ThemeToggleRow id="driver-dark-mode" />
+          <Separator className="bg-[var(--border-color)]" />
+          <div className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-3">
+              <KeyRound className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <span className="text-sm text-foreground">Change Password</span>
+                <p className="text-xs text-muted-foreground">Update your account password</p>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowPasswordSheet(true)}
+            >
+              Change
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -268,6 +343,59 @@ export function DriverSettings() {
         <LogOut className="w-4 h-4 mr-2" />
         Sign Out
       </Button>
+
+      {/* Password Change Sheet */}
+      <Sheet open={showPasswordSheet} onOpenChange={setShowPasswordSheet}>
+        <SheetContent className="bg-background border-l border-border">
+          <SheetHeader>
+            <SheetTitle>Change Password</SheetTitle>
+            <SheetDescription>
+              Enter a new password for your account
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <Input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                placeholder="Min 6 characters"
+                disabled={isChangingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm Password</Label>
+              <Input
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                placeholder="Confirm new password"
+                disabled={isChangingPassword}
+              />
+            </div>
+            
+            <Button 
+              onClick={handlePasswordChange} 
+              className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+              disabled={isChangingPassword}
+            >
+              {isChangingPassword ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  Changing Password...
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4 mr-2" />
+                  Change Password
+                </>
+              )}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

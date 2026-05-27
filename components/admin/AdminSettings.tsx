@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/context'
+import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -182,12 +183,27 @@ export function AdminSettings() {
       return
     }
     setPwSaving(true)
-    // Simulate network request
-    await new Promise(r => setTimeout(r, 600))
-    setPwSaving(false)
-    setShowPasswordDialog(false)
-    setPwForm({ current: '', next: '', confirm: '' })
-    toast.success('Password changed successfully')
+    
+    try {
+      const supabase = createClient()
+      
+      // Update password via Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: pwForm.next
+      })
+      
+      if (error) {
+        throw error
+      }
+      
+      setShowPasswordDialog(false)
+      setPwForm({ current: '', next: '', confirm: '' })
+      toast.success('Password changed successfully')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to change password')
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   const handleStart2fa = () => {
