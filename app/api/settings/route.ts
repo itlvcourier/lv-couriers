@@ -1,0 +1,72 @@
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+export async function GET() {
+  try {
+    // Try to get the current settings
+    const { data, error } = await supabaseAdmin
+      .from('system_settings')
+      .select('*')
+      .eq('id', 'main')
+      .single()
+
+    if (error) {
+      // If no row found, try to insert default
+      if (error.code === 'PGRST116') {
+        const { data: insertData, error: insertError } = await supabaseAdmin
+          .from('system_settings')
+          .insert({
+            id: 'main',
+            driver_pay_enabled: false,
+            driver_base_rate: 5.00,
+            driver_rush_bonus: 2.00,
+            driver_urgent_bonus: 5.00,
+            driver_distance_rate: 0.50,
+          })
+          .select()
+          .single()
+
+        if (insertError) {
+          return NextResponse.json({ error: insertError.message, code: insertError.code }, { status: 400 })
+        }
+
+        return NextResponse.json(insertData)
+      }
+
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 400 })
+    }
+
+    return NextResponse.json(data)
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    
+    const { data, error } = await supabaseAdmin
+      .from('system_settings')
+      .upsert({
+        id: 'main',
+        ...body,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 400 })
+    }
+
+    return NextResponse.json(data)
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
