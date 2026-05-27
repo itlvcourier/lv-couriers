@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useApp } from '@/lib/context'
 import {
   Select,
@@ -8,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Building2, ChevronDown } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 export function LocationSwitcher() {
@@ -21,17 +22,44 @@ export function LocationSwitcher() {
     isOwner,
   } = useApp()
   
+  const userIsOwner = isOwner()
+  const accessibleLocations = getAccessibleLocations()
+  
+  // Auto-set location for non-owners on mount
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'business') return
+    
+    // For non-owners with single location, auto-set it
+    if (!userIsOwner && accessibleLocations.length === 1) {
+      if (activeLocationId !== accessibleLocations[0].id) {
+        setActiveLocation(accessibleLocations[0].id)
+      }
+    }
+    // For owners, default to "all" if not set
+    else if (userIsOwner && (!activeLocationId || activeLocationId === null)) {
+      setActiveLocation('all')
+    }
+  }, [currentUser, userIsOwner, accessibleLocations, activeLocationId, setActiveLocation])
+  
+  // Don't render for non-business users
   if (!currentUser || currentUser.role !== 'business') {
     return null
   }
   
-  const accessibleLocations = getAccessibleLocations()
-  const userIsOwner = isOwner()
-  
-  // Single location - no switcher needed
-  if (accessibleLocations.length <= 1 && !userIsOwner) {
-    return null
+  // Non-owners with single location - just show a label, no switcher
+  if (!userIsOwner && accessibleLocations.length === 1) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-lg border border-border/50">
+        <Building2 className="w-4 h-4 text-muted-foreground" />
+        <span className="text-sm font-medium truncate max-w-[150px]">
+          {accessibleLocations[0].name}
+        </span>
+      </div>
+    )
   }
+  
+  // Non-owners with multiple locations but no "all" option
+  // Owners get "All Locations" option
   
   const business = businesses.find(b => b.id === currentUser.businessId)
   if (!business) return null
@@ -43,7 +71,7 @@ export function LocationSwitcher() {
   return (
     <div className="flex items-center gap-2">
       <Select
-        value={activeLocationId === 'all' ? 'all' : (activeLocationId || '')}
+        value={activeLocationId === 'all' ? 'all' : (activeLocationId || accessibleLocations[0]?.id || '')}
         onValueChange={(value) => setActiveLocation(value as string | 'all')}
       >
         <SelectTrigger className="w-[200px] h-9 bg-muted/50 border-border/50">
@@ -59,7 +87,7 @@ export function LocationSwitcher() {
                 </span>
               ) : (
                 <span className="truncate">
-                  {currentLocation?.name || 'Select location'}
+                  {currentLocation?.name || accessibleLocations[0]?.name || 'Select location'}
                 </span>
               )}
             </SelectValue>

@@ -41,21 +41,23 @@ export function BusinessInvoices() {
   const [disputeLineId, setDisputeLineId] = useState<string | null>(null)
 
   // Get invoices for this business/location
-  const businessInvoices = (invoices || []).filter(inv => 
-    inv.businessId === currentUser?.businessId &&
-    (activeLocationId ? inv.locationId === activeLocationId : true)
-  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  const businessInvoices = (invoices || []).filter(inv => {
+    if (inv.businessId !== currentUser?.businessId) return false
+    // If "all" or no location filter, show all business invoices
+    if (!activeLocationId || activeLocationId === 'all') return true
+    return inv.locationId === activeLocationId
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   // Get current month's running total
   const currentMonth = new Date()
   const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
-  const monthDeliveries = (deliveries || []).filter(d =>
-    d.businessId === currentUser?.businessId &&
-    (activeLocationId ? d.locationId === activeLocationId : true) &&
-    d.status === 'delivered' &&
-    d.deliveredAt &&
-    new Date(d.deliveredAt) >= monthStart
-  )
+  const monthDeliveries = (deliveries || []).filter(d => {
+    if (d.businessId !== currentUser?.businessId) return false
+    if (!activeLocationId || activeLocationId === 'all') {
+      return d.status === 'delivered' && d.deliveredAt && new Date(d.deliveredAt) >= monthStart
+    }
+    return d.locationId === activeLocationId && d.status === 'delivered' && d.deliveredAt && new Date(d.deliveredAt) >= monthStart
+  })
 
   const rateCard = rateCards.find(rc => rc.locationId === activeLocationId)
   

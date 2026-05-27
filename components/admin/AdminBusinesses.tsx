@@ -483,7 +483,12 @@ export function AdminBusinesses() {
           {/* Team Tab */}
           <TabsContent value="team" className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">Team Members</h3>
+              <div>
+                <h3 className="text-lg font-medium">Team Members</h3>
+                <p className="text-sm text-muted-foreground">
+                  Manage who can access this business
+                </p>
+              </div>
               <Button 
                 size="sm" 
                 onClick={() => setShowInviteSheet(true)}
@@ -494,6 +499,19 @@ export function AdminBusinesses() {
               </Button>
             </div>
             
+            {/* Role Hierarchy Info */}
+            <Card className="bg-blue-500/5 border-blue-500/20">
+              <CardContent className="p-4">
+                <h4 className="text-sm font-medium text-blue-400 mb-2">User Roles</h4>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p><strong className="text-foreground">Owner:</strong> Full access to all locations, can view combined reports, manage team</p>
+                  <p><strong className="text-foreground">Manager:</strong> Can post deliveries and view reports for assigned locations only</p>
+                  <p><strong className="text-foreground">Viewer:</strong> Read-only access to assigned locations (view orders, track deliveries)</p>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Owner Card */}
             <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -508,7 +526,10 @@ export function AdminBusinesses() {
                     </div>
                     <div className="text-sm text-muted-foreground">{detailBusiness.billing_email}</div>
                   </div>
-                  <Badge className="bg-primary/10 text-primary border-primary/20">Owner</Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge className="bg-primary/10 text-primary border-primary/20">Owner</Badge>
+                    <span className="text-xs text-muted-foreground">All {detailBusiness.locations.length} locations</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>

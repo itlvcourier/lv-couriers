@@ -33,16 +33,21 @@ import type { Delivery } from '@/lib/types'
 import { estimateDeliveryPrice } from '@/lib/billing'
 
 export function BusinessOrders() {
-  const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation } = useApp()
+  const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation, activeLocationId } = useApp()
   const [selectedOrder, setSelectedOrder] = useState<OrderLike | null>(null)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
   const [cancelTarget, setCancelTarget] = useState<Delivery | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
 
-  const businessDeliveries = (deliveries || []).filter(
-    d => d.businessId === currentUser?.businessId,
-  )
+  // Filter by business AND location (if a specific location is selected)
+  const businessDeliveries = (deliveries || []).filter(d => {
+    if (d.businessId !== currentUser?.businessId) return false
+    // If "all" locations selected or no location filter, show all business deliveries
+    if (!activeLocationId || activeLocationId === 'all') return true
+    // Otherwise filter by specific location
+    return d.locationId === activeLocationId
+  })
 
   // Keep a map from OrderLike.id -> full Delivery so detail/cancel handlers
   // can access the richer data without extra lookups.

@@ -81,17 +81,21 @@ function getInitials(name: string): string {
 }
 
 export function BusinessLiveTracking() {
-  const { currentUser, deliveries, drivers, driverGPS } = useApp()
+  const { currentUser, deliveries, drivers, driverGPS, activeLocationId } = useApp()
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
 
   const active = useMemo(() => {
     if (!currentUser?.businessId) return []
     return deliveries
-      .filter(
-        d =>
-          d.businessId === currentUser.businessId &&
-          IN_TRANSIT_STATUSES.includes(d.status),
-      )
+      .filter(d => {
+        if (d.businessId !== currentUser.businessId) return false
+        if (!IN_TRANSIT_STATUSES.includes(d.status)) return false
+        // Filter by location if specific location selected
+        if (activeLocationId && activeLocationId !== 'all') {
+          return d.locationId === activeLocationId
+        }
+        return true
+      })
       .sort((a, b) => {
         // prioritize picked_up / en_route_dropoff, then by most recent update
         const rank = (s: DeliveryStatus) =>
@@ -100,7 +104,7 @@ export function BusinessLiveTracking() {
         if (diff !== 0) return diff
         return (b.postedAt ?? '').localeCompare(a.postedAt ?? '')
       })
-  }, [currentUser?.businessId, deliveries])
+  }, [currentUser?.businessId, deliveries, activeLocationId])
 
   const selectedDelivery = active.find(d => d.id === selectedDeliveryId) ?? null
 
