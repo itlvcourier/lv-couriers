@@ -60,7 +60,6 @@ import {
 } from 'lucide-react'
 import { getBusinesses, getAllDeliveries, type DbBusiness, type DbLocation, type DbDelivery } from '@/lib/db'
 import { createClient } from '@/lib/supabase/client'
-import { Checkbox } from '@/components/ui/checkbox'
 
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
