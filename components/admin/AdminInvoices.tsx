@@ -287,9 +287,10 @@ export function AdminInvoices() {
     
     for (const inv of draftOrSent) {
       markInvoicePaid(inv.id, {
-        method: 'bulk_mark',
-        amount: inv.total,
+        method: 'other',
+        amountReceived: inv.total,
         date: new Date().toISOString(),
+        reference: 'Bulk marked as paid',
       })
     }
     

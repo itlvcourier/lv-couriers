@@ -68,7 +68,7 @@ export function AdminDriverReports() {
     return drivers.map((driver: DbDriver) => {
       const driverDeliveries = monthDeliveries.filter((d: DbDelivery) => d.driver_id === driver.id)
       const completed = driverDeliveries.filter((d: DbDelivery) => d.status === 'delivered')
-      const failed = driverDeliveries.filter((d: DbDelivery) => d.status === 'failed_permanent' || d.status === 'failed')
+      const failed = driverDeliveries.filter((d: DbDelivery) => d.status === 'failed_retry' || d.status === 'flagged')
       
       // Calculate average time (mock - would need actual timestamps)
       const avgTime = completed.length > 0 ? Math.round(15 + Math.random() * 20) : 0
@@ -312,11 +312,11 @@ export function AdminDriverReports() {
               
               {/* Weekly bars — interactive */}
               {(() => {
-                const peak = Math.max(...report.weeklyBreakdown, 1)
-                const data = report.weeklyBreakdown.map((count, i) => ({
-                  week: `W${i + 1}`,
-                  count,
-                  isPeak: count === peak && count > 0,
+                const peak = Math.max(...report.weeklyBreakdown.map(w => w.count), 1)
+                const data = report.weeklyBreakdown.map((item) => ({
+                  week: item.week,
+                  count: item.count,
+                  isPeak: item.count === peak && item.count > 0,
                 }))
                 return (
                   <ChartContainer

@@ -148,7 +148,7 @@ export function AdminAuditLog() {
       log.details ? JSON.stringify(log.details) : '',
     ])
     
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const csvContent = [headers, ...rows].map(row => row.map((cell: string | number | null) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

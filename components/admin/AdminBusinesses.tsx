@@ -180,7 +180,7 @@ export function AdminBusinesses() {
     }> = []
     
     if (profiles) {
-      profiles.forEach(profile => {
+      profiles.forEach((profile: { id: string; email: string | null; full_name: string | null; role: string; business_id: string | null; location_id: string | null; created_at: string | null }) => {
         // Skip the main business account (billing_email) - shown separately as owner card
         if (profile.email === businessData?.billing_email) return
         
@@ -413,10 +413,9 @@ export function AdminBusinesses() {
       .update({
         name: editingLocation.name,
         address: editingLocation.address,
-        phone: editingLocation.phone,
+        contact_phone: editingLocation.contact_phone,
         billing_email: editingLocation.billing_email,
         backup_email: editingLocation.backup_email,
-        notes: editingLocation.notes,
       })
       .eq('id', editingLocation.id)
 
@@ -639,10 +638,10 @@ export function AdminBusinesses() {
                           <MapPin className="w-3 h-3" />
                           {location.address}
                         </p>
-                        {location.phone && (
+                        {location.contact_phone && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
                             <Phone className="w-3 h-3" />
-                            {location.phone}
+                            {location.contact_phone}
                           </p>
                         )}
                         <p className="text-sm text-muted-foreground flex items-center gap-1">
@@ -970,8 +969,8 @@ export function AdminBusinesses() {
                 <div className="space-y-2">
                   <Label className="text-foreground">Phone</Label>
                   <Input
-                    value={editingLocation.phone || ''}
-                    onChange={(e) => setEditingLocation({ ...editingLocation, phone: e.target.value })}
+                    value={editingLocation.contact_phone || ''}
+                    onChange={(e) => setEditingLocation({ ...editingLocation, contact_phone: e.target.value })}
                     className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                   />
                 </div>
@@ -979,7 +978,7 @@ export function AdminBusinesses() {
                   <Label className="text-foreground">Billing Email</Label>
                   <Input
                     type="email"
-                    value={editingLocation.billing_email}
+                    value={editingLocation.billing_email || ''}
                     onChange={(e) => setEditingLocation({ ...editingLocation, billing_email: e.target.value })}
                     className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                   />
@@ -990,14 +989,6 @@ export function AdminBusinesses() {
                     type="email"
                     value={editingLocation.backup_email || ''}
                     onChange={(e) => setEditingLocation({ ...editingLocation, backup_email: e.target.value })}
-                    className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-foreground">Notes</Label>
-                  <Textarea
-                    value={editingLocation.notes || ''}
-                    onChange={(e) => setEditingLocation({ ...editingLocation, notes: e.target.value })}
                     className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                   />
                 </div>

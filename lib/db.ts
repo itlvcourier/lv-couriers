@@ -222,6 +222,20 @@ export async function getDriverHistory(driverId: string, limit = 50) {
   return data as DbDelivery[]
 }
 
+// Get all completed deliveries for a driver (for earnings calculations)
+export async function getDriverDeliveries(driverId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select('*')
+    .eq('driver_id', driverId)
+    .eq('status', 'delivered')
+    .order('delivered_at', { ascending: false })
+
+  if (error) throw error
+  return data as DbDelivery[]
+}
+
 export async function getBusinessDeliveries(businessId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
