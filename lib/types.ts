@@ -18,6 +18,9 @@ export type DriverStatus = 'available' | 'on_delivery' | 'off_duty'
 
 export type UserRole = 'admin' | 'driver' | 'business'
 
+// Business user roles for multi-store access control
+export type BusinessUserRole = 'owner' | 'manager' | 'viewer'
+
 export type InviteStatus = 'active' | 'pending' | 'deactivated'
 
 export interface MockUser {
@@ -28,6 +31,36 @@ export interface MockUser {
   driverId?: string
   businessId?: string
   locationId?: string
+  // Multi-store fields
+  businessRole?: BusinessUserRole
+  managedLocationIds?: string[]  // For managers: which locations they can access
+}
+
+// Business user (for team management)
+export interface BusinessUser {
+  id: string
+  userId: string
+  businessId: string
+  email: string
+  name: string
+  businessRole: BusinessUserRole
+  managedLocationIds: string[]  // Empty for owner (has access to all), specific IDs for manager/viewer
+  createdAt: string
+}
+
+// Business invitation
+export interface BusinessInvitation {
+  id: string
+  businessId: string
+  email: string
+  role: BusinessUserRole
+  locationIds: string[]
+  invitedBy: string
+  inviterName: string
+  token: string
+  expiresAt: string
+  acceptedAt: string | null
+  createdAt: string
 }
 
 export interface Driver {
@@ -324,9 +357,7 @@ export interface RateCard {
   notifyInvoiceSent: boolean
   notifyPaymentReminder: boolean
   notifyRecipientSms: boolean
-  // Billing info (from business_locations)
-  billingEmail: string
-  backupEmail: string
+  // Note: billingEmail and backupEmail are on BusinessLocation, not RateCard
   // Billing notes
   contractNotes: string
   createdAt: string
@@ -343,6 +374,16 @@ export interface InvoiceLine {
   rate: number
   total: number
   deliveryIds: string[] // IDs of deliveries included in this line
+}
+
+// For combined_breakdown invoice format - shows per-location subtotals
+export interface LocationBreakdown {
+  locationId: string
+  locationName: string
+  lines: InvoiceLine[]
+  subtotal: number
+  gstAmount: number
+  total: number
 }
 
 export type InvoiceEventType =
@@ -406,6 +447,8 @@ export interface Invoice {
   emailBounced: boolean
   backupBillingEmail: string | null
   recipientPhone: string | null
+  // Multi-location combined invoices
+  locationBreakdowns?: LocationBreakdown[]  // For combined_breakdown format
   createdAt: string
   updatedAt: string
 }
@@ -574,4 +617,55 @@ export interface TimeoutWarning {
   lastUpdateMinutes: number
   createdAt: string
   dismissed: boolean
+}
+
+// ===== MULTI-STORE REPORTING TYPES =====
+
+export interface LocationReport {
+  locationId: string
+  locationName: string
+  period: { start: string; end: string }
+  
+  // Delivery stats
+  totalDeliveries: number
+  completedDeliveries: number
+  failedDeliveries: number
+  cancelledDeliveries: number
+  avgDeliveryMins: number
+  
+  // Financial
+  totalSpend: number
+  pendingInvoices: number
+  paidInvoices: number
+  
+  // Feedback
+  avgRating: number | null
+  feedbackCount: number
+  positiveCount: number
+  negativeCount: number
+  issues: Array<{
+    type: string
+    count: number
+  }>
+}
+
+export interface BusinessReport {
+  businessId: string
+  businessName: string
+  period: { start: string; end: string }
+  locations: LocationReport[]
+  totals: {
+    totalDeliveries: number
+    completedDeliveries: number
+    failedDeliveries: number
+    cancelledDeliveries: number
+    avgDeliveryMins: number
+    totalSpend: number
+    pendingInvoices: number
+    paidInvoices: number
+    avgRating: number | null
+    feedbackCount: number
+    positiveCount: number
+    negativeCount: number
+  }
 }

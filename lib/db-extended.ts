@@ -105,8 +105,8 @@ export function mapRateCardRow(row: Row): RateCard {
     notifyInvoiceSent: !!row.notify_invoice_sent,
     notifyPaymentReminder: !!row.notify_payment_reminder,
     notifyRecipientSms: !!row.notify_recipient_sms,
-    billingEmail: (row.billing_email as string) || '',
-    backupEmail: (row.backup_email as string) || '',
+    // Note: billingEmail and backupEmail are on business_locations, not rate_cards
+    // They should be fetched from the location data instead
     contractNotes: (row.contract_notes as string) || '',
     createdAt: (row.created_at as string) || new Date().toISOString(),
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
@@ -483,8 +483,7 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     notify_invoice_sent: rateCard.notifyInvoiceSent,
     notify_payment_reminder: rateCard.notifyPaymentReminder,
     notify_recipient_sms: rateCard.notifyRecipientSms,
-    billing_email: rateCard.billingEmail,
-    backup_email: rateCard.backupEmail,
+    // billing_email and backup_email are stored on business_locations, not rate_cards
     contract_notes: rateCard.contractNotes,
     updated_at: new Date().toISOString(),
   }
@@ -495,6 +494,27 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     .single()
   if (error) throw error
   return mapRateCardRow(data as Row)
+}
+
+/**
+ * Update billing email info for a business location.
+ * This is separate from rate cards since billing emails live on business_locations table.
+ */
+export async function updateLocationBillingEmails(
+  locationId: string,
+  billingEmail: string,
+  backupEmail: string | null
+): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('business_locations')
+    .update({
+      billing_email: billingEmail,
+      backup_email: backupEmail || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', locationId)
+  if (error) throw error
 }
 
 export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promise<void> {

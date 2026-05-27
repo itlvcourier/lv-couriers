@@ -17,7 +17,7 @@ import { CostCalculator } from '@/components/shared/CostCalculator'
 import { BillingScenarioTests } from './BillingScenarioTests'
 
 export function AdminRateCards() {
-  const { businesses, rateCards, saveRateCard } = useApp()
+  const { businesses, rateCards, saveRateCard, updateLocationEmails } = useApp()
   const [selectedLocation, setSelectedLocation] = useState<{ business: Business; location: BusinessLocation } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [testRateCardId, setTestRateCardId] = useState<string>('')
@@ -156,9 +156,12 @@ export function AdminRateCards() {
               business={selectedLocation.business}
               location={selectedLocation.location}
               existingRateCard={rateCards.find(rc => rc.locationId === selectedLocation.location.id) || null}
-              onSave={(data) => {
+              onSave={(data, billingEmail, backupEmail) => {
+                // Save rate card to rate_cards table
                 saveRateCard(selectedLocation.location.id, data)
-                toast.success('Rate card saved successfully')
+                // Save billing emails to business_locations table (separate from rate card)
+                updateLocationEmails(selectedLocation.location.id, billingEmail, backupEmail || null)
+                toast.success('Rate card and billing info saved successfully')
                 setIsEditing(false)
               }}
               onClose={() => setIsEditing(false)}
@@ -174,11 +177,12 @@ interface RateCardEditorProps {
   business: Business
   location: BusinessLocation
   existingRateCard: RateCard | null
-  onSave: (data: Partial<RateCard>) => void
+  onSave: (data: Partial<RateCard>, billingEmail: string, backupEmail: string) => void
   onClose: () => void
 }
 
 function RateCardEditor({ business, location, existingRateCard, onSave, onClose }: RateCardEditorProps) {
+  // Rate card fields (stored in rate_cards table)
   const [formData, setFormData] = useState({
     effectiveDate: existingRateCard?.effectiveDate || new Date().toISOString().split('T')[0],
     rateRegular: existingRateCard?.rateRegular ?? 9,
@@ -189,10 +193,12 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     gstApplicable: existingRateCard?.gstApplicable ?? true,
     cancelBeforeDepart: existingRateCard?.cancelBeforeDepart ?? 0,
     cancelEnRoute: existingRateCard?.cancelEnRoute ?? 5,
-    billingEmail: existingRateCard?.billingEmail || location.billingEmail,
-    backupEmail: existingRateCard?.backupEmail || location.backupEmail,
     contractNotes: existingRateCard?.contractNotes || '',
   })
+  
+  // Billing emails (stored in business_locations table, not rate_cards)
+  const [billingEmail, setBillingEmail] = useState(location.billingEmail || '')
+  const [backupEmail, setBackupEmail] = useState(location.backupEmail || '')
 
   const [errors, setErrors] = useState<string[]>([])
 
@@ -210,7 +216,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
       // This is just a warning, not an error
     }
 
-    if (!formData.billingEmail) newErrors.push('Primary billing email is required')
+    if (!billingEmail) newErrors.push('Primary billing email is required')
 
     setErrors(newErrors)
     return newErrors.length === 0
@@ -218,7 +224,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
 
   const handleSave = () => {
     if (validate()) {
-      onSave(formData)
+      onSave(formData, billingEmail, backupEmail)
     }
   }
 
@@ -382,21 +388,21 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Primary billing email</Label>
-            <Input
-              type="email"
-              value={formData.billingEmail}
-              onChange={(e) => setFormData({ ...formData, billingEmail: e.target.value })}
-              placeholder="billing@company.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Backup billing email</Label>
-            <Input
-              type="email"
-              value={formData.backupEmail}
-              onChange={(e) => setFormData({ ...formData, backupEmail: e.target.value })}
-              placeholder="accounts@company.com"
-            />
+                <Input
+                  type="email"
+                  value={billingEmail}
+                  onChange={(e) => setBillingEmail(e.target.value)}
+                  placeholder="billing@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Backup billing email</Label>
+                <Input
+                  type="email"
+                  value={backupEmail}
+                  onChange={(e) => setBackupEmail(e.target.value)}
+                  placeholder="accounts@company.com"
+                />
           </div>
           <div className="space-y-2">
             <Label>Contract notes</Label>
