@@ -240,6 +240,9 @@ export function BusinessProfile() {
     const supabase = createClient()
 
     try {
+      // Get the current auth user's ID for the foreign key
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
       // Create a store request record
       const { error } = await supabase
         .from('store_requests')
@@ -253,13 +256,14 @@ export function BusinessProfile() {
           notes: storeRequestForm.notes,
           location_id: storeRequestType === 'remove' ? storeRequestForm.locationIdToRemove : null,
           status: 'pending',
-          requested_by: currentUser?.email || 'unknown',
+          requested_by: authUser?.id || null,
           created_at: new Date().toISOString(),
         })
 
       if (error) {
-        // If table doesn't exist, just show success (request would go via email/support)
         console.error('Store request error:', error)
+        toast.error('Failed to submit request: ' + error.message)
+        return
       }
 
       toast.success(
