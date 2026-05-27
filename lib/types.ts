@@ -192,6 +192,7 @@ export interface Delivery {
   // Completion
   durationMins?: number | null
   duration: string | null // Formatted for display
+  pickupPhotoUrl: string | null
   proofPhotoUrl: string | null
   signatureUrl: string | null
   recipientNote: string | null
