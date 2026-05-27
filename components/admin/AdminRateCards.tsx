@@ -11,6 +11,13 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { AlertTriangle, Building2, Check, ChevronRight, DollarSign, FileText, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { CostCalculator } from '@/components/shared/CostCalculator'
@@ -21,6 +28,7 @@ export function AdminRateCards() {
   const [selectedLocation, setSelectedLocation] = useState<{ business: Business; location: BusinessLocation } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [testRateCardId, setTestRateCardId] = useState<string>('')
+  const [businessFilter, setBusinessFilter] = useState<string>('all')
 
   // Get all locations with their rate card status
   const allLocations = businesses.flatMap(business =>
@@ -30,6 +38,11 @@ export function AdminRateCards() {
       rateCard: rateCards.find(rc => rc.locationId === location.id) || null,
     }))
   )
+
+  // Filter locations by selected business
+  const filteredLocations = businessFilter === 'all' 
+    ? allLocations 
+    : allLocations.filter(l => l.business.id === businessFilter)
 
   const missingRateCards = allLocations.filter(l => !l.rateCard)
 
@@ -55,12 +68,32 @@ export function AdminRateCards() {
       {/* Business List */}
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
-          <CardTitle>Rate Cards</CardTitle>
-          <CardDescription>Manage billing rates for each business location</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Rate Cards</CardTitle>
+              <CardDescription>Manage billing rates for each business location</CardDescription>
+            </div>
+            <Select value={businessFilter} onValueChange={setBusinessFilter}>
+              <SelectTrigger className="w-[200px] bg-[var(--bg-card)] border-[var(--border-color)]">
+                <SelectValue placeholder="Filter by business" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Businesses</SelectItem>
+                {businesses.map(b => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-border/50">
-            {allLocations.map(({ business, location, rateCard }) => (
+            {filteredLocations.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                No locations found for the selected business
+              </div>
+            ) : (
+              filteredLocations.map(({ business, location, rateCard }) => (
               <button
                 key={location.id}
                 onClick={() => handleSelectLocation(business, location)}
@@ -90,7 +123,8 @@ export function AdminRateCards() {
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />
                 </div>
               </button>
-            ))}
+            ))
+            )}
           </div>
         </CardContent>
       </Card>
