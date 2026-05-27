@@ -93,6 +93,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   sendReminderSms: false,
   cancellationBeforeDepart: 0,
   cancellationEnRoute: 5,
+  // Driver pay tracking – disabled by default
+  driverPayEnabled: false,
   // SMS feature toggles – defaults match the DB column defaults
   smsNotifyEnRoutePickup: true,
   smsNotifyPickedUp: true,

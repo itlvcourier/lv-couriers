@@ -252,6 +252,8 @@ export interface SystemSettings {
   sendReminderSms: boolean
   cancellationBeforeDepart: number
   cancellationEnRoute: number
+  // Driver pay tracking
+  driverPayEnabled: boolean
   // SMS feature toggles
   smsNotifyEnRoutePickup: boolean
   smsNotifyPickedUp: boolean

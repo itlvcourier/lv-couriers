@@ -215,6 +215,8 @@ export function mapSettingsRow(row: Row): SystemSettings {
     sendReminderSms: !!row.send_reminder_sms,
     cancellationBeforeDepart: (row.cancel_fee_before_depart as number) ?? 0,
     cancellationEnRoute: (row.cancel_fee_en_route as number) ?? 5,
+    // Driver pay tracking
+    driverPayEnabled: !!row.driver_pay_enabled,
     // SMS feature toggles
     smsNotifyEnRoutePickup: row.sms_notify_en_route_pickup !== false,
     smsNotifyPickedUp: row.sms_notify_picked_up !== false,
@@ -536,6 +538,8 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.sendReminderSms != null) p.send_reminder_sms = partial.sendReminderSms
   if (partial.cancellationBeforeDepart != null) p.cancel_fee_before_depart = partial.cancellationBeforeDepart
   if (partial.cancellationEnRoute != null) p.cancel_fee_en_route = partial.cancellationEnRoute
+  // Driver pay tracking
+  if (partial.driverPayEnabled != null) p.driver_pay_enabled = partial.driverPayEnabled
   // SMS feature toggles
   if (partial.smsNotifyEnRoutePickup != null) p.sms_notify_en_route_pickup = partial.smsNotifyEnRoutePickup
   if (partial.smsNotifyPickedUp != null) p.sms_notify_picked_up = partial.smsNotifyPickedUp

@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import { useApp } from '@/lib/context'
 import { createClient } from '@/lib/supabase/client'
+import { getSystemSettings } from '@/lib/settings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,6 +60,10 @@ export function DriverSettings() {
   
   const driverId = currentUser?.driverId || ''
   const driver = drivers.find(d => d.id === driverId)
+
+  // Check if driver pay is enabled
+  const { data: settings } = useSWR('system-settings', getSystemSettings)
+  const showEarnings = settings?.driver_pay_enabled ?? false
 
   // Calculate driver stats from deliveries
   const completedDeliveries = deliveries.filter(
@@ -166,7 +172,7 @@ export function DriverSettings() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${showEarnings ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-4 text-center">
             <Star className="w-5 h-5 text-[var(--accent-orange)] mx-auto mb-2" />
@@ -181,13 +187,15 @@ export function DriverSettings() {
             <p className="text-xs text-muted-foreground">Deliveries</p>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-          <CardContent className="p-4 text-center">
-            <DollarSign className="w-5 h-5 text-[var(--accent-green)] mx-auto mb-2" />
-            <p className="text-xl font-bold text-foreground">${totalEarnings}</p>
-            <p className="text-xs text-muted-foreground">Earned</p>
-          </CardContent>
-        </Card>
+        {showEarnings && (
+          <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+            <CardContent className="p-4 text-center">
+              <DollarSign className="w-5 h-5 text-[var(--accent-green)] mx-auto mb-2" />
+              <p className="text-xl font-bold text-foreground">${totalEarnings}</p>
+              <p className="text-xs text-muted-foreground">Earned</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Contact Info */}
