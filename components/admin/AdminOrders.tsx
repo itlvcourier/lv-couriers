@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { 
   Package, 
   Search,
@@ -20,6 +21,8 @@ import {
   Globe,
   UserRound,
   Download,
+  Check,
+  X,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
@@ -30,6 +33,7 @@ import { toast } from 'sonner'
 export function AdminOrders() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DeliveryStatus | 'all'>('all')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Fetch deliveries from Supabase
   const { data: deliveries = [], isLoading } = useSWR('all-deliveries', () => getAllDeliveries(), {
@@ -97,6 +101,25 @@ export function AdminOrders() {
     link.click()
     URL.revokeObjectURL(url)
     toast.success(`Exported ${filteredDeliveries.length} deliveries`)
+  }
+
+  // Bulk selection handlers
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredDeliveries.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredDeliveries.map((d: DbDelivery) => d.id)))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      newSet.add(id)
+    }
+    setSelectedIds(newSet)
   }
 
   if (isLoading) {
@@ -192,6 +215,27 @@ export function AdminOrders() {
         </Select>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {filteredDeliveries.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
+          <Checkbox
+            checked={selectedIds.size === filteredDeliveries.length && filteredDeliveries.length > 0}
+            onCheckedChange={toggleSelectAll}
+          />
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+          </span>
+          {selectedIds.size > 0 && (
+            <div className="flex gap-2 ml-auto">
+              <Button size="sm" variant="outline" onClick={handleExportCSV}>
+                <Download className="w-4 h-4 mr-1" />
+                Export Selected
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Deliveries List */}
       {filteredDeliveries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
@@ -202,10 +246,15 @@ export function AdminOrders() {
       ) : (
         <div className="space-y-3">
           {filteredDeliveries.map((delivery: DbDelivery) => (
-            <Card 
-              key={delivery.id} 
-              className="bg-[var(--bg-card)] border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card-hover)] transition-colors"
-            >
+            <div key={delivery.id} className="flex items-start gap-3">
+              <Checkbox
+                checked={selectedIds.has(delivery.id)}
+                onCheckedChange={() => toggleSelect(delivery.id)}
+                className="mt-4"
+              />
+              <Card 
+                className="flex-1 bg-[var(--bg-card)] border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card-hover)] transition-colors"
+              >
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   {/* Delivery Info */}
@@ -299,6 +348,7 @@ export function AdminOrders() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           ))}
         </div>
       )}

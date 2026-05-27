@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
+import { AdminUserManagement } from './AdminUserManagement'
 import {
   Dialog,
   DialogContent,
@@ -987,6 +988,20 @@ export function AdminSettings() {
               </Badge>
             )}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Admin User Management */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Users className="w-5 h-5" />
+            Admin Users
+          </CardTitle>
+          <CardDescription>Manage administrator accounts</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdminUserManagement />
         </CardContent>
       </Card>
 

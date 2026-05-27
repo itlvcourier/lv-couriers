@@ -142,6 +142,7 @@ export function AdminInvoices() {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [showMarkPaidFor, setShowMarkPaidFor] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSendModal, setShowSendModal] = useState<{ invoiceIds: string[] } | null>(null)
   const [showUnmatchedPayments, setShowUnmatchedPayments] = useState(true)
   const [showAutoSendStatus, setShowAutoSendStatus] = useState(true)
@@ -255,6 +256,47 @@ export function AdminInvoices() {
     toast.success(`Exported ${filteredInvoices.length} invoices`)
   }
 
+  // Bulk selection handlers
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredInvoices.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredInvoices.map(inv => inv.id)))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      newSet.add(id)
+    }
+    setSelectedIds(newSet)
+  }
+
+  const handleBulkSend = () => {
+    if (selectedIds.size === 0) return
+    setShowSendModal({ invoiceIds: Array.from(selectedIds) })
+  }
+
+  const handleBulkMarkPaid = async () => {
+    if (selectedIds.size === 0) return
+    const selectedInvoices = filteredInvoices.filter(inv => selectedIds.has(inv.id))
+    const draftOrSent = selectedInvoices.filter(inv => inv.status === 'draft' || inv.status === 'sent' || inv.status === 'overdue')
+    
+    for (const inv of draftOrSent) {
+      markInvoicePaid(inv.id, {
+        method: 'bulk_mark',
+        amount: inv.total,
+        date: new Date().toISOString(),
+      })
+    }
+    
+    toast.success(`Marked ${draftOrSent.length} invoices as paid`)
+    setSelectedIds(new Set())
+  }
+
   return (
     <div className="space-y-6">
       {/* Auto-send status indicator */}
@@ -355,6 +397,31 @@ export function AdminInvoices() {
         </div>
       </Tabs>
 
+      {/* Bulk Actions Bar */}
+      {filteredInvoices.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
+          <Checkbox
+            checked={selectedIds.size === filteredInvoices.length && filteredInvoices.length > 0}
+            onCheckedChange={toggleSelectAll}
+          />
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+          </span>
+          {selectedIds.size > 0 && (
+            <div className="flex gap-2 ml-auto">
+              <Button size="sm" variant="outline" onClick={handleBulkSend}>
+                <Send className="w-4 h-4 mr-1" />
+                Send ({selectedIds.size})
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleBulkMarkPaid}>
+                <Check className="w-4 h-4 mr-1" />
+                Mark Paid ({selectedIds.size})
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Invoice List */}
       <div className="space-y-3">
         {filteredInvoices.length === 0 ? (
@@ -365,23 +432,31 @@ export function AdminInvoices() {
           </Card>
         ) : (
           filteredInvoices.map(invoice => (
-            <InvoiceCard
-              key={invoice.id}
-              invoice={invoice}
-              dispute={disputes.find(d => d.invoiceId === invoice.id && d.status === 'open')}
-              onView={() => setSelectedInvoiceId(invoice.id)}
-              onMarkPaid={() => setShowMarkPaidFor(invoice.id)}
-              onSend={() => setShowSendModal({ invoiceIds: [invoice.id] })}
-              onResendBounced={(newEmail) => handleResendBounced(invoice, newEmail)}
-              onPauseReminders={() => {
-                pauseReminders(invoice.id)
-                toast.success('Reminders paused')
-              }}
-              onResumeReminders={() => {
-                resumeReminders(invoice.id)
-                toast.success('Reminders resumed')
-              }}
-            />
+            <div key={invoice.id} className="flex items-start gap-3">
+              <Checkbox
+                checked={selectedIds.has(invoice.id)}
+                onCheckedChange={() => toggleSelect(invoice.id)}
+                className="mt-4"
+              />
+              <div className="flex-1">
+                <InvoiceCard
+                  invoice={invoice}
+                  dispute={disputes.find(d => d.invoiceId === invoice.id && d.status === 'open')}
+                  onView={() => setSelectedInvoiceId(invoice.id)}
+                  onMarkPaid={() => setShowMarkPaidFor(invoice.id)}
+                  onSend={() => setShowSendModal({ invoiceIds: [invoice.id] })}
+                  onResendBounced={(newEmail) => handleResendBounced(invoice, newEmail)}
+                  onPauseReminders={() => {
+                    pauseReminders(invoice.id)
+                    toast.success('Reminders paused')
+                  }}
+                  onResumeReminders={() => {
+                    resumeReminders(invoice.id)
+                    toast.success('Reminders resumed')
+                  }}
+                />
+              </div>
+            </div>
           ))
         )}
       </div>
