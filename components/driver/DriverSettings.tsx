@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
+import { DriverDocuments } from './DriverDocuments'
 import {
   Sheet,
   SheetContent,
@@ -343,6 +344,9 @@ export function DriverSettings() {
         <LogOut className="w-4 h-4 mr-2" />
         Sign Out
       </Button>
+
+      {/* Documents Section */}
+      <DriverDocuments />
 
       {/* Password Change Sheet */}
       <Sheet open={showPasswordSheet} onOpenChange={setShowPasswordSheet}>

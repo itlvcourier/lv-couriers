@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -32,6 +38,8 @@ import {
   UserRound,
   Phone,
   KeyRound,
+  Navigation,
+  Map,
 } from 'lucide-react'
 import type { Delivery, DeliveryStatus, FailReason, Trip } from '@/lib/types'
 
@@ -416,9 +424,25 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   const [failNotes, setFailNotes] = useState('')
   const { advanceStatus, failDelivery, retryDelivery, escalateDelivery } = useApp()
 
-  const openInMaps = (address: string) => {
+  // Navigation helpers
+  const openInGoogleMaps = (address: string) => {
     const encoded = encodeURIComponent(address)
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank')
+  }
+
+  const openInWaze = (address: string) => {
+    const encoded = encodeURIComponent(address)
+    window.open(`https://waze.com/ul?q=${encoded}&navigate=yes`, '_blank')
+  }
+
+  const openInAppleMaps = (address: string) => {
+    const encoded = encodeURIComponent(address)
+    window.open(`https://maps.apple.com/?q=${encoded}`, '_blank')
+  }
+
+  const openInMaps = (address: string) => {
+    // Default to Google Maps, but we now have dropdown options
+    openInGoogleMaps(address)
   }
 
   const handleAction = () => {
@@ -606,15 +630,33 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
                 </p>
                 <p className="text-sm text-foreground">{delivery.pickupAddress}</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openInMaps(delivery.pickupAddress)}
-                className="shrink-0 gap-1 border-[var(--border-color)] tap-target"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Maps
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1 border-[var(--border-color)] tap-target"
+                  >
+                    <Navigation className="w-3 h-3" />
+                    Navigate
+                    <ChevronDown className="w-3 h-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => openInGoogleMaps(delivery.pickupAddress)}>
+                    <Map className="w-4 h-4 mr-2" />
+                    Google Maps
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openInWaze(delivery.pickupAddress)}>
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Waze
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openInAppleMaps(delivery.pickupAddress)}>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Apple Maps
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardContent>
         </Card>
@@ -629,15 +671,33 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
                 </p>
                 <p className="text-sm text-foreground">{delivery.dropoffAddress}</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openInMaps(delivery.dropoffAddress)}
-                className="shrink-0 gap-1 border-[var(--border-color)] tap-target"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Maps
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1 border-[var(--border-color)] tap-target"
+                  >
+                    <Navigation className="w-3 h-3" />
+                    Navigate
+                    <ChevronDown className="w-3 h-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => openInGoogleMaps(delivery.dropoffAddress)}>
+                    <Map className="w-4 h-4 mr-2" />
+                    Google Maps
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openInWaze(delivery.dropoffAddress)}>
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Waze
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openInAppleMaps(delivery.dropoffAddress)}>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Apple Maps
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {(delivery.recipientName || delivery.recipientPhone || delivery.buzzCode) && (
