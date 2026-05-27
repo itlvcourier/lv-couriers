@@ -28,6 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { 
   Building2, 
   Phone, 
@@ -44,7 +50,9 @@ import {
   Plus,
   Trash2,
   Send,
-  Store
+  Store,
+  MoreVertical,
+  KeyRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -86,6 +94,25 @@ export function BusinessProfile() {
     locationIdToRemove: '',
   })
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
+  
+  // Password Change State
+  const [showPasswordSheet, setShowPasswordSheet] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  
+  // Reset Team Member Password State
+  const [showResetPasswordSheet, setShowResetPasswordSheet] = useState(false)
+  const [selectedMemberForReset, setSelectedMemberForReset] = useState<{
+    id: string
+    email: string
+    name: string
+  } | null>(null)
+  const [newMemberPassword, setNewMemberPassword] = useState('')
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
   
   const business = businesses.find(b => b.id === currentUser?.businessId)
   const primaryLocation = business?.locations[0]
@@ -244,6 +271,86 @@ export function BusinessProfile() {
       toast.error('Failed to submit request')
     } finally {
       setIsSubmittingRequest(false)
+    }
+  }
+
+  // Handle password change
+  const handlePasswordChange = async () => {
+    if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
+      toast.error('Please fill in all password fields')
+      return
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+
+    setIsChangingPassword(true)
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: passwordForm.newPassword
+      })
+
+      if (error) {
+        throw error
+      }
+
+      toast.success('Password changed successfully')
+      setShowPasswordSheet(false)
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to change password')
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  // Handle resetting team member password
+  const handleResetMemberPassword = async () => {
+    if (!selectedMemberForReset || !newMemberPassword) {
+      toast.error('Please enter a new password')
+      return
+    }
+
+    if (newMemberPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+
+    setIsResettingPassword(true)
+
+    try {
+      const response = await fetch('/api/admin/reset-user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedMemberForReset.id,
+          newPassword: newMemberPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reset password')
+      }
+
+      toast.success(`Password reset for ${selectedMemberForReset.name}`)
+      setShowResetPasswordSheet(false)
+      setSelectedMemberForReset(null)
+      setNewMemberPassword('')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to reset password')
+    } finally {
+      setIsResettingPassword(false)
     }
   }
 
@@ -482,6 +589,24 @@ export function BusinessProfile() {
                     <Badge variant="outline" className="text-xs">
                       {member.business_role}
                     </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setSelectedMemberForReset(member)
+                            setShowResetPasswordSheet(true)
+                          }}
+                        >
+                          <KeyRound className="w-4 h-4 mr-2" />
+                          Reset Password
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ))}
               </div>
@@ -505,6 +630,20 @@ export function BusinessProfile() {
           </div>
           <Separator />
           <ThemeToggleRow id="business-dark-mode" />
+          <Separator />
+          <div className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-muted-foreground" />
+              <span className="text-sm">Change Password</span>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowPasswordSheet(true)}
+            >
+              Change
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -769,6 +908,127 @@ export function BusinessProfile() {
                 <>
                   <Send className="w-4 h-4 mr-2" />
                   Submit Request
+                </>
+              )}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Password Change Sheet */}
+      <Sheet open={showPasswordSheet} onOpenChange={setShowPasswordSheet}>
+        <SheetContent className="bg-background border-l border-border">
+          <SheetHeader>
+            <SheetTitle>Change Password</SheetTitle>
+            <SheetDescription>
+              Enter a new password for your account
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <Label>New Password *</Label>
+              <Input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                placeholder="Min 6 characters"
+                disabled={isChangingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm New Password *</Label>
+              <Input
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                placeholder="Confirm new password"
+                disabled={isChangingPassword}
+              />
+            </div>
+            
+            <Button 
+              onClick={handlePasswordChange} 
+              className="w-full"
+              disabled={isChangingPassword}
+            >
+              {isChangingPassword ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  Changing Password...
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Change Password
+                </>
+              )}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Reset Team Member Password Sheet */}
+      <Sheet open={showResetPasswordSheet} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedMemberForReset(null)
+          setNewMemberPassword('')
+        }
+        setShowResetPasswordSheet(open)
+      }}>
+        <SheetContent className="bg-background border-l border-border">
+          <SheetHeader>
+            <SheetTitle>Reset Password</SheetTitle>
+            <SheetDescription>
+              Set a new password for {selectedMemberForReset?.name}
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="mt-6 space-y-4">
+            <Card className="bg-muted/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-10 h-10">
+                    <AvatarFallback>
+                      {selectedMemberForReset ? getInitials(selectedMemberForReset.name) : ''}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{selectedMemberForReset?.name}</p>
+                    <p className="text-sm text-muted-foreground">{selectedMemberForReset?.email}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <div className="space-y-2">
+              <Label>New Password *</Label>
+              <Input
+                type="text"
+                value={newMemberPassword}
+                onChange={(e) => setNewMemberPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                disabled={isResettingPassword}
+              />
+              <p className="text-xs text-muted-foreground">
+                Share this password with the user. They can change it after logging in.
+              </p>
+            </div>
+            
+            <Button 
+              onClick={handleResetMemberPassword} 
+              className="w-full"
+              disabled={isResettingPassword}
+            >
+              {isResettingPassword ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4 mr-2" />
+                  Reset Password
                 </>
               )}
             </Button>
