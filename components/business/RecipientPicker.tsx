@@ -163,14 +163,16 @@ export function RecipientPicker({
                             )}
                           </div>
                         </div>
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={e => handleDelete(e, contact)}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleDelete(e as unknown as React.MouseEvent, contact) }}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
                           aria-label={`Delete ${contact.name}`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </div>
                       </div>
                       <div className="space-y-1 pl-10">
                         <div className="flex items-start gap-1.5 text-sm text-foreground">

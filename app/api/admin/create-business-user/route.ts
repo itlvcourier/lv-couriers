@@ -1,14 +1,21 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-// Use service role to create users (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Force dynamic - this route requires runtime env vars
+export const dynamic = 'force-dynamic'
+
+// Lazy initialization to avoid build-time errors
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 export async function POST(request: Request) {
+  const supabaseAdmin = getSupabaseAdmin()
+  
   try {
     const { email, password, name, businessId, locationId, role } = await request.json()
 

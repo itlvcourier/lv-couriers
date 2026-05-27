@@ -1,15 +1,22 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Force dynamic - this route requires runtime env vars
+export const dynamic = 'force-dynamic'
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 // Fixed UUID for main settings row
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000001'
 
 export async function GET() {
+  const supabaseAdmin = getSupabaseAdmin()
+  
   try {
     // Try to get the current settings
     const { data, error } = await supabaseAdmin
@@ -51,6 +58,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const supabaseAdmin = getSupabaseAdmin()
+  
   try {
     const body = await request.json()
     

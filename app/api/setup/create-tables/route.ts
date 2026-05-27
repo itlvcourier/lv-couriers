@@ -1,13 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+// Force dynamic - this route requires runtime env vars
+export const dynamic = 'force-dynamic'
+
 // Use service role key to bypass RLS for admin operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function POST() {
+  const supabaseAdmin = getSupabaseAdmin()
   const results: { table: string; status: string; error?: string }[] = []
 
   // 1. Create system_settings table
@@ -119,6 +125,7 @@ export async function POST() {
 }
 
 export async function GET() {
+  const supabaseAdmin = getSupabaseAdmin()
   // Check status of all tables
   const tables = ['system_settings', 'audit_logs', 'store_requests']
   const status: Record<string, boolean> = {}
