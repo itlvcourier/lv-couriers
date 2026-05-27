@@ -28,16 +28,17 @@ export async function POST(request: Request) {
     }
 
     // Create user in Supabase Auth with metadata
+    // IMPORTANT: Keys must match what mockUserFromAuthUser expects (snake_case)
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true, // Auto-confirm email
       user_metadata: {
         role: 'business',
-        businessId,
-        locationId: role === 'owner' ? null : locationId, // Owners don't have a specific location
-        businessRole: role,
-        name: name || email.split('@')[0],
+        business_id: businessId,
+        location_id: role === 'owner' ? null : locationId, // Owners don't have a specific location
+        business_role: role,
+        full_name: name || email.split('@')[0],
       },
     })
 
@@ -46,23 +47,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
-    // If not owner, also store in business_users table for location access tracking
-    if (role !== 'owner' && authData.user) {
-      const { error: dbError } = await supabaseAdmin
-        .from('business_users')
-        .insert({
-          user_id: authData.user.id,
-          business_id: businessId,
+    // Store ALL business users in profiles table
+    if (authData.user) {
+      // First, create/update the profile record
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
           email,
-          name: name || email.split('@')[0],
+          full_name: name || email.split('@')[0],
+          role: 'business',
+          business_id: businessId,
+          location_id: role === 'owner' ? null : locationId,
           business_role: role,
-          managed_location_ids: locationId ? [locationId] : [],
+          managed_location_ids: role === 'owner' ? [] : (locationId ? [locationId] : []),
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
 
-      if (dbError) {
-        console.error('Error storing business user:', dbError)
-        // User was created but DB record failed - not critical
+      if (profileError) {
+        console.error('Error storing profile:', profileError)
+      }
+
+      // If not owner, also create location assignment records
+      if (role !== 'owner' && locationId) {
+        const { error: locationError } = await supabaseAdmin
+          .from('business_user_locations')
+          .upsert({
+            user_id: authData.user.id,
+            business_id: businessId,
+            location_id: locationId,
+            created_at: new Date().toISOString(),
+          })
+
+        if (locationError) {
+          console.error('Error storing location assignment:', locationError)
+        }
       }
     }
 

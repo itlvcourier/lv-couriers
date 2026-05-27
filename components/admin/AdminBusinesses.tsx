@@ -111,6 +111,50 @@ export function AdminBusinesses() {
   })
   const [isCreatingUser, setIsCreatingUser] = useState(false)
   const [createdUserCredentials, setCreatedUserCredentials] = useState<{ email: string; password: string } | null>(null)
+  const [teamMembers, setTeamMembers] = useState<Array<{
+    id: string
+    email: string
+    name: string
+    business_role: string
+    managed_location_ids: string[]
+    created_at: string
+  }>>([])
+  const [loadingTeam, setLoadingTeam] = useState(false)
+
+  // Fetch team members when viewing a business
+  const fetchTeamMembers = async (businessId: string) => {
+    setLoadingTeam(true)
+    const supabase = createClient()
+    // Fetch from profiles table where business_id matches
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, business_role, managed_location_ids, created_at')
+      .eq('business_id', businessId)
+      .eq('role', 'business')
+      .order('created_at', { ascending: false })
+    
+    if (!error && data) {
+      // Map to expected format
+      setTeamMembers(data.map(p => ({
+        id: p.id,
+        email: p.email || '',
+        name: p.full_name || p.email || '',
+        business_role: p.business_role || 'viewer',
+        managed_location_ids: p.managed_location_ids || [],
+        created_at: p.created_at,
+      })))
+    } else {
+      console.error('Error fetching team members:', error)
+      setTeamMembers([])
+    }
+    setLoadingTeam(false)
+  }
+
+  // When detailBusiness changes, fetch team members
+  const handleOpenBusinessDetail = (business: BusinessWithLocations) => {
+    setDetailBusiness(business)
+    fetchTeamMembers(business.id)
+  }
 
   // Filter businesses
   const filteredBusinesses = businesses.filter((b: BusinessWithLocations) => {
@@ -338,6 +382,11 @@ export function AdminBusinesses() {
       // Show success with credentials
       setCreatedUserCredentials({ email: inviteForm.email, password: inviteForm.password })
       toast.success(`User account created for ${inviteForm.name}`)
+      
+      // Refresh team members list
+      if (detailBusiness) {
+        fetchTeamMembers(detailBusiness.id)
+      }
       
       // Reset form but keep sheet open to show credentials
       setInviteForm({ email: '', name: '', password: '', role: 'manager', locationIds: [] })
@@ -576,11 +625,59 @@ export function AdminBusinesses() {
               </CardContent>
             </Card>
             
-            <div className="text-center py-8 text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No additional team members</p>
-              <p className="text-xs">Invite managers or viewers to grant access to specific locations</p>
-            </div>
+            {/* Team Members List */}
+            {loadingTeam ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner className="w-6 h-6" />
+              </div>
+            ) : teamMembers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No additional team members</p>
+                <p className="text-xs">Create user accounts to grant access to specific locations</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {teamMembers.map((member) => (
+                  <Card key={member.id} className="bg-[var(--bg-card)] border-[var(--border-color)]">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback className="bg-muted text-muted-foreground">
+                            {getInitials(member.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="font-medium text-foreground">{member.name}</div>
+                          <div className="text-sm text-muted-foreground">{member.email}</div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge 
+                            className={
+                              member.business_role === 'owner' 
+                                ? 'bg-primary/10 text-primary border-primary/20'
+                                : member.business_role === 'manager'
+                                ? 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                : 'bg-muted text-muted-foreground'
+                            }
+                          >
+                            {member.business_role.charAt(0).toUpperCase() + member.business_role.slice(1)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {member.business_role === 'owner' 
+                              ? `All ${detailBusiness.locations.length} locations`
+                              : member.managed_location_ids?.length 
+                                ? `${member.managed_location_ids.length} location(s)`
+                                : 'No locations'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* Billing Tab */}
@@ -1052,7 +1149,7 @@ export function AdminBusinesses() {
               <Card 
                 key={business.id} 
                 className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden cursor-pointer hover:border-[var(--accent-orange)]/50 transition-colors"
-                onClick={() => setDetailBusiness(business)}
+                onClick={() => handleOpenBusinessDetail(business)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
@@ -1076,7 +1173,7 @@ export function AdminBusinesses() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenuItem onClick={() => setDetailBusiness(business)}>
+                        <DropdownMenuItem onClick={() => handleOpenBusinessDetail(business)}>
                           <ChevronRight className="w-4 h-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
