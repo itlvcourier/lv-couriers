@@ -1715,7 +1715,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dueDate.setDate(dueDate.getDate() + (settings.invoiceDueDays || 15))
 
     const newInvoice: Invoice = {
-      id: `inv-${Date.now()}`,
+      id: crypto.randomUUID(),
       invoiceNumber: generateInvoiceNumber(invoices),
       businessId,
       businessName: business.name,
@@ -1851,7 +1851,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const primaryLocation = locationData[0].location
       
       const combinedInvoice: Invoice = {
-        id: `inv-${Date.now()}`,
+        id: crypto.randomUUID(),
         invoiceNumber: generateInvoiceNumber(invoices),
         businessId,
         businessName: business.name,
