@@ -27,6 +27,9 @@ import type {
   SMSStatus,
   Dispute,
   DisputeStatus,
+  CustomerFeedback,
+  DriverRatingsSummary,
+  BusinessRatingsSummary,
 } from './types'
 
 type Row = Record<string, unknown>
@@ -1157,4 +1160,253 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
     })
   
   if (eventError) console.error('[v0] Failed to log invoice generated event:', eventError)
+}
+
+// ============================================================================
+// CUSTOMER FEEDBACK
+// ============================================================================
+
+export function mapCustomerFeedbackRow(row: Row): CustomerFeedback {
+  return {
+    id: row.id as string,
+    deliveryId: row.delivery_id as string,
+    driverId: row.driver_id as string,
+    businessId: row.business_id as string,
+    locationId: row.location_id as string,
+    token: row.token as string,
+    tokenExpiresAt: row.token_expires_at as string,
+    driverRating: (row.driver_rating as number | null) ?? null,
+    businessRating: (row.business_rating as number | null) ?? null,
+    driverProfessionalism: (row.driver_professionalism as number | null) ?? null,
+    driverTimeliness: (row.driver_timeliness as number | null) ?? null,
+    driverPackageHandling: (row.driver_package_handling as number | null) ?? null,
+    businessPackaging: (row.business_packaging as number | null) ?? null,
+    businessAccuracy: (row.business_accuracy as number | null) ?? null,
+    comment: (row.comment as string | null) ?? null,
+    reportedIssues: (row.reported_issues as { issues: string[] } | null) ?? null,
+    issueDetails: (row.issue_details as string | null) ?? null,
+    feedbackReceived: !!row.feedback_received,
+    submittedAt: (row.submitted_at as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+export function mapDriverRatingsSummaryRow(row: Row): DriverRatingsSummary {
+  return {
+    id: row.id as string,
+    driverId: row.driver_id as string,
+    avgOverallRating: (row.avg_overall_rating as number | null) ?? null,
+    totalRatings: (row.total_ratings as number) ?? 0,
+    avgProfessionalism: (row.avg_professionalism as number | null) ?? null,
+    avgTimeliness: (row.avg_timeliness as number | null) ?? null,
+    avgPackageHandling: (row.avg_package_handling as number | null) ?? null,
+    totalFeedback: (row.total_feedback as number) ?? 0,
+    feedbackReceivedCount: (row.feedback_received_count as number) ?? 0,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+export function mapBusinessRatingsSummaryRow(row: Row): BusinessRatingsSummary {
+  return {
+    id: row.id as string,
+    businessId: row.business_id as string,
+    locationId: row.location_id as string,
+    avgOverallRating: (row.avg_overall_rating as number | null) ?? null,
+    totalRatings: (row.total_ratings as number) ?? 0,
+    avgPackaging: (row.avg_packaging as number | null) ?? null,
+    avgAccuracy: (row.avg_accuracy as number | null) ?? null,
+    totalFeedback: (row.total_feedback as number) ?? 0,
+    feedbackReceivedCount: (row.feedback_received_count as number) ?? 0,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+/**
+ * Create a feedback token for a delivery
+ * Token expires in 7 days
+ */
+export async function createFeedbackToken(
+  deliveryId: string,
+  driverId: string,
+  businessId: string,
+  locationId: string,
+): Promise<string> {
+  const supabase = createClient()
+  
+  // Generate a secure random token
+  const token = `fb_${crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + (b % 36).toString(36), '')}`
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 7)
+  
+  const { data, error } = await supabase
+    .from('customer_feedback')
+    .insert({
+      delivery_id: deliveryId,
+      driver_id: driverId,
+      business_id: businessId,
+      location_id: locationId,
+      token,
+      token_expires_at: expiresAt.toISOString(),
+      feedback_received: false,
+    })
+    .select('token')
+    .single()
+  
+  if (error) {
+    console.error('[v0] Failed to create feedback token:', error.message)
+    throw error
+  }
+  
+  return data.token
+}
+
+/**
+ * Get feedback by token (for public feedback form)
+ */
+export async function getFeedbackByToken(token: string): Promise<CustomerFeedback | null> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('customer_feedback')
+    .select('*')
+    .eq('token', token)
+    .single()
+  
+  if (error || !data) {
+    console.error('[v0] Failed to fetch feedback by token:', error?.message)
+    return null
+  }
+  
+  return mapCustomerFeedbackRow(data)
+}
+
+/**
+ * Submit customer feedback
+ */
+export async function submitCustomerFeedback(
+  feedbackId: string,
+  driverRating: number,
+  businessRating: number,
+  driverProfessionalism: number | null,
+  driverTimeliness: number | null,
+  driverPackageHandling: number | null,
+  businessPackaging: number | null,
+  businessAccuracy: number | null,
+  comment: string | null,
+  reportedIssues: { issues: string[] } | null,
+  issueDetails: string | null,
+): Promise<CustomerFeedback> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('customer_feedback')
+    .update({
+      driver_rating: driverRating,
+      business_rating: businessRating,
+      driver_professionalism: driverProfessionalism,
+      driver_timeliness: driverTimeliness,
+      driver_package_handling: driverPackageHandling,
+      business_packaging: businessPackaging,
+      business_accuracy: businessAccuracy,
+      comment,
+      reported_issues: reportedIssues,
+      issue_details: issueDetails,
+      feedback_received: true,
+      submitted_at: new Date().toISOString(),
+    })
+    .eq('id', feedbackId)
+    .select('*')
+    .single()
+  
+  if (error) {
+    console.error('[v0] Failed to submit feedback:', error.message)
+    throw error
+  }
+  
+  return mapCustomerFeedbackRow(data)
+}
+
+/**
+ * Get all feedback for a driver
+ */
+export async function getDriverFeedback(driverId: string): Promise<CustomerFeedback[]> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('customer_feedback')
+    .select('*')
+    .eq('driver_id', driverId)
+    .eq('feedback_received', true)
+    .order('submitted_at', { ascending: false })
+  
+  if (error) {
+    console.error('[v0] Failed to fetch driver feedback:', error.message)
+    return []
+  }
+  
+  return (data || []).map(mapCustomerFeedbackRow)
+}
+
+/**
+ * Get feedback for a business location
+ */
+export async function getBusinessLocationFeedback(businessId: string, locationId: string): Promise<CustomerFeedback[]> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('customer_feedback')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('location_id', locationId)
+    .eq('feedback_received', true)
+    .order('submitted_at', { ascending: false })
+  
+  if (error) {
+    console.error('[v0] Failed to fetch business feedback:', error.message)
+    return []
+  }
+  
+  return (data || []).map(mapCustomerFeedbackRow)
+}
+
+/**
+ * Get driver ratings summary
+ */
+export async function getDriverRatingsSummary(driverId: string): Promise<DriverRatingsSummary | null> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('driver_ratings_summary')
+    .select('*')
+    .eq('driver_id', driverId)
+    .single()
+  
+  if (error) {
+    console.error('[v0] Failed to fetch driver ratings summary:', error.message)
+    return null
+  }
+  
+  return data ? mapDriverRatingsSummaryRow(data) : null
+}
+
+/**
+ * Get business ratings summary for a location
+ */
+export async function getBusinessRatingsSummary(businessId: string, locationId: string): Promise<BusinessRatingsSummary | null> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('business_ratings_summary')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('location_id', locationId)
+    .single()
+  
+  if (error) {
+    console.error('[v0] Failed to fetch business ratings summary:', error.message)
+    return null
+  }
+  
+  return data ? mapBusinessRatingsSummaryRow(data) : null
 }

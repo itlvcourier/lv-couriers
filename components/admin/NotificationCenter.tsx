@@ -23,7 +23,6 @@ import {
   UserX
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import Link from 'next/link'
 import type { AdminNotificationType } from '@/lib/types'
 
 const NOTIFICATION_ICONS: Record<AdminNotificationType, React.ElementType> = {
@@ -165,15 +164,16 @@ export function NotificationCenter() {
         
         {/* Footer */}
         <div className="p-3 border-t border-border">
-          <Link href="/admin/communications">
-            <Button 
-              variant="ghost" 
-              className="w-full text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => setOpen(false)}
-            >
-              View all notifications
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            className="w-full text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('doms:navigate-admin', { detail: 'communications' }))
+              setOpen(false)
+            }}
+          >
+            View all notifications
+          </Button>
         </div>
       </PopoverContent>
     </Popover>

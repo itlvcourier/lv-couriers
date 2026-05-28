@@ -23,12 +23,16 @@ import {
   Download,
   Check,
   X,
+  Camera,
+  ImageIcon,
+  PenLine,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
 import type { DeliveryStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
   SheetContent,
@@ -504,8 +508,88 @@ export function AdminOrders() {
                       <span className="text-foreground">{format(new Date(selectedDelivery.delivered_at), 'MMM d, h:mm a')}</span>
                     </div>
                   )}
-                </div>
               </div>
+              )}
+
+              {/* Proof of Delivery Section */}
+              {(selectedDelivery.proof_photo_url || selectedDelivery.pickup_photo_url || selectedDelivery.signature_url || selectedDelivery.recipient_note) && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Camera className="w-4 h-4" />
+                      Proof of Delivery
+                    </h4>
+                    
+                    {/* Pickup Photo */}
+                    {selectedDelivery.pickup_photo_url && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3" />
+                          Pickup Photo
+                        </p>
+                        <div className="relative rounded-lg overflow-hidden border border-border">
+                          <img 
+                            src={selectedDelivery.pickup_photo_url} 
+                            alt="Pickup proof" 
+                            className="w-full h-40 object-cover"
+                          />
+                          <div className="absolute top-2 left-2 px-2 py-1 rounded bg-blue-500/90 text-white text-xs font-medium">
+                            Pickup
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Delivery Photo */}
+                    {selectedDelivery.proof_photo_url && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3" />
+                          Delivery Photo
+                        </p>
+                        <div className="relative rounded-lg overflow-hidden border border-border">
+                          <img 
+                            src={selectedDelivery.proof_photo_url} 
+                            alt="Delivery proof" 
+                            className="w-full h-40 object-cover"
+                          />
+                          <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
+                            Delivered
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Signature */}
+                    {selectedDelivery.signature_url && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <PenLine className="w-3 h-3" />
+                          Recipient Signature
+                        </p>
+                        <div className="rounded-lg overflow-hidden border border-border bg-muted/50 p-2">
+                          <img 
+                            src={selectedDelivery.signature_url} 
+                            alt="Recipient signature" 
+                            className="w-full h-24 object-contain"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Recipient Note */}
+                    {selectedDelivery.recipient_note && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Delivery Note</p>
+                        <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                          <p className="text-sm text-foreground">{selectedDelivery.recipient_note}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               {/* Rate */}
               {selectedDelivery.calculated_rate && (

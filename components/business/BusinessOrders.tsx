@@ -102,6 +102,10 @@ export function BusinessOrders() {
       buzzCode: d.buzzCode || null,
       cancellationReason: d.cancellationReason || null,
       dropoffContact: d.recipientPhone || undefined,
+      proofPhotoUrl: d.proofPhotoUrl || null,
+      pickupPhotoUrl: d.pickupPhotoUrl || null,
+      signatureUrl: d.signatureUrl || null,
+      recipientNote: d.recipientNote || null,
       }
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
