@@ -46,7 +46,11 @@ You do **not** need to know anything about Capacitor. Follow the steps in order.
 | Node.js 20+ | Yes | Yes |
 | Android Studio (latest) | Yes | No |
 | Xcode (latest) | No | Yes (Mac only) |
-| CocoaPods (`sudo gem install cocoapods`) | No | Yes |
+| CocoaPods (`brew install cocoapods`) | No | Yes |
+
+> CocoaPods: on modern Macs use Homebrew (`brew install cocoapods`). The old
+> `sudo gem install cocoapods` route often fails on newer macOS due to the
+> system Ruby being locked down.
 
 You said you have both Windows and a Mac — build Android on either, build iOS on the Mac.
 
@@ -104,10 +108,22 @@ Inside `<manifest>` (above `<application>`), add:
 <uses-permission android:name="android.permission.CAMERA" />
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<!-- Only needed if you track driver location while the app is backgrounded. -->
+<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 <uses-feature android:name="android.hardware.camera" android:required="false" />
 ```
+
+> **Foreground vs. background location.** `ACCESS_FINE_LOCATION` only grants
+> location while the app is open and visible. To keep updating a driver's
+> location when the app is minimized or the screen is off, you also need
+> `ACCESS_BACKGROUND_LOCATION`. On Android 10+ this is a **separate runtime
+> prompt** ("Allow all the time") that the user must grant from a settings
+> screen — you cannot request it in the same dialog as foreground location.
+> Google Play also requires a written justification + a demo video when you
+> submit an app that requests it, so only add it if you truly need background
+> tracking. See the background-tracking note after Step 3.
 
 ### iOS — `ios/App/App/Info.plist`
 Add these keys (the text is shown to the user in the permission prompt):
@@ -121,6 +137,42 @@ Add these keys (the text is shown to the user in the permission prompt):
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>Used to share your location for deliveries.</string>
 ```
+
+For **background** driver tracking on iOS, also add the "Always" keys (iOS
+requires both the When-In-Use key above **and** the Always keys below), plus the
+`location` background mode:
+```xml
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>Used to keep your delivery location updated in the background.</string>
+<key>NSLocationAlwaysUsageDescription</key>
+<string>Used to keep your delivery location updated in the background.</string>
+<key>UIBackgroundModes</key>
+<array>
+  <string>location</string>
+</array>
+```
+
+### Important: background location tracking
+
+The installed `@capacitor/geolocation` plugin is reliable for **foreground**
+use — getting the current position or watching it while a driver has the app
+open. It does **not** guarantee continuous updates once the app is backgrounded
+or the screen is locked; the OS suspends the web view and the watch stops.
+
+If DOMS needs to keep tracking a driver's location during an active delivery
+while the app is minimized, plan to add a dedicated background plugin:
+
+```bash
+pnpm add @capacitor-community/background-geolocation
+npx cap sync
+```
+
+It runs a native background service (with the permissions above) and posts
+location updates even when the app isn't visible. Wire it into
+`lib/native/geolocation.ts` behind the same `isNativeApp()` guard so the web
+build is unaffected. Treat this as a follow-up: get foreground tracking working
+first, then add background mode once you confirm you need it (it adds store-
+review overhead on both platforms).
 
 ---
 
@@ -199,13 +251,20 @@ npx cap sync
 
 > You said you just want it running locally first — come back to this later.
 
+> **⚠️ Do this FIRST, before any release build:** switch `CAP_SERVER_URL` from
+> your local LAN IP to your **production** `https://your-app.vercel.app` URL,
+> then run `npx cap sync`. If you forget, you will ship a store build that tries
+> to load `http://192.168.x.x:3000` and shows a blank screen for every user.
+> Double-check it in `capacitor.config.ts` after syncing.
+
 - **Android**: in Android Studio → Build → Generate Signed Bundle (.aab) → upload
   to Google Play Console (one-time $25 account).
 - **iOS**: in Xcode → Product → Archive → Distribute App → App Store Connect
   (Apple Developer account $99/yr).
 
-Remember to set `CAP_SERVER_URL` to your **production** `https://` URL and run
-`npx cap sync` before building a release.
+> If you request `ACCESS_BACKGROUND_LOCATION` (Android) or the Always location
+> keys (iOS), both stores will ask you to justify background location use during
+> review — prepare a short explanation and, for Google Play, a demo video.
 
 ---
 
