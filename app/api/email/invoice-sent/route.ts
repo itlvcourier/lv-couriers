@@ -89,10 +89,18 @@ export async function POST(req: NextRequest) {
 
   const { result } = await sendInvoiceAndRecord(normalized, 'sent')
   console.log('[v0] invoice-sent: sendInvoiceAndRecord result:', result)
+  
+  // If email failed, keep invoice as draft and return error
   if (!result.ok) {
-    return NextResponse.json({ error: result.reason, bounced: result.bounced }, { status: 502 })
+    return NextResponse.json({ 
+      ok: false, 
+      error: result.reason || 'Failed to send email',
+      emailSent: false,
+      bounced: result.bounced 
+    }, { status: 502 })
   }
-
+  
+  // Email sent successfully - update invoice to 'sent' status
   const now = new Date()
   const due = new Date(inv.due_date + 'T00:00:00Z')
 
@@ -120,5 +128,5 @@ export async function POST(req: NextRequest) {
     scheduleInvoiceEvent({ invoice_id: inv.id, event_type: 'escalated', scheduled_for: escalation }),
   ])
 
-  return NextResponse.json({ ok: true, invoiceId: inv.id })
+  return NextResponse.json({ ok: true, invoiceId: inv.id, emailSent: true })
 }

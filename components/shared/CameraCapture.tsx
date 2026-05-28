@@ -4,6 +4,8 @@ import { useState, useRef, useCallback } from 'react'
 import { Camera, Upload, X, RotateCcw, Check, SwitchCamera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { isNativeApp } from '@/lib/native'
+import { takeNativePhoto } from '@/lib/native/camera'
 
 interface CameraCaptureProps {
   onCapture: (imageDataUrl: string) => void
@@ -30,6 +32,20 @@ export function CameraCapture({
 
   // Start camera stream
   const startCamera = useCallback(async () => {
+    // In the native app, use the OS camera instead of the web video stream.
+    if (isNativeApp()) {
+      try {
+        const dataUrl = await takeNativePhoto('camera', { quality: 80 })
+        if (dataUrl) {
+          setPreview(dataUrl)
+        }
+      } catch (err) {
+        console.error('[v0] native camera error:', err)
+        toast.error('Could not access camera.')
+      }
+      return
+    }
+
     try {
       // Stop any existing stream
       if (stream) {
@@ -151,6 +167,21 @@ export function CameraCapture({
     onCancel?.()
   }
 
+  // Open gallery — native picker in the app, hidden file input on web.
+  const handleGallery = useCallback(async () => {
+    if (isNativeApp()) {
+      try {
+        const dataUrl = await takeNativePhoto('gallery', { quality: 80 })
+        if (dataUrl) setPreview(dataUrl)
+      } catch (err) {
+        console.error('[v0] native gallery error:', err)
+        toast.error('Could not open gallery.')
+      }
+      return
+    }
+    fileInputRef.current?.click()
+  }, [])
+
   return (
     <div className="space-y-3">
       {/* Hidden file input for fallback */}
@@ -250,7 +281,7 @@ export function CameraCapture({
           
           <Button
             variant="ghost"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleGallery}
             className="w-full h-10 text-sm text-muted-foreground"
           >
             <Upload className="w-4 h-4 mr-2" />

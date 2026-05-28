@@ -20,8 +20,11 @@ import {
   AlertTriangle,
   BarChart3,
   Calendar,
+  Star,
 } from 'lucide-react'
+import useSWR from 'swr'
 import type { LocationReport, BusinessReport } from '@/lib/types'
+import { getBusinessLocationFeedback, getBusinessRatingsSummary } from '@/lib/db-extended'
 
 // Date range presets
 const DATE_RANGES = {
@@ -39,6 +42,18 @@ export function BusinessReports() {
   const business = businesses.find(b => b.id === currentUser?.businessId)
   const accessibleLocations = getAccessibleLocations()
   const canViewAll = isOwner()
+  
+  // Fetch business ratings for the selected location
+  const { data: businessRatings } = useSWR(
+    business && selectedLocationId !== 'all' 
+      ? ['business-ratings', business.id, selectedLocationId] 
+      : null,
+    async () => {
+      if (!business) return null
+      const summary = await getBusinessRatingsSummary(business.id, selectedLocationId)
+      return summary
+    }
+  )
   
   // Calculate date range
   const { start, end } = useMemo(() => {
@@ -222,6 +237,30 @@ export function BusinessReports() {
               </p>
             </CardContent>
           </Card>
+
+          {/* Customer Rating (shown when viewing a single location) */}
+          {selectedLocationId !== 'all' && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Customer Rating</CardTitle>
+                <Star className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold flex items-center gap-1">
+                  {businessRatings?.avgOverallRating 
+                    ? businessRatings.avgOverallRating.toFixed(1)
+                    : 'N/A'
+                  }
+                  {businessRatings?.avgOverallRating && (
+                    <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {businessRatings ? `${businessRatings.feedbackReceivedCount} of ${businessRatings.totalFeedback} reviews` : 'No reviews yet'}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
       

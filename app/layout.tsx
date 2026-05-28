@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { AppProvider } from '@/lib/context'
 import { ThemeProvider } from '@/components/theme-provider'
+import { NativeAppProvider } from '@/components/native/NativeAppProvider'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -43,7 +44,10 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <AppProvider>{children}</AppProvider>
+          <AppProvider>
+            <NativeAppProvider />
+            {children}
+          </AppProvider>
           <Toaster
             position="top-center"
             toastOptions={{

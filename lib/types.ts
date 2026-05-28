@@ -672,3 +672,57 @@ export interface BusinessReport {
     negativeCount: number
   }
 }
+
+// ===== CUSTOMER FEEDBACK TYPES =====
+
+export interface CustomerFeedback {
+  id: string
+  deliveryId: string
+  driverId: string
+  businessId: string
+  locationId: string
+  token: string
+  tokenExpiresAt: string
+  driverRating: number | null
+  businessRating: number | null
+  driverProfessionalism: number | null
+  driverTimeliness: number | null
+  driverPackageHandling: number | null
+  businessPackaging: number | null
+  businessAccuracy: number | null
+  comment: string | null
+  reportedIssues: {
+    issues: string[]
+  } | null
+  issueDetails: string | null
+  feedbackReceived: boolean
+  submittedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DriverRatingsSummary {
+  id: string
+  driverId: string
+  avgOverallRating: number | null
+  totalRatings: number
+  avgProfessionalism: number | null
+  avgTimeliness: number | null
+  avgPackageHandling: number | null
+  totalFeedback: number
+  feedbackReceivedCount: number
+  updatedAt: string
+}
+
+export interface BusinessRatingsSummary {
+  id: string
+  businessId: string
+  locationId: string
+  avgOverallRating: number | null
+  totalRatings: number
+  avgPackaging: number | null
+  avgAccuracy: number | null
+  totalFeedback: number
+  feedbackReceivedCount: number
+  updatedAt: string
+}
