@@ -1132,7 +1132,7 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
       invoice_id: invoice.id,
       description: line.description,
       delivery_type: line.deliveryType || null,
-      count: line.quantity,
+      quantity: line.quantity,
       rate: line.rate,
       subtotal: line.total,
       delivery_ids: line.deliveryIds || [],
