@@ -74,6 +74,48 @@ export async function initPushNotifications(handlers?: PushHandlers): Promise<vo
   }
 }
 
+/**
+ * Unregisters this device's push token from the backend (call on logout so a
+ * signed-out device stops receiving the previous user's notifications).
+ * Safe no-op on the web.
+ */
+export async function unregisterDevicePush(): Promise<void> {
+  if (!isNativeApp()) return
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications')
+    // Capture the current token, then tell the backend to drop it.
+    const tokenPromise = new Promise<string | null>((resolve) => {
+      let settled = false
+      PushNotifications.addListener('registration', (t) => {
+        if (!settled) {
+          settled = true
+          resolve(t.value)
+        }
+      }).catch(() => resolve(null))
+      // Fail open after a short wait so logout is never blocked.
+      setTimeout(() => {
+        if (!settled) {
+          settled = true
+          resolve(null)
+        }
+      }, 1500)
+    })
+    await PushNotifications.register()
+    const token = await tokenPromise
+    if (token) {
+      await fetch('/api/push/register', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+    }
+    await PushNotifications.removeAllListeners()
+    registered = false
+  } catch (e) {
+    console.error('[v0] push: unregister failed', e)
+  }
+}
+
 /** Clears the app's notification badge / delivered notifications. */
 export async function clearDeliveredNotifications(): Promise<void> {
   if (!isNativeApp()) return

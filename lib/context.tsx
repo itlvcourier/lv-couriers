@@ -38,6 +38,7 @@ import type {
 } from './types'
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES } from './billing'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
+import { unregisterDevicePush } from '@/lib/native/push'
 import {
   loadAllBusinesses,
   loadAllDrivers,
@@ -433,6 +434,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     const supabase = createSupabaseClient()
+    // Drop this device's push token while still authenticated (no-op on web).
+    await unregisterDevicePush()
     await supabase.auth.signOut()
     setCurrentUser(null)
     setActiveRole(null)
