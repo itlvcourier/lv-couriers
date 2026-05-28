@@ -25,7 +25,6 @@ import {
   X,
   Camera,
   ImageIcon,
-  PenLine,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
@@ -512,7 +511,7 @@ export function AdminOrders() {
               </div>
 
               {/* Proof of Delivery Section */}
-              {(selectedDelivery.proof_photo_url || selectedDelivery.pickup_photo_url || selectedDelivery.signature_url || selectedDelivery.recipient_note) && (
+              {(selectedDelivery.proof_photo_url || selectedDelivery.recipient_note) && (
                 <>
                   <Separator />
                   <div className="space-y-4">
@@ -520,26 +519,6 @@ export function AdminOrders() {
                       <Camera className="w-4 h-4" />
                       Proof of Delivery
                     </h4>
-                    
-                    {/* Pickup Photo */}
-                    {selectedDelivery.pickup_photo_url && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <ImageIcon className="w-3 h-3" />
-                          Pickup Photo
-                        </p>
-                        <div className="relative rounded-lg overflow-hidden border border-border">
-                          <img 
-                            src={selectedDelivery.pickup_photo_url} 
-                            alt="Pickup proof" 
-                            className="w-full h-40 object-cover"
-                          />
-                          <div className="absolute top-2 left-2 px-2 py-1 rounded bg-blue-500/90 text-white text-xs font-medium">
-                            Pickup
-                          </div>
-                        </div>
-                      </div>
-                    )}
                     
                     {/* Delivery Photo */}
                     {selectedDelivery.proof_photo_url && (
@@ -557,23 +536,6 @@ export function AdminOrders() {
                           <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
                             Delivered
                           </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Signature */}
-                    {selectedDelivery.signature_url && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <PenLine className="w-3 h-3" />
-                          Recipient Signature
-                        </p>
-                        <div className="rounded-lg overflow-hidden border border-border bg-muted/50 p-2">
-                          <img 
-                            src={selectedDelivery.signature_url} 
-                            alt="Recipient signature" 
-                            className="w-full h-24 object-contain"
-                          />
                         </div>
                       </div>
                     )}
