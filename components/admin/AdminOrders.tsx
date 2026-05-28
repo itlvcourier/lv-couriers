@@ -508,8 +508,8 @@ export function AdminOrders() {
                       <span className="text-foreground">{format(new Date(selectedDelivery.delivered_at), 'MMM d, h:mm a')}</span>
                     </div>
                   )}
+                </div>
               </div>
-              )}
 
               {/* Proof of Delivery Section */}
               {(selectedDelivery.proof_photo_url || selectedDelivery.pickup_photo_url || selectedDelivery.signature_url || selectedDelivery.recipient_note) && (

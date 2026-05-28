@@ -239,21 +239,24 @@ export function BusinessReports() {
           </Card>
 
           {/* Customer Rating (shown when viewing a single location) */}
-          {selectedLocationId !== 'all' && businessRatings && (
+          {selectedLocationId !== 'all' && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Customer Rating</CardTitle>
                 <Star className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {businessRatings.avgOverallRating 
+                <div className="text-2xl font-bold flex items-center gap-1">
+                  {businessRatings?.avgOverallRating 
                     ? businessRatings.avgOverallRating.toFixed(1)
                     : 'N/A'
                   }
+                  {businessRatings?.avgOverallRating && (
+                    <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {businessRatings.feedbackReceivedCount} of {businessRatings.totalFeedback} reviews
+                  {businessRatings ? `${businessRatings.feedbackReceivedCount} of ${businessRatings.totalFeedback} reviews` : 'No reviews yet'}
                 </p>
               </CardContent>
             </Card>

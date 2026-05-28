@@ -1271,10 +1271,14 @@ export async function getFeedbackByToken(token: string): Promise<CustomerFeedbac
     .from('customer_feedback')
     .select('*')
     .eq('token', token)
-    .single()
+    .maybeSingle()
   
-  if (error || !data) {
+  if (error) {
     console.error('[v0] Failed to fetch feedback by token:', error?.message)
+    return null
+  }
+  
+  if (!data) {
     return null
   }
   
@@ -1380,7 +1384,7 @@ export async function getDriverRatingsSummary(driverId: string): Promise<DriverR
     .from('driver_ratings_summary')
     .select('*')
     .eq('driver_id', driverId)
-    .single()
+    .maybeSingle()
   
   if (error) {
     console.error('[v0] Failed to fetch driver ratings summary:', error.message)
@@ -1401,7 +1405,7 @@ export async function getBusinessRatingsSummary(businessId: string, locationId: 
     .select('*')
     .eq('business_id', businessId)
     .eq('location_id', locationId)
-    .single()
+    .maybeSingle()
   
   if (error) {
     console.error('[v0] Failed to fetch business ratings summary:', error.message)
