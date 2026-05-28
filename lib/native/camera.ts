@@ -59,7 +59,7 @@ export async function takeNativePhoto(
   if (source === 'gallery') {
     const result = await Camera.chooseFromGallery({
       mediaType: MediaTypeSelection.Photo,
-      multiple: false,
+      allowMultipleSelection: false,
     })
     const first = result.results?.[0]
     if (!first) return null
