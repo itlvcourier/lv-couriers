@@ -352,6 +352,32 @@ background mode once you confirm you need it, because both app stores scrutinize
 background location closely (Google Play requires a written justification and a
 demo video).
 
+### 3.4 — How permissions actually work (two layers — already handled)
+
+There are **two separate layers** to every device permission, and both are
+required:
+
+1. **Declaration** — listing the permission in `AndroidManifest.xml` (Step 3.1)
+   and `Info.plist` (Step 3.2). This just tells the OS "this app may ask for
+   X." On its own it does **not** grant anything.
+2. **Runtime request** — at the moment the feature is used, the app must call
+   the plugin's `requestPermissions()` so the OS shows the actual "Allow?" popup
+   to the user. Without this call, the camera/GPS silently fails even though the
+   manifest declares it.
+
+> **You don't need to write this yourself — the bridge layer already does it.**
+> The helpers in `lib/native/` call `checkPermissions()` and, if not yet
+> granted, `requestPermissions()` at the right moment:
+> - `lib/native/camera.ts` → `Camera.requestPermissions()` before opening the camera/gallery
+> - `lib/native/geolocation.ts` → `Geolocation.requestPermissions()` before reading location
+> - `lib/native/push.ts` → `PushNotifications.requestPermissions()` before registering
+>
+> So your only job is to make sure the **declarations** in Steps 3.1 / 3.2 are
+> present. The runtime popups are triggered automatically the first time a
+> driver uses each feature. (Exception: Android `ACCESS_BACKGROUND_LOCATION` and
+> iOS "Always" location are upgrade prompts the user must approve from a settings
+> screen — only relevant if you add background tracking per Step 3.3.)
+
 ---
 
 ## STEP 4 — Run the app on Android
@@ -445,8 +471,12 @@ Apple requires a push key so Firebase can deliver to iPhones:
 1. Go to https://developer.apple.com/account → **Certificates, Identifiers &
    Profiles → Keys → +**.
 2. Create a key, enable **Apple Push Notifications service (APNs)**, download the
-   `.p8` file (you can only download it once — keep it safe). Note the **Key ID**
-   and your **Team ID**.
+   `.p8` file. Note the **Key ID** and your **Team ID**.
+   > **⚠️ You can only download the `.p8` file ONCE.** Apple will never let you
+   > re-download it. Immediately back it up somewhere secure and durable — a
+   > password manager (1Password, Bitwarden) or your team's secrets vault — **not**
+   > just a local Downloads folder that could be wiped. If you lose it, you must
+   > revoke the key and create a new one, then re-upload it to Firebase.
 3. In Firebase → **Project Settings → Cloud Messaging → Apple app configuration**,
    upload the `.p8`, and enter the Key ID and Team ID.
    > Note: real iOS push requires a **paid Apple Developer account ($99/yr)** and
@@ -465,6 +495,13 @@ Your backend (`lib/push/send.ts`) needs credentials to call FCM:
    - `FIREBASE_PRIVATE_KEY` → the `private_key` value, **including** the
      `-----BEGIN PRIVATE KEY-----` header and all `\n` characters exactly as they
      appear
+     > **⚠️ Most common mistake here.** Copy the value EXACTLY as it appears in
+     > the JSON, keeping every literal `\n` intact — do not convert them to real
+     > line breaks, and do not strip the `-----BEGIN/END PRIVATE KEY-----` lines.
+     > When pasting into the Vercel/v0 env var field, paste the whole single-line
+     > string with the `\n` characters in it. The sender code in `lib/push/send.ts`
+     > converts those `\n` back into real newlines at runtime. If push fails with
+     > an "invalid key" / "DECODER" error, this is almost always the cause.
 3. Redeploy so the new env vars take effect.
 
 ### 6.6 — Send a test push from your code
