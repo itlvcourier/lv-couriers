@@ -90,6 +90,17 @@ export async function POST(req: NextRequest) {
   const { result } = await sendInvoiceAndRecord(normalized, 'sent')
   console.log('[v0] invoice-sent: sendInvoiceAndRecord result:', result)
   
+  // If email failed, keep invoice as draft and return error
+  if (!result.ok) {
+    return NextResponse.json({ 
+      ok: false, 
+      error: result.reason || 'Failed to send email',
+      emailSent: false,
+      bounced: result.bounced 
+    }, { status: 502 })
+  }
+  
+  // Email sent successfully - update invoice to 'sent' status
   const now = new Date()
   const due = new Date(inv.due_date + 'T00:00:00Z')
 
@@ -101,10 +112,6 @@ export async function POST(req: NextRequest) {
   const escalation = new Date(due)
   escalation.setUTCDate(escalation.getUTCDate() + settings.invoice_escalation_day)
 
-  // Always update the invoice status to 'sent' and schedule events,
-  // even if email delivery failed. This ensures the invoice appears
-  // in the "Sent" tab and can be tracked. The email failure is logged
-  // in invoice_events by sendInvoiceAndRecord.
   await Promise.all([
     supabase
       .from('invoices')
@@ -112,7 +119,7 @@ export async function POST(req: NextRequest) {
         status: 'sent',
         sent_at: now.toISOString(),
         billing_email: inv.billing_email,
-        email_bounced: !result.ok && result.bounced ? true : false,
+        email_bounced: false,
       })
       .eq('id', inv.id),
     scheduleInvoiceEvent({ invoice_id: inv.id, event_type: 'reminder_1', scheduled_for: r1 }),
@@ -120,17 +127,6 @@ export async function POST(req: NextRequest) {
     scheduleInvoiceEvent({ invoice_id: inv.id, event_type: 'overdue_notice', scheduled_for: overdue }),
     scheduleInvoiceEvent({ invoice_id: inv.id, event_type: 'escalated', scheduled_for: escalation }),
   ])
-
-  if (!result.ok) {
-    // Return success for UI but include warning about email failure
-    return NextResponse.json({ 
-      ok: true, 
-      invoiceId: inv.id, 
-      emailSent: false,
-      emailError: result.reason,
-      bounced: result.bounced 
-    }, { status: 200 })
-  }
 
   return NextResponse.json({ ok: true, invoiceId: inv.id, emailSent: true })
 }

@@ -201,8 +201,8 @@ export function AdminInvoices() {
     }, 100)
   }
 
-  const handleSendSingle = (invoice: Invoice, backupEmail?: string) => {
-    const result = sendSingleInvoice(invoice.id, backupEmail ? { backupEmail } : undefined)
+  const handleSendSingle = async (invoice: Invoice, backupEmail?: string) => {
+    const result = await sendSingleInvoice(invoice.id, backupEmail ? { backupEmail } : undefined)
     if (result.ok) {
       toast.success(`Invoice ${invoice.invoiceNumber} sent`)
       setShowSendModal(null)

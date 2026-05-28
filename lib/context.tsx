@@ -242,7 +242,7 @@ interface AppContextType {
   // Invoice sending / reminders
   toggleAutoSend: () => void
   updateInvoiceSettings: (settings: Partial<SystemSettings>) => void
-  sendSingleInvoice: (invoiceId: string, opts?: { backupEmail?: string }) => { ok: boolean; reason?: string }
+  sendSingleInvoice: (invoiceId: string, opts?: { backupEmail?: string }) => Promise<{ ok: boolean; reason?: string }>
   sendAllDraftInvoices: () => { sent: Invoice[]; skipped: Invoice[] }
   pauseReminders: (invoiceId: string) => void
   resumeReminders: (invoiceId: string) => void
@@ -1974,7 +1974,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ]
   }, [])
 
-  const sendSingleInvoice = useCallback((invoiceId: string, opts?: { backupEmail?: string }) => {
+  const sendSingleInvoice = useCallback(async (invoiceId: string, opts?: { backupEmail?: string }) => {
     const invoice = invoices.find(i => i.id === invoiceId)
     if (!invoice) return { ok: false, reason: 'Invoice not found' }
     if (invoice.status !== 'draft') return { ok: false, reason: 'Invoice is not a draft' }
@@ -1987,42 +1987,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const due = new Date(now)
     due.setDate(due.getDate() + settings.invoiceDueDays)
 
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id !== invoiceId) return inv
-      const sentEvent: InvoiceEmailEvent = {
-        id: `e-${Date.now()}-sent`,
-        type: 'sent',
-        timestamp: now.toISOString(),
-        email: sendTo,
+    // Call the API first - don't optimistically update
+    try {
+      const response = await fetch('/api/email/invoice-sent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId, backupEmail: opts?.backupEmail }),
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok || !result.ok) {
+        console.error('[v0] invoice-sent email failed:', result.error || result.reason)
+        return { ok: false, reason: result.error || result.reason || 'Failed to send invoice email' }
       }
-      const scheduled = computeScheduledEvents(now, due, settings)
-      return {
-        ...inv,
-        status: 'sent' as const,
-        sentAt: now.toISOString(),
-        dueDate: due.toISOString().split('T')[0],
-        billingEmail: sendTo,
-        emailBounced: false,
-        updatedAt: now.toISOString(),
-        emailLog: [...inv.emailLog, sentEvent, ...scheduled],
-      }
-    }))
+      
+      // Email sent successfully - now update local state
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id !== invoiceId) return inv
+        const sentEvent: InvoiceEmailEvent = {
+          id: `e-${Date.now()}-sent`,
+          type: 'sent',
+          timestamp: now.toISOString(),
+          email: sendTo,
+        }
+        const scheduled = computeScheduledEvents(now, due, settings)
+        return {
+          ...inv,
+          status: 'sent' as const,
+          sentAt: now.toISOString(),
+          dueDate: due.toISOString().split('T')[0],
+          billingEmail: sendTo,
+          emailBounced: false,
+          updatedAt: now.toISOString(),
+          emailLog: [...inv.emailLog, sentEvent, ...scheduled],
+        }
+      }))
 
-    // Fire-and-forget: persist + email + schedule reminders on the server.
-    void fetch('/api/email/invoice-sent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoiceId, backupEmail: opts?.backupEmail }),
-    }).catch(err => console.error('[v0] invoice-sent email failed', err))
+      // Fire-and-forget: SMS the billing contact that their invoice is ready
+      void fetch('/api/sms/invoice-ready', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId }),
+      }).catch(err => console.error('[v0] invoice-ready SMS failed', err))
 
-    // Fire-and-forget: SMS the billing contact that their invoice is ready
-    void fetch('/api/sms/invoice-ready', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoiceId }),
-    }).catch(err => console.error('[v0] invoice-ready SMS failed', err))
-
-    return { ok: true }
+      return { ok: true }
+    } catch (err) {
+      console.error('[v0] invoice-sent API error:', err)
+      return { ok: false, reason: 'Failed to send invoice - network error' }
+    }
   }, [invoices, settings, computeScheduledEvents])
 
   const sendAllDraftInvoices = useCallback(() => {
