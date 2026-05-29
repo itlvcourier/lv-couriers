@@ -24,6 +24,8 @@ export type BusinessUserRole = 'owner' | 'manager' | 'viewer'
 export type InviteStatus = 'active' | 'pending' | 'deactivated'
 
 export interface MockUser {
+  /** Supabase auth user UUID (used for audit fields like deliveries.assigned_by). */
+  id?: string
   email: string
   password: string
   role: UserRole

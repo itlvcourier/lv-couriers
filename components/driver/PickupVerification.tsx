@@ -19,10 +19,9 @@ interface PickupVerificationProps {
 }
 
 export function PickupVerification({ delivery, onClose }: PickupVerificationProps) {
-  const { verifyPickup, generateTrackingLink, sendTrackingSMS, getRateCardForLocation } = useApp()
+  const { verifyPickup, advanceStatus, getRateCardForLocation } = useApp()
   const rateCard = getRateCardForLocation(delivery.locationId)
   const [showConfirmation, setShowConfirmation] = useState(false)
-  const [trackingCode, setTrackingCode] = useState<string | null>(null)
   const [pickupPhoto, setPickupPhoto] = useState<string | null>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [verifications, setVerifications] = useState<Record<string, { qty: number; photo: string | null; outOfTown: boolean }>>(
@@ -103,17 +102,6 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     }
   }
 
-  const handleItemPhotoCapture = async (itemId: string, imageDataUrl: string) => {
-    // Upload to blob storage
-    const pathname = await uploadProofPhoto(imageDataUrl, `pickup_item_${itemId}`)
-    
-    setVerifications(prev => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], photo: imageDataUrl }
-    }))
-    toast.success('Item photo captured')
-  }
-
   const handlePickupPhotoCapture = async (imageDataUrl: string) => {
     // Upload to blob storage
     await uploadProofPhoto(imageDataUrl, 'pickup')
@@ -143,36 +131,25 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
     }))
 
     verifyPickup(delivery.id, pickupVerifications)
-    
-    // Generate tracking link and show confirmation
-    const code = generateTrackingLink(delivery.id)
-    setTrackingCode(code)
-    
-    // Send SMS if recipient phone exists
-    if (delivery.recipientPhone) {
-      sendTrackingSMS(delivery.id, delivery.recipientPhone)
-    }
-    
     setShowConfirmation(true)
   }
-  
-  const handleCopyLink = () => {
-    if (trackingCode) {
-      navigator.clipboard.writeText(`lvcourier.ca/track/${trackingCode}`)
-      toast.success('Link copied to clipboard')
-    }
-  }
-  
-  const handleOpenMaps = () => {
+
+  // Start the delivery run and open turn-by-turn directions in one tap.
+  // Advancing to "en route to drop-off" is what notifies the recipient with
+  // their tracking link, so the driver never has to come back and tap a
+  // separate "Start Delivery Run" button.
+  const handleStartDeliveryAndNavigate = () => {
+    advanceStatus(delivery.id)
     const encoded = encodeURIComponent(delivery.dropoffAddress)
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank')
+    toast.success('Delivery started - navigating to drop-off')
     onClose()
   }
 
   const allItemsVerified = delivery.manifest.every(item => {
     const v = verifications[item.id]
-    // For big packages, photo is required
-    if (item.type === 'big_package' && !v?.photo) return false
+    // Only the single pickup photo is required now; per-item photos were
+    // removed so the driver isn't asked for two separate photos.
     return v?.qty !== undefined && v.qty >= 0
   })
 
@@ -339,42 +316,6 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
                   </span>
                 )}
               </div>
-
-              {/* Photo capture for big packages */}
-              {item.type === 'big_package' && (
-                <div className="mb-3">
-                  {verifications[item.id]?.photo ? (
-                    <div className="relative">
-                      <img 
-                        src={verifications[item.id].photo!} 
-                        alt="Verification"
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
-                      <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded bg-[var(--accent-green)]/90 text-white text-xs">
-                        <CheckCircle className="w-3 h-3" />
-                        Captured
-                      </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setVerifications(prev => ({
-                          ...prev,
-                          [item.id]: { ...prev[item.id], photo: null }
-                        }))}
-                        className="absolute bottom-2 right-2"
-                      >
-                        Retake
-                      </Button>
-                    </div>
-                  ) : (
-                    <CameraCapture
-                      onCapture={(url) => handleItemPhotoCapture(item.id, url)}
-                      label="Take Item Photo (Required)"
-                      required
-                    />
-                  )}
-                </div>
-              )}
 
               {/* Out of town toggle */}
               <div className="flex items-center gap-2">

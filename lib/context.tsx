@@ -375,6 +375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const role = meta.role as UserRole | undefined
     if (!role || !['admin', 'driver', 'business'].includes(role)) return null
     return {
+      id: authUser.id,
       email: authUser.email || '',
       password: '',
       role,
@@ -601,14 +602,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           updateFields.en_route_dropoff_at = new Date().toISOString()
         }
         persist(updateDeliveryFields(deliveryId, updateFields), 'advanceStatus')
-        // When driver heads to pickup — notify business
-        if (next === 'en_route_pickup') {
-          void fetch('/api/sms/en-route-pickup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deliveryId }),
-          }).catch(err => console.error('[v0] en-route-pickup SMS failed', err))
-        }
+        // Note: the "en route to pickup" business SMS was intentionally removed
+        // to cut message volume — the business is notified again moments later
+        // when the package is actually picked up (below).
         // When package is picked up — notify business
         if (next === 'picked_up') {
           void fetch('/api/sms/picked-up', {
@@ -692,14 +688,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId }),
     }).catch(err => console.error('[v0] delivered SMS failed', err))
-    // Fire-and-forget: send feedback request to recipient 30 minutes after delivery
-    setTimeout(() => {
-      void fetch('/api/sms/feedback-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deliveryId }),
-      }).catch(err => console.error('[v0] feedback-request SMS failed', err))
-    }, 30 * 60 * 1000)
+    // Note: the 30-minute client-side setTimeout feedback-request SMS was
+    // removed — a client timer can't survive the driver closing/refreshing the
+    // app, so it fired unreliably while still adding SMS volume. Feedback
+    // requests should be driven server-side (cron) if needed later.
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
       persist(
@@ -936,6 +928,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const currentDelivery = deliveries.find(d => d.id === deliveryId)
     const oldDriverId = currentDelivery?.driverId ?? null
 
+    // Persist the reassignment to the DB so it survives a refresh.
+    persist(
+      updateDeliveryFields(deliveryId, { driver_id: newDriverId }),
+      'reassignDriver',
+    )
+
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
@@ -1034,13 +1032,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!driver) return
 
       const now = new Date().toISOString()
+      // assigned_by is a uuid column. Only write it when we actually have a
+      // valid UUID (the admin's auth id); otherwise omit it so the whole
+      // update doesn't fail on an invalid-uuid cast (which previously caused
+      // the assignment to silently not persist and reappear as unassigned).
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        adminUserId,
+      )
       persist(
         updateDeliveryFields(deliveryId, {
           driver_id: driverId,
           status: 'claimed',
           claimed_at: now,
           assigned_at: now,
-          assigned_by: adminUserId,
+          ...(isUuid ? { assigned_by: adminUserId } : {}),
         }),
         'assignDelivery',
       )

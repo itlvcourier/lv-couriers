@@ -53,6 +53,14 @@ export type SendSmsInput = {
    * messages themselves (STOP reply confirmations).
    */
   skipOptOutCheck?: boolean
+  /**
+   * Duplicate-suppression window in minutes. When a deliveryId is provided and
+   * an identical (delivery_id + sms_type + recipient) message was already sent
+   * within this window, the send is skipped. This guards against accidental
+   * SMS floods from double-clicks, re-renders, or retried requests. Defaults
+   * to 10 minutes for delivery-scoped messages; pass 0 to disable.
+   */
+  dedupeWindowMinutes?: number
 }
 
 export type SendSmsResult =
@@ -135,6 +143,32 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
       }
     } catch {
       // Non-fatal: if opt-out check fails, proceed with send
+    }
+  }
+
+  // Duplicate suppression: skip if an identical delivery-scoped message was
+  // already sent very recently. Prevents SMS floods from double-fires.
+  const dedupeWindow =
+    input.dedupeWindowMinutes ?? (input.deliveryId ? 10 : 0)
+  if (dedupeWindow > 0 && input.deliveryId && !input.skipLog) {
+    try {
+      const supabase = createAdminClient()
+      const since = new Date(Date.now() - dedupeWindow * 60_000).toISOString()
+      const { data: recent } = await supabase
+        .from('sms_log')
+        .select('id')
+        .eq('delivery_id', input.deliveryId)
+        .eq('sms_type', input.type)
+        .eq('recipient_phone', intendedTo)
+        .eq('status', 'sent')
+        .gte('sent_at', since)
+        .limit(1)
+      if (recent && recent.length > 0) {
+        console.log('[v0] sms.deduped', { type: input.type, to: intendedTo })
+        return { ok: false, reason: 'Duplicate suppressed', logged: false }
+      }
+    } catch {
+      // Non-fatal: if the dedupe check fails, proceed with send
     }
   }
 
