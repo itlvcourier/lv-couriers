@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { X, Package, AlertCircle, CheckCircle, Copy, Navigation, Zap, Camera } from 'lucide-react'
+import { X, Package, AlertCircle, CheckCircle, Navigation, Zap, Camera } from 'lucide-react'
 import type { Delivery, PickupVerification as VerificationType, ManifestItem } from '@/lib/types'
 import { calculateBreakdown } from '@/lib/billing'
 import { RuleBadge } from '@/components/shared/CostCalculator'
@@ -166,33 +166,16 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
             
             <h2 className="text-xl font-semibold text-foreground mb-2">Pickup Confirmed!</h2>
             <p className="text-muted-foreground mb-6">
-              {delivery.recipientPhone ? 'Tracking link sent to recipient' : 'Tracking link generated'}
+              Start the delivery run to notify the recipient and get directions.
             </p>
-            
-            {/* Tracking link */}
-            {trackingCode && (
-              <div className="mb-6 p-4 rounded-xl bg-[var(--bg-card-2)] border border-[var(--border-color)]">
-                <p className="text-xs text-muted-foreground mb-2">Tracking Link</p>
-                <p className="text-sm font-mono text-foreground mb-3">lvcourier.ca/track/{trackingCode}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyLink}
-                  className="gap-2 border-[var(--border-color)]"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy Link
-                </Button>
-              </div>
-            )}
-            
-            {/* Open Maps button */}
+
+            {/* Single button: starts the run AND opens directions together */}
             <Button
-              onClick={handleOpenMaps}
+              onClick={handleStartDeliveryAndNavigate}
               className="w-full h-12 rounded-xl tap-target bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white font-medium"
             >
               <Navigation className="w-4 h-4 mr-2" />
-              Open Maps to Drop-off
+              Start Delivery & Navigate
             </Button>
           </div>
         </SheetContent>
@@ -227,11 +210,11 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
             </div>
             
             {pickupPhoto ? (
-              <div className="relative rounded-lg overflow-hidden">
+              <div className="relative rounded-lg overflow-hidden bg-black flex items-center justify-center">
                 <img 
                   src={pickupPhoto} 
                   alt="Pickup verification"
-                  className="w-full h-40 object-cover"
+                  className="w-full h-40 object-contain"
                 />
                 <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded bg-[var(--accent-green)]/90 text-white text-xs">
                   <CheckCircle className="w-3 h-3" />

@@ -239,7 +239,7 @@ export default function TrackingPage() {
                 <img
                   src={delivery.proof_photo_url || '/placeholder.svg'}
                   alt="Proof of delivery"
-                  className="w-full rounded-md object-cover max-h-[400px]"
+                  className="w-full rounded-md object-contain max-h-[400px] bg-black"
                 />
               </div>
             )}
