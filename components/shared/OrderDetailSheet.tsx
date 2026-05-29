@@ -267,11 +267,11 @@ export function OrderDetailSheet({
                       <ImageIcon className="w-3 h-3" />
                       Pickup Photo
                     </p>
-                    <div className="relative rounded-lg overflow-hidden border border-border">
+                    <div className="relative rounded-lg overflow-hidden border border-border bg-black flex items-center justify-center">
                       <img 
                         src={order.pickupPhotoUrl} 
                         alt="Pickup proof" 
-                        className="w-full h-40 object-cover"
+                        className="w-full h-40 object-contain"
                       />
                       <div className="absolute top-2 left-2 px-2 py-1 rounded bg-blue-500/90 text-white text-xs font-medium">
                         Pickup
@@ -287,11 +287,11 @@ export function OrderDetailSheet({
                       <ImageIcon className="w-3 h-3" />
                       Delivery Photo
                     </p>
-                    <div className="relative rounded-lg overflow-hidden border border-border">
+                    <div className="relative rounded-lg overflow-hidden border border-border bg-black flex items-center justify-center">
                       <img 
                         src={order.proofPhotoUrl} 
                         alt="Delivery proof" 
-                        className="w-full h-40 object-cover"
+                        className="w-full h-40 object-contain"
                       />
                       <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
                         Delivered

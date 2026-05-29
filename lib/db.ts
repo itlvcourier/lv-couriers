@@ -148,11 +148,13 @@ export interface DbDriverLocation {
   id: string
   driver_id: string
   delivery_id: string | null
-  latitude: number
-  longitude: number
+  lat: number
+  lng: number
+  accuracy: number | null
+  battery_level: number | null
   heading: number | null
   speed: number | null
-  updated_at: string
+  recorded_at: string
 }
 
 export interface DbActivityEvent {
@@ -737,35 +739,29 @@ export async function updateDriverLocation(
   longitude: number,
   deliveryId?: string,
   heading?: number,
-  speed?: number
+  speed?: number,
+  accuracy?: number,
 ) {
   const supabase = createClient()
+  // Column names match the live table: lat/lng/recorded_at (NOT latitude/longitude).
+  const row = {
+    driver_id: driverId,
+    delivery_id: deliveryId || null,
+    lat: latitude,
+    lng: longitude,
+    heading: heading ?? null,
+    speed: speed ?? null,
+    accuracy: accuracy ?? null,
+    recorded_at: new Date().toISOString(),
+  }
+  // One upsertable live row per driver (UNIQUE(driver_id)).
   const { error } = await supabase
     .from('driver_locations')
-    .upsert({
-      driver_id: driverId,
-      delivery_id: deliveryId || null,
-      latitude,
-      longitude,
-      heading: heading || null,
-      speed: speed || null,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'driver_id',
-    })
+    .upsert(row, { onConflict: 'driver_id' })
 
   if (error) {
-    // If upsert fails, try insert
-    await supabase
-      .from('driver_locations')
-      .insert({
-        driver_id: driverId,
-        delivery_id: deliveryId || null,
-        latitude,
-        longitude,
-        heading: heading || null,
-        speed: speed || null,
-      })
+    console.error('[v0] updateDriverLocation failed', error.message)
+    throw error
   }
 }
 
@@ -775,12 +771,37 @@ export async function getDriverLocation(driverId: string) {
     .from('driver_locations')
     .select('*')
     .eq('driver_id', driverId)
-    .order('updated_at', { ascending: false })
+    .order('recorded_at', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (error) return null
-  return data as DbDriverLocation
+  return data as DbDriverLocation | null
+}
+
+/**
+ * Public live location for a tracking page: returns the assigned driver's
+ * latest GPS fix for a given delivery, but only while the delivery is actively
+ * in transit (so we don't leak a driver's position before/after the job).
+ */
+export async function getLiveLocationForDelivery(
+  deliveryId: string,
+  driverId: string,
+) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('driver_locations')
+    .select('lat,lng,heading,speed,accuracy,recorded_at')
+    .eq('driver_id', driverId)
+    .order('recorded_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return data as Pick<
+    DbDriverLocation,
+    'lat' | 'lng' | 'heading' | 'speed' | 'accuracy' | 'recorded_at'
+  >
 }
 
 // ============ DASHBOARD STATS ============

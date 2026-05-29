@@ -112,8 +112,9 @@ export function DispatchBoard() {
   const handleAssign = (deliveryId: string, driverId: string) => {
     if (!currentUser) return
     setAssigningId(deliveryId)
-    // Use a simulated admin user ID if no real auth (for demo)
-    const adminUserId = currentUser.email || 'admin'
+    // Pass the admin's auth UUID so it persists into deliveries.assigned_by.
+    // (Falls back to empty string; assignDelivery safely omits non-UUIDs.)
+    const adminUserId = currentUser.id ?? ''
     assignDelivery(deliveryId, driverId, adminUserId)
     setTimeout(() => setAssigningId(null), 500)
   }

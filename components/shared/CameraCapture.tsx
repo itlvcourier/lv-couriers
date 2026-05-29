@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { isNativeApp } from '@/lib/native'
 import { takeNativePhoto } from '@/lib/native/camera'
+import { normalizeImageDataUrl } from '@/lib/image'
 
 interface CameraCaptureProps {
   onCapture: (imageDataUrl: string) => void
@@ -37,7 +38,7 @@ export function CameraCapture({
       try {
         const dataUrl = await takeNativePhoto('camera', { quality: 80 })
         if (dataUrl) {
-          setPreview(dataUrl)
+          setPreview(await normalizeImageDataUrl(dataUrl))
         }
       } catch (err) {
         console.error('[v0] native camera error:', err)
@@ -86,7 +87,7 @@ export function CameraCapture({
   }, [stream])
 
   // Capture photo from video
-  const capturePhoto = useCallback(() => {
+  const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return
 
     const video = videoRef.current
@@ -102,9 +103,9 @@ export function CameraCapture({
     // Draw video frame to canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     
-    // Convert to data URL
+    // Convert to data URL, then normalize for consistent size across devices
     const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
-    setPreview(dataUrl)
+    setPreview(await normalizeImageDataUrl(dataUrl))
     
     // Stop camera
     stopCamera()
@@ -138,8 +139,8 @@ export function CameraCapture({
     }
 
     const reader = new FileReader()
-    reader.onloadend = () => {
-      setPreview(reader.result as string)
+    reader.onloadend = async () => {
+      setPreview(await normalizeImageDataUrl(reader.result as string))
     }
     reader.readAsDataURL(file)
   }
@@ -172,7 +173,7 @@ export function CameraCapture({
     if (isNativeApp()) {
       try {
         const dataUrl = await takeNativePhoto('gallery', { quality: 80 })
-        if (dataUrl) setPreview(dataUrl)
+        if (dataUrl) setPreview(await normalizeImageDataUrl(dataUrl))
       } catch (err) {
         console.error('[v0] native gallery error:', err)
         toast.error('Could not open gallery.')
@@ -240,12 +241,13 @@ export function CameraCapture({
           </div>
         </div>
       ) : preview ? (
-        // Preview captured photo
-        <div className="relative rounded-xl overflow-hidden">
+        // Preview captured photo — object-contain shows the whole photo at its
+        // true aspect ratio (no cropping/stretching) consistently on any device.
+        <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center">
           <img
             src={preview}
             alt="Captured photo"
-            className="w-full h-64 object-cover"
+            className="w-full h-64 object-contain"
           />
           
           {/* Photo confirmed badge */}

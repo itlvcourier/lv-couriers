@@ -124,11 +124,11 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
             </div>
             
             {photoUrl ? (
-              <div className="relative rounded-xl overflow-hidden">
+              <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center">
                 <img
                   src={photoUrl}
                   alt="Proof of delivery"
-                  className="w-full h-48 object-cover"
+                  className="w-full h-48 object-contain"
                 />
                 <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--accent-green)]/90 text-white text-xs font-medium">
                   <CheckCircle className="w-3 h-3" />
