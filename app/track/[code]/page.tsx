@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { DeliveryMap, type MapLocation } from '@/components/maps/DeliveryMap'
 
 type TrackingStatus =
   | 'posted'
@@ -28,9 +29,14 @@ type TrackingStatus =
 
 interface TrackedDelivery {
   id: string
+  driver_id: string | null
   status: TrackingStatus
   recipient_name: string | null
   dropoff_address: string | null
+  dropoff_lat: number | null
+  dropoff_lng: number | null
+  pickup_lat: number | null
+  pickup_lng: number | null
   delivered_at: string | null
   picked_up_at: string | null
   posted_at: string | null
@@ -41,6 +47,13 @@ interface TrackedDelivery {
   recipient_note: string | null
   business: { name: string } | null
   driver: { name: string; phone: string | null } | null
+}
+
+interface LiveLocation {
+  lat: number
+  lng: number
+  heading: number | null
+  recorded_at: string
 }
 
 interface StatusStep {
@@ -55,6 +68,7 @@ export default function TrackingPage() {
   const code = params.code as string
 
   const [delivery, setDelivery] = useState<TrackedDelivery | null>(null)
+  const [liveLocation, setLiveLocation] = useState<LiveLocation | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -66,7 +80,8 @@ export default function TrackingPage() {
       const { data, error } = await supabase
         .from('deliveries')
         .select(
-          `id, status, recipient_name, dropoff_address, delivered_at,
+          `id, driver_id, status, recipient_name, dropoff_address,
+           dropoff_lat, dropoff_lng, pickup_lat, pickup_lng, delivered_at,
            picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
            proof_photo_url, signature_url, recipient_note,
            business:businesses(name), driver:drivers(name, phone)`,
@@ -114,6 +129,74 @@ export default function TrackingPage() {
       void supabase.removeChannel(channel)
     }
   }, [code])
+
+  // Live driver location: only while the delivery is assigned to a driver and
+  // actively in transit. Reads the latest fix and subscribes to updates so the
+  // map dot moves in real time.
+  const driverId = delivery?.driver_id ?? null
+  const isInTransit =
+    delivery?.status === 'en_route_pickup' ||
+    delivery?.status === 'picked_up' ||
+    delivery?.status === 'en_route_dropoff'
+
+  useEffect(() => {
+    if (!driverId || !isInTransit) {
+      setLiveLocation(null)
+      return
+    }
+    let cancelled = false
+    const supabase = createClient()
+
+    const loadLocation = async () => {
+      const { data } = await supabase
+        .from('driver_locations')
+        .select('lat, lng, heading, recorded_at')
+        .eq('driver_id', driverId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (cancelled || !data) return
+      setLiveLocation(data as LiveLocation)
+    }
+
+    void loadLocation()
+
+    const channel = supabase
+      .channel(`driver-loc-${driverId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'driver_locations',
+          filter: `driver_id=eq.${driverId}`,
+        },
+        (payload: { new?: Partial<LiveLocation> }) => {
+          if (cancelled) return
+          const row = payload.new
+          if (row && typeof row.lat === 'number' && typeof row.lng === 'number') {
+            setLiveLocation({
+              lat: row.lat,
+              lng: row.lng,
+              heading: row.heading ?? null,
+              recorded_at: row.recorded_at ?? new Date().toISOString(),
+            })
+          } else {
+            void loadLocation()
+          }
+        },
+      )
+      .subscribe()
+
+    // Fallback poll every 15s in case realtime drops.
+    const interval = setInterval(loadLocation, 15000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      void supabase.removeChannel(channel)
+    }
+  }, [driverId, isInTransit])
 
   if (loading) {
     return (
@@ -184,6 +267,32 @@ export default function TrackingPage() {
   const steps = buildStatusSteps(delivery)
   const isDelivered = delivery.status === 'delivered'
 
+  // Markers for the live map: dropoff (and pickup before the package is picked up).
+  const mapLocations: MapLocation[] = []
+  if (
+    delivery.status === 'en_route_pickup' &&
+    typeof delivery.pickup_lat === 'number' &&
+    typeof delivery.pickup_lng === 'number'
+  ) {
+    mapLocations.push({
+      lat: delivery.pickup_lat,
+      lng: delivery.pickup_lng,
+      label: 'Pickup',
+      type: 'pickup',
+    })
+  }
+  if (
+    typeof delivery.dropoff_lat === 'number' &&
+    typeof delivery.dropoff_lng === 'number'
+  ) {
+    mapLocations.push({
+      lat: delivery.dropoff_lat,
+      lng: delivery.dropoff_lng,
+      label: delivery.dropoff_address ?? 'Drop-off',
+      type: 'dropoff',
+    })
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TrackingHeader />
@@ -207,6 +316,40 @@ export default function TrackingPage() {
                 </p>
               </div>
             </Card>
+          ) : mapLocations.length > 0 || liveLocation ? (
+            <div>
+              <DeliveryMap
+                locations={mapLocations}
+                driverLocation={
+                  liveLocation
+                    ? {
+                        lat: liveLocation.lat,
+                        lng: liveLocation.lng,
+                        heading: liveLocation.heading ?? undefined,
+                      }
+                    : undefined
+                }
+                showRoute={false}
+                className="h-[260px] md:h-[320px] w-full rounded-xl overflow-hidden"
+              />
+              <div className="mt-3 text-center">
+                <h3 className="text-lg font-semibold">
+                  {headlineForStatus(delivery.status)}
+                </h3>
+                {liveLocation ? (
+                  <p className="text-sm text-primary flex items-center justify-center gap-1.5">
+                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                    Live location · updated {formatTime(liveLocation.recorded_at)}
+                  </p>
+                ) : (
+                  delivery.dropoff_address && (
+                    <p className="text-sm text-muted-foreground">
+                      Heading to {delivery.dropoff_address}
+                    </p>
+                  )
+                )}
+              </div>
+            </div>
           ) : (
             <Card className="h-[260px] md:h-[320px] flex flex-col items-center justify-center bg-card text-center px-6">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">

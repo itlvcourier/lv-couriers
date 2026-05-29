@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/context'
+import { useDriverLocationTracking } from '@/lib/hooks/useDriverLocationTracking'
 import { BottomNav } from '@/components/shared/BottomNav'
 import { AvailableJobs } from './AvailableJobs'
 import { ActiveDelivery } from './ActiveDelivery'
@@ -29,6 +30,18 @@ export function DriverView() {
   const activeJobs = deliveries.filter(
     d => d.driverId === driverId && !['delivered', 'failed_permanent', 'cancelled'].includes(d.status)
   )
+
+  // Live-location tracking: while the driver is actively in transit on a job,
+  // continuously push GPS to driver_locations so the recipient's tracking page
+  // shows a moving dot. Picks the first in-transit delivery as the active one.
+  const inTransitDelivery = activeJobs.find(d =>
+    ['en_route_pickup', 'picked_up', 'en_route_dropoff'].includes(d.status)
+  )
+  useDriverLocationTracking({
+    driverId,
+    deliveryId: inTransitDelivery?.id,
+    enabled: Boolean(driverId && inTransitDelivery),
+  })
 
   // When dispatch mode is active, hide the Available tab
   const isDispatchMode = !settings.allowDriverSelfClaim
