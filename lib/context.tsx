@@ -917,6 +917,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deliveryId: saved.id }),
         }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
+
+        // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
+        // show map pins. This runs async and updates the row via realtime.
+        void fetch('/api/delivery/geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deliveryId: saved.id }),
+        }).catch(err => console.error('[v0] geocode failed', err))
       }),
       'postDelivery',
     )
