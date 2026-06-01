@@ -393,9 +393,13 @@ export async function createDeliveryInDb(input: {
   pickupAddress: string
   pickupArea: string
   pickupPostalCode?: string | null
+  pickupLat?: number | null
+  pickupLng?: number | null
   dropoffAddress: string
   dropoffArea: string
   dropoffPostalCode?: string | null
+  dropoffLat?: number | null
+  dropoffLng?: number | null
   recipientName?: string | null
   recipientPhone?: string | null
   recipientNote?: string | null
@@ -417,9 +421,13 @@ export async function createDeliveryInDb(input: {
       pickup_address: input.pickupAddress,
       pickup_area: input.pickupArea,
       pickup_postal_code: input.pickupPostalCode ?? null,
+      pickup_lat: input.pickupLat ?? null,
+      pickup_lng: input.pickupLng ?? null,
       dropoff_address: input.dropoffAddress,
       dropoff_area: input.dropoffArea,
       dropoff_postal_code: input.dropoffPostalCode ?? null,
+      dropoff_lat: input.dropoffLat ?? null,
+      dropoff_lng: input.dropoffLng ?? null,
       recipient_name: input.recipientName ?? null,
       recipient_phone: input.recipientPhone ?? null,
       recipient_note: input.recipientNote ?? null,

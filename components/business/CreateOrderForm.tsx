@@ -79,10 +79,14 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
     pickupAddress: location?.address || '',
     pickupPostalCode: '',
     pickupContact: location?.phone || '',
+    pickupLat: null as number | null,
+    pickupLng: null as number | null,
     recipientName: '',
     dropoffAddress: '',
     dropoffPostalCode: '',
     dropoffContact: '',
+    dropoffLat: null as number | null,
+    dropoffLng: null as number | null,
     buzzCode: '',
     saveContact: true,
     packageDescription: '',
@@ -280,9 +284,13 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       pickupAddress: form.pickupAddress,
       pickupArea: location?.name || '',
       pickupPostalCode: form.pickupPostalCode.trim().toUpperCase() || null,
+      pickupLat: form.pickupLat,
+      pickupLng: form.pickupLng,
       dropoffAddress: form.dropoffAddress,
       dropoffArea: form.dropoffAddress.split(',')[1]?.trim() || 'Calgary',
       dropoffPostalCode: form.dropoffPostalCode.trim().toUpperCase() || null,
+      dropoffLat: form.dropoffLat,
+      dropoffLng: form.dropoffLng,
       recipientName: form.recipientName.trim() || null,
       recipientPhone: form.dropoffContact.trim() || null,
       buzzCode: form.buzzCode.trim() || null,
@@ -353,9 +361,14 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               <AddressAutocomplete
                 id="pickupAddress"
                 value={form.pickupAddress}
-                onChange={(value) => setForm({ ...form, pickupAddress: value })}
+                onChange={(value) => setForm({ ...form, pickupAddress: value, pickupLat: null, pickupLng: null })}
                 onSelect={(result: AddressResult) => {
-                  setForm({ ...form, pickupAddress: result.address })
+                  setForm({
+                    ...form,
+                    pickupAddress: result.address,
+                    pickupLat: result.lat ?? null,
+                    pickupLng: result.lng ?? null,
+                  })
                 }}
                 placeholder="Enter pickup address"
                 required
@@ -454,9 +467,14 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               <AddressAutocomplete
                 id="dropoffAddress"
                 value={form.dropoffAddress}
-                onChange={(value) => setForm({ ...form, dropoffAddress: value })}
+                onChange={(value) => setForm({ ...form, dropoffAddress: value, dropoffLat: null, dropoffLng: null })}
                 onSelect={(result: AddressResult) => {
-                  setForm({ ...form, dropoffAddress: result.address })
+                  setForm({
+                    ...form,
+                    dropoffAddress: result.address,
+                    dropoffLat: result.lat ?? null,
+                    dropoffLng: result.lng ?? null,
+                  })
                 }}
                 placeholder="Enter delivery address"
                 required

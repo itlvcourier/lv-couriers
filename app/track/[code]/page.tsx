@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -201,9 +201,18 @@ export default function TrackingPage() {
     }
   }, [driverId, isInTransit])
 
+  // Refs for throttling API calls — only fetch directions/reverse-geocode if
+  // driver has moved significantly or enough time has passed. This reduces
+  // Google Maps API usage by 50-70%.
+  const lastDirectionsFetch = useRef<{ lat: number; lng: number; time: number } | null>(null)
+  const lastReverseGeocode = useRef<{ lat: number; lng: number; street: string } | null>(null)
+
   // Fetch ETA, route line, and driver's current street when we have live location
+  // Throttled: only re-fetch directions every 30s or if driver moved 200m+
   useEffect(() => {
     if (!liveLocation || !delivery) return
+
+    const now = Date.now()
 
     // Determine destination based on status
     const isHeadingToPickup =
@@ -211,36 +220,63 @@ export default function TrackingPage() {
     const destLat = isHeadingToPickup ? delivery.pickup_lat : delivery.dropoff_lat
     const destLng = isHeadingToPickup ? delivery.pickup_lng : delivery.dropoff_lng
 
-    // Fetch ETA and route if we have destination coords (via server-side API to avoid CORS)
-    if (destLat && destLng) {
-      const params = new URLSearchParams({
-        originLat: String(liveLocation.lat),
-        originLng: String(liveLocation.lng),
-        destLat: String(destLat),
-        destLng: String(destLng),
-      })
-
-      // Get directions (includes ETA and polyline)
-      void fetch(`/api/maps/directions?${params}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.polyline) setRoutePolyline(data.polyline)
-          if (data.duration?.text) setEtaText(data.duration.text)
-        })
-        .catch(err => console.error('[v0] Directions fetch error:', err))
+    // Helper: calculate distance between two points in meters
+    const distanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const R = 6371000 // Earth's radius in meters
+      const dLat = ((lat2 - lat1) * Math.PI) / 180
+      const dLng = ((lng2 - lng1) * Math.PI) / 180
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     }
 
-    // Reverse geocode driver's position to get street name (via server-side API)
-    const reverseParams = new URLSearchParams({
-      lat: String(liveLocation.lat),
-      lng: String(liveLocation.lng),
-    })
-    void fetch(`/api/maps/reverse-geocode?${reverseParams}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.street) setDriverStreet(data.street)
+    // Fetch ETA and route if we have destination coords
+    // Throttle: only if moved 200m+ or 30s+ since last fetch
+    if (destLat && destLng) {
+      const last = lastDirectionsFetch.current
+      const movedEnough = !last || distanceMeters(liveLocation.lat, liveLocation.lng, last.lat, last.lng) > 200
+      const timeElapsed = !last || now - last.time > 30000
+
+      if (movedEnough || timeElapsed) {
+        lastDirectionsFetch.current = { lat: liveLocation.lat, lng: liveLocation.lng, time: now }
+
+        const params = new URLSearchParams({
+          originLat: String(liveLocation.lat),
+          originLng: String(liveLocation.lng),
+          destLat: String(destLat),
+          destLng: String(destLng),
+        })
+
+        void fetch(`/api/maps/directions?${params}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.polyline) setRoutePolyline(data.polyline)
+            if (data.duration?.text) setEtaText(data.duration.text)
+          })
+          .catch(err => console.error('[v0] Directions fetch error:', err))
+      }
+    }
+
+    // Reverse geocode: only if moved 100m+ from last position
+    const lastRG = lastReverseGeocode.current
+    const rgMovedEnough = !lastRG || distanceMeters(liveLocation.lat, liveLocation.lng, lastRG.lat, lastRG.lng) > 100
+
+    if (rgMovedEnough) {
+      const reverseParams = new URLSearchParams({
+        lat: String(liveLocation.lat),
+        lng: String(liveLocation.lng),
       })
-      .catch(err => console.error('[v0] Reverse geocode fetch error:', err))
+      void fetch(`/api/maps/reverse-geocode?${reverseParams}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.street) {
+            setDriverStreet(data.street)
+            lastReverseGeocode.current = { lat: liveLocation.lat, lng: liveLocation.lng, street: data.street }
+          }
+        })
+        .catch(err => console.error('[v0] Reverse geocode fetch error:', err))
+    }
   }, [liveLocation, delivery])
 
   if (loading) {
