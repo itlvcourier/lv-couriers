@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { RecipientPicker } from '@/components/business/RecipientPicker'
+import { AddressAutocomplete, type AddressResult } from '@/components/shared/AddressAutocomplete'
 import { toast } from 'sonner'
 import {
   MapPin,
@@ -349,10 +350,13 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="pickupAddress">Pickup Address *</Label>
-              <Input
+              <AddressAutocomplete
                 id="pickupAddress"
                 value={form.pickupAddress}
-                onChange={e => setForm({ ...form, pickupAddress: e.target.value })}
+                onChange={(value) => setForm({ ...form, pickupAddress: value })}
+                onSelect={(result: AddressResult) => {
+                  setForm({ ...form, pickupAddress: result.address })
+                }}
                 placeholder="Enter pickup address"
                 required
               />
@@ -447,10 +451,13 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
             <div className="space-y-2">
               <Label htmlFor="dropoffAddress">Delivery Address *</Label>
-              <Input
+              <AddressAutocomplete
                 id="dropoffAddress"
                 value={form.dropoffAddress}
-                onChange={e => setForm({ ...form, dropoffAddress: e.target.value })}
+                onChange={(value) => setForm({ ...form, dropoffAddress: value })}
+                onSelect={(result: AddressResult) => {
+                  setForm({ ...form, dropoffAddress: result.address })
+                }}
                 placeholder="Enter delivery address"
                 required
               />

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { geocodeDeliveryAddresses } from '@/lib/geocode'
+import { geocodeAddress } from '@/lib/google-maps'
 
 /**
  * POST /api/delivery/geocode
@@ -34,21 +34,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: 'already geocoded' })
     }
 
-    // Geocode the addresses
-    const coords = await geocodeDeliveryAddresses(
-      delivery.pickup_address,
-      delivery.dropoff_address,
-    )
+    // Geocode the addresses using Google Maps API
+    const [pickupResult, dropoffResult] = await Promise.all([
+      delivery.pickup_address && !delivery.pickup_lat
+        ? geocodeAddress(delivery.pickup_address)
+        : null,
+      delivery.dropoff_address && !delivery.dropoff_lat
+        ? geocodeAddress(delivery.dropoff_address)
+        : null,
+    ])
 
     // Only update fields that actually got geocoded
     const updates: Record<string, number | null> = {}
-    if (coords.pickup_lat !== null && !delivery.pickup_lat) {
-      updates.pickup_lat = coords.pickup_lat
-      updates.pickup_lng = coords.pickup_lng
+    if (pickupResult) {
+      updates.pickup_lat = pickupResult.lat
+      updates.pickup_lng = pickupResult.lng
     }
-    if (coords.dropoff_lat !== null && !delivery.dropoff_lat) {
-      updates.dropoff_lat = coords.dropoff_lat
-      updates.dropoff_lng = coords.dropoff_lng
+    if (dropoffResult) {
+      updates.dropoff_lat = dropoffResult.lat
+      updates.dropoff_lng = dropoffResult.lng
     }
 
     if (Object.keys(updates).length === 0) {
@@ -69,8 +73,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       geocoded: {
-        pickup: coords.pickup_lat !== null,
-        dropoff: coords.dropoff_lat !== null,
+        pickup: !!pickupResult,
+        dropoff: !!dropoffResult,
       },
     })
   } catch (err) {
