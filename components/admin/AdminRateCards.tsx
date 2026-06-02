@@ -234,6 +234,8 @@ interface RadiusTierInput {
 }
 
 function RateCardEditor({ business, location, existingRateCard, onSave, onClose }: RateCardEditorProps) {
+  const { updateLocationCoords } = useApp()
+  
   // Rate card fields (stored in rate_cards table)
   const [formData, setFormData] = useState({
     effectiveDate: existingRateCard?.effectiveDate || new Date().toISOString().split('T')[0],
@@ -474,14 +476,10 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                   className="shrink-0 text-xs h-7"
                   onClick={async () => {
                     try {
-                      console.log('[v0] Geocoding address:', location.address)
                       const res = await fetch(`/api/maps/geocode?address=${encodeURIComponent(location.address)}`)
-                      console.log('[v0] Geocode response status:', res.status, res.ok)
                       if (res.ok) {
                         const data = await res.json()
-                        console.log('[v0] Geocode data:', data)
                         if (data.lat && data.lng) {
-                          console.log('[v0] Calling updateLocationCoords:', location.id, data.lat, data.lng)
                           updateLocationCoords(location.id, data.lat, data.lng)
                           toast.success('Location geocoded successfully!')
                         } else {
@@ -491,7 +489,6 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                         toast.error('Geocode API failed')
                       }
                     } catch (e) {
-                      console.error('[v0] Geocode error:', e)
                       toast.error('Failed to geocode location')
                     }
                   }}
