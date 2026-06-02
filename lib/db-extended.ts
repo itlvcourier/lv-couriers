@@ -365,7 +365,7 @@ export async function loadAllRateCards(): Promise<RateCard[]> {
   if (!rateCardsData || rateCardsData.length === 0) return []
   
   // Get all unique location IDs
-  const locationIds = [...new Set(rateCardsData.map(rc => rc.location_id))]
+  const locationIds = [...new Set(rateCardsData.map((rc: Row) => rc.location_id as string))]
   
   // Fetch all radius tiers for these locations
   const { data: tiersData, error: tiersError } = await supabase
@@ -389,7 +389,7 @@ export async function loadAllRateCards(): Promise<RateCard[]> {
   }
   
   // Map rate cards with their tiers
-  return rateCardsData.map(row => {
+  return rateCardsData.map((row: Row) => {
     const tiers = tiersByLocation.get(row.location_id as string) || []
     return mapRateCardRow({ ...row, radius_pricing_tiers: tiers })
   })
