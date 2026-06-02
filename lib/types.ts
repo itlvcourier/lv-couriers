@@ -104,6 +104,8 @@ export interface BusinessLocation {
   contactName: string
   phone: string
   savedAddresses: SavedAddress[]
+  lat: number | null
+  lng: number | null
 }
 
 export interface Business {
@@ -207,6 +209,8 @@ export interface Delivery {
   // Cancellation
   cancelledAt?: string | null
   cancellationStage?: 'before_depart' | 'en_route_pickup' | 'after_pickup' | null
+  // Distance for radius-based pricing
+  distanceKm?: number | null
   cancellationFee?: number | null
   cancellationReason?: string | null
   // Trip ordering
@@ -337,6 +341,17 @@ export const RATES = {
 
 // ===== PHASE 2: BILLING & INVOICING TYPES =====
 
+export interface RadiusPricingTier {
+  id: string
+  locationId: string
+  maxDistanceKm: number
+  rateRegular: number
+  rateRush: number
+  rateBigParcel: number
+  label: string | null
+  sortOrder: number
+}
+
 export interface RateCard {
   id: string
   businessId: string
@@ -367,6 +382,9 @@ export interface RateCard {
   contractNotes: string
   createdAt: string
   updatedAt: string
+  // Radius-based pricing
+  useRadiusPricing: boolean
+  radiusTiers?: RadiusPricingTier[]
 }
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'disputed' | 'escalated'

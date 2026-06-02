@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useApp } from '@/lib/context'
-import type { RateCard, Business, BusinessLocation } from '@/lib/types'
+import type { RateCard, Business, BusinessLocation, RadiusPricingTier } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,10 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AlertTriangle, Building2, Check, ChevronRight, DollarSign, FileText, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, ChevronRight, DollarSign, FileText, X, MapPin, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { CostCalculator } from '@/components/shared/CostCalculator'
 import { BillingScenarioTests } from './BillingScenarioTests'
+import { saveRadiusTiers, getRadiusTiers } from '@/lib/db-extended'
 
 export function AdminRateCards() {
   const { businesses, rateCards, saveRateCard, updateLocationEmails } = useApp()
@@ -190,11 +191,18 @@ export function AdminRateCards() {
               business={selectedLocation.business}
               location={selectedLocation.location}
               existingRateCard={rateCards.find(rc => rc.locationId === selectedLocation.location.id) || null}
-              onSave={(data, billingEmail, backupEmail) => {
+              onSave={async (data, billingEmail, backupEmail, radiusTiers) => {
                 // Save rate card to rate_cards table
                 saveRateCard(selectedLocation.location.id, data)
                 // Save billing emails to business_locations table (separate from rate card)
                 updateLocationEmails(selectedLocation.location.id, billingEmail, backupEmail || null)
+                // Save radius tiers if radius pricing is enabled
+                if (data.useRadiusPricing && radiusTiers.length > 0) {
+                  await saveRadiusTiers(selectedLocation.location.id, radiusTiers)
+                } else if (!data.useRadiusPricing) {
+                  // Clear tiers when disabled
+                  await saveRadiusTiers(selectedLocation.location.id, [])
+                }
                 toast.success('Rate card and billing info saved successfully')
                 setIsEditing(false)
               }}
@@ -211,8 +219,17 @@ interface RateCardEditorProps {
   business: Business
   location: BusinessLocation
   existingRateCard: RateCard | null
-  onSave: (data: Partial<RateCard>, billingEmail: string, backupEmail: string) => void
+  onSave: (data: Partial<RateCard>, billingEmail: string, backupEmail: string, radiusTiers: RadiusTierInput[]) => void
   onClose: () => void
+}
+
+interface RadiusTierInput {
+  maxDistanceKm: number
+  rateRegular: number
+  rateRush: number
+  rateBigParcel: number
+  rateRushBig: number
+  label: string
 }
 
 function RateCardEditor({ business, location, existingRateCard, onSave, onClose }: RateCardEditorProps) {
@@ -228,6 +245,29 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     cancelBeforeDepart: existingRateCard?.cancelBeforeDepart ?? 0,
     cancelEnRoute: existingRateCard?.cancelEnRoute ?? 5,
     contractNotes: existingRateCard?.contractNotes || '',
+    useRadiusPricing: existingRateCard?.useRadiusPricing ?? false,
+  })
+  
+  // Radius pricing tiers
+  const [radiusTiers, setRadiusTiers] = useState<RadiusTierInput[]>([])
+  const [loadingTiers, setLoadingTiers] = useState(false)
+  
+  // Load existing tiers when opening editor
+  useState(() => {
+    if (existingRateCard?.useRadiusPricing) {
+      setLoadingTiers(true)
+      getRadiusTiers(location.id).then(tiers => {
+        setRadiusTiers(tiers.map(t => ({
+          maxDistanceKm: t.maxDistanceKm,
+          rateRegular: t.rateRegular,
+          rateRush: t.rateRush,
+          rateBigParcel: t.rateBigParcel,
+          rateRushBig: t.rateRushBig,
+          label: t.label || '',
+        })))
+        setLoadingTiers(false)
+      })
+    }
   })
   
   // Billing emails (stored in business_locations table, not rate_cards)
@@ -258,8 +298,32 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
 
   const handleSave = () => {
     if (validate()) {
-      onSave(formData, billingEmail, backupEmail)
+      onSave(formData, billingEmail, backupEmail, radiusTiers)
     }
+  }
+
+  // Radius tier helpers
+  const addTier = () => {
+    const lastTier = radiusTiers[radiusTiers.length - 1]
+    const newDistance = lastTier ? lastTier.maxDistanceKm + 5 : 5
+    setRadiusTiers([...radiusTiers, {
+      maxDistanceKm: newDistance,
+      rateRegular: lastTier?.rateRegular ?? formData.rateRegular,
+      rateRush: lastTier?.rateRush ?? formData.rateRush,
+      rateBigParcel: lastTier?.rateBigParcel ?? formData.rateBigDouble,
+      rateRushBig: lastTier?.rateRushBig ?? (formData.rateRush + 5),
+      label: `Zone ${String.fromCharCode(65 + radiusTiers.length)}`, // A, B, C...
+    }])
+  }
+
+  const removeTier = (index: number) => {
+    setRadiusTiers(radiusTiers.filter((_, i) => i !== index))
+  }
+
+  const updateTier = (index: number, field: keyof RadiusTierInput, value: number | string) => {
+    const updated = [...radiusTiers]
+    updated[index] = { ...updated[index], [field]: value }
+    setRadiusTiers(updated)
   }
 
   return (

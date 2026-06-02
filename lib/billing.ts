@@ -1,4 +1,4 @@
-import type { ManifestItem, RateCard, Delivery, InvoiceLine, Invoice } from './types'
+import type { ManifestItem, RateCard, Delivery, InvoiceLine, Invoice, RadiusPricingTier } from './types'
 
 /**
  * Default rate card values applied when a business or location is created
@@ -23,6 +23,7 @@ export const DEFAULT_RATE_CARD_VALUES = {
   notifyInvoiceSent: true,
   notifyPaymentReminder: true,
   notifyRecipientSms: true,
+  useRadiusPricing: false,
 } as const
 
 /**
@@ -35,7 +36,7 @@ export const DEFAULT_RATE_CARD_VALUES = {
 export function estimateDeliveryPrice(delivery: Delivery, rateCard: RateCard | null): number {
   if (delivery.calculatedRate != null) return delivery.calculatedRate
   if (!rateCard) return 0
-  return calculateRate(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, false)
+  return calculateRate(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, false, delivery.distanceKm)
 }
 
 /**
@@ -58,15 +59,35 @@ export function countBigPackages(
 }
 
 /**
+ * Find the matching radius tier for a given distance.
+ * Returns null if no tier matches or radius pricing is not configured.
+ */
+export function findMatchingTier(
+  distanceKm: number,
+  tiers: RadiusPricingTier[]
+): RadiusPricingTier | null {
+  if (!tiers || tiers.length === 0) return null
+  const sortedTiers = [...tiers].sort((a, b) => a.maxDistanceKm - b.maxDistanceKm)
+  const matchedTier = sortedTiers.find(t => distanceKm <= t.maxDistanceKm)
+  // If beyond all tiers, return the last (highest distance) tier
+  return matchedTier || sortedTiers[sortedTiers.length - 1] || null
+}
+
+/**
  * Calculate the rate for a delivery based on priority order:
- * 1. Rush + out of town -> Rush OOT rate
- * 2. Rush only -> Rush rate
- * 3. 2+ big packages + out of town (not rush) -> OOT big rate
- * 4. 2+ big packages in town (not rush) -> 2+ big rate
- * 5. Everything else -> Regular rate
- *
- * Rush always overrides package count. Out-of-town only affects price when
- * combined with rush OR with 2+ big packages.
+ * 
+ * When radius pricing is ENABLED and we have distance + tiers:
+ *   - Find the matching distance tier
+ *   - Apply tier.rateRush for rush orders
+ *   - Apply tier.rateBigParcel for 2+ big packages
+ *   - Apply tier.rateRegular for regular orders
+ * 
+ * When radius pricing is DISABLED (or distance calc fails):
+ *   1. Rush + out of town -> Rush OOT rate
+ *   2. Rush only -> Rush rate
+ *   3. 2+ big packages + out of town (not rush) -> OOT big rate
+ *   4. 2+ big packages in town (not rush) -> 2+ big rate
+ *   5. Everything else -> Regular rate
  *
  * Pass `useConfirmed: true` after pickup verification to lock the rate against
  * the driver-confirmed quantities.
@@ -76,21 +97,41 @@ export function calculateRate(
   isOutOfTown: boolean,
   isRush: boolean,
   rateCard: RateCard,
-  useConfirmed: boolean = false
+  useConfirmed: boolean = false,
+  distanceKm?: number | null
 ): number {
+  const bigCount = countBigPackages(manifest, useConfirmed)
+  const hasBigPackages = bigCount >= 2
+
+  // Radius pricing takes precedence when enabled and we have valid distance + tiers
+  if (
+    rateCard.useRadiusPricing &&
+    distanceKm != null &&
+    distanceKm > 0 &&
+    rateCard.radiusTiers &&
+    rateCard.radiusTiers.length > 0
+  ) {
+    const tier = findMatchingTier(distanceKm, rateCard.radiusTiers)
+    if (tier) {
+      // Rush takes highest priority, then big packages
+      if (isRush) return tier.rateRush
+      if (hasBigPackages) return tier.rateBigParcel
+      return tier.rateRegular
+    }
+  }
+
+  // Standard flat-rate pricing (fallback or when radius pricing disabled)
   // Priority 1: Rush + Out of Town
   if (isRush && isOutOfTown) return rateCard.rateRushOot
 
   // Priority 2: Rush only (in town)
   if (isRush) return rateCard.rateRush
 
-  const bigCount = countBigPackages(manifest, useConfirmed)
-
   // Priority 3: 2+ big packages + out of town (not rush)
-  if (bigCount >= 2 && isOutOfTown) return rateCard.rateOotBig ?? rateCard.rateBigDouble
+  if (hasBigPackages && isOutOfTown) return rateCard.rateOotBig ?? rateCard.rateBigDouble
 
   // Priority 4: 2+ big packages in town (not rush)
-  if (bigCount >= 2) return rateCard.rateBigDouble
+  if (hasBigPackages) return rateCard.rateBigDouble
 
   // Priority 5: Everything else
   return rateCard.rateRegular
@@ -106,18 +147,44 @@ export type BillingRuleName =
   | 'Rush + Out of Town'
   | '2+ Big Packages — In Town'
   | '2+ Big Packages — Out of Town'
+  | 'Zone Rate — Regular'
+  | 'Zone Rate — Rush'
+  | 'Zone Rate — Big Parcel'
+  | 'Zone Rate — Rush + Big'
 
 export function getRuleApplied(
   manifest: ManifestItem[],
   isOutOfTown: boolean,
   isRush: boolean,
-  useConfirmed: boolean = false
+  useConfirmed: boolean = false,
+  rateCard?: RateCard | null,
+  distanceKm?: number | null
 ): BillingRuleName {
+  const bigCount = countBigPackages(manifest, useConfirmed)
+  const hasBigPackages = bigCount >= 2
+
+  // Check if radius pricing applies
+  if (
+    rateCard?.useRadiusPricing &&
+    distanceKm != null &&
+    distanceKm > 0 &&
+    rateCard.radiusTiers &&
+    rateCard.radiusTiers.length > 0
+  ) {
+    const tier = findMatchingTier(distanceKm, rateCard.radiusTiers)
+    if (tier) {
+      if (isRush && hasBigPackages) return 'Zone Rate — Rush + Big'
+      if (isRush) return 'Zone Rate — Rush'
+      if (hasBigPackages) return 'Zone Rate — Big Parcel'
+      return 'Zone Rate — Regular'
+    }
+  }
+
+  // Standard rules
   if (isRush && isOutOfTown) return 'Rush + Out of Town'
   if (isRush) return 'Rush'
-  const bigCount = countBigPackages(manifest, useConfirmed)
-  if (bigCount >= 2 && isOutOfTown) return '2+ Big Packages — Out of Town'
-  if (bigCount >= 2) return '2+ Big Packages — In Town'
+  if (hasBigPackages && isOutOfTown) return '2+ Big Packages — Out of Town'
+  if (hasBigPackages) return '2+ Big Packages — In Town'
   return 'Regular'
 }
 
@@ -152,12 +219,16 @@ export function getDeliveryType(
 /**
  * Rule-to-badge-color mapping for UI components.
  */
-export function getRuleBadgeColor(rule: BillingRuleName): 'red' | 'orange' | 'purple' | 'blue' | 'gray' {
+export function getRuleBadgeColor(rule: BillingRuleName): 'red' | 'orange' | 'purple' | 'blue' | 'gray' | 'green' {
   switch (rule) {
     case 'Rush + Out of Town': return 'red'
     case 'Rush': return 'orange'
+    case 'Zone Rate — Rush': return 'orange'
+    case 'Zone Rate — Rush + Big': return 'red'
     case '2+ Big Packages — Out of Town': return 'purple'
     case '2+ Big Packages — In Town': return 'blue'
+    case 'Zone Rate — Big Parcel': return 'blue'
+    case 'Zone Rate — Regular': return 'green'
     case 'Regular':
     default: return 'gray'
   }
@@ -171,7 +242,8 @@ export function calculateBreakdown(
   isOutOfTown: boolean,
   isRush: boolean,
   rateCard: RateCard | null,
-  useConfirmed: boolean = false
+  useConfirmed: boolean = false,
+  distanceKm?: number | null
 ): {
   rule: BillingRuleName
   rate: number
@@ -179,16 +251,25 @@ export function calculateBreakdown(
   total: number
   bigPackageCount: number
   gstApplicable: boolean
+  distanceKm: number | null
+  zoneTier: RadiusPricingTier | null
 } {
-  const rule = getRuleApplied(manifest, isOutOfTown, isRush, useConfirmed)
+  const rule = getRuleApplied(manifest, isOutOfTown, isRush, useConfirmed, rateCard, distanceKm)
   const bigPackageCount = countBigPackages(manifest, useConfirmed)
-  if (!rateCard) {
-    return { rule, rate: 0, gst: 0, total: 0, bigPackageCount, gstApplicable: false }
+  
+  // Find zone tier if applicable
+  let zoneTier: RadiusPricingTier | null = null
+  if (rateCard?.useRadiusPricing && distanceKm != null && distanceKm > 0 && rateCard.radiusTiers?.length) {
+    zoneTier = findMatchingTier(distanceKm, rateCard.radiusTiers)
   }
-  const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard, useConfirmed)
+  
+  if (!rateCard) {
+    return { rule, rate: 0, gst: 0, total: 0, bigPackageCount, gstApplicable: false, distanceKm: distanceKm ?? null, zoneTier: null }
+  }
+  const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard, useConfirmed, distanceKm)
   const gst = calculateGST(rate, rateCard.gstApplicable)
   const total = calculateTotal(rate, gst)
-  return { rule, rate, gst, total, bigPackageCount, gstApplicable: rateCard.gstApplicable }
+  return { rule, rate, gst, total, bigPackageCount, gstApplicable: rateCard.gstApplicable, distanceKm: distanceKm ?? null, zoneTier }
 }
 
 /**
@@ -295,14 +376,15 @@ export function calculateEstimatedCost(
   manifest: ManifestItem[],
   isOutOfTown: boolean,
   isRush: boolean,
-  rateCard: RateCard | null
+  rateCard: RateCard | null,
+  distanceKm?: number | null
 ): { rate: number; gst: number; total: number } {
   if (!rateCard) {
     // No rate card set — callers must handle this state explicitly (e.g. warn).
     return { rate: 0, gst: 0, total: 0 }
   }
 
-  const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard)
+  const rate = calculateRate(manifest, isOutOfTown, isRush, rateCard, false, distanceKm)
   const gst = calculateGST(rate, rateCard.gstApplicable)
   return { rate, gst, total: rate + gst }
 }
