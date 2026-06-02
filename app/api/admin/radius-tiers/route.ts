@@ -1,6 +1,17 @@
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+
+// Force dynamic - this route requires runtime env vars
+export const dynamic = 'force-dynamic'
+
+// Lazy initialization to avoid build-time errors
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 interface RadiusTierInput {
   maxDistanceKm: number
@@ -13,15 +24,7 @@ interface RadiusTierInput {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify user is authenticated using the regular server client
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Use admin client to bypass RLS for data operations
-    const adminClient = createAdminClient()
+    const adminClient = getSupabaseAdmin()
 
     const { locationId, tiers } = await request.json() as {
       locationId: string
@@ -95,8 +98,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Use admin client to bypass RLS
-    const adminClient = createAdminClient()
+    const adminClient = getSupabaseAdmin()
     
     const { searchParams } = new URL(request.url)
     const locationId = searchParams.get('locationId')
