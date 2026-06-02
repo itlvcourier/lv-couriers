@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 interface RadiusTierInput {
   maxDistanceKm: number
@@ -12,13 +13,15 @@ interface RadiusTierInput {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify user is authenticated using the regular server client
     const supabase = await createClient()
-    
-    // Check if user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Use admin client to bypass RLS for data operations
+    const adminClient = createAdminClient()
 
     const { locationId, tiers } = await request.json() as {
       locationId: string
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Delete existing tiers for this location
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await adminClient
       .from('radius_pricing_tiers')
       .delete()
       .eq('location_id', locationId)
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
       sort_order: index,
     }))
 
-    const { data, error: insertError } = await supabase
+    const { data, error: insertError } = await adminClient
       .from('radius_pricing_tiers')
       .insert(insertData)
       .select()
@@ -92,7 +95,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    // Use admin client to bypass RLS
+    const adminClient = createAdminClient()
     
     const { searchParams } = new URL(request.url)
     const locationId = searchParams.get('locationId')
@@ -101,7 +105,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'locationId is required' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await adminClient
       .from('radius_pricing_tiers')
       .select('*')
       .eq('location_id', locationId)
