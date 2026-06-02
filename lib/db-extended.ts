@@ -355,11 +355,44 @@ export async function loadAllDrivers(): Promise<Driver[]> {
 
 export async function loadAllRateCards(): Promise<RateCard[]> {
   const supabase = createClient()
-  const { data, error } = await supabase
+  
+  // Fetch rate cards
+  const { data: rateCardsData, error: rateCardsError } = await supabase
     .from('rate_cards')
-    .select('*, radius_pricing_tiers(*)')
-  if (error) throw error
-  return (data || []).map(mapRateCardRow)
+    .select('*')
+  if (rateCardsError) throw rateCardsError
+  
+  if (!rateCardsData || rateCardsData.length === 0) return []
+  
+  // Get all unique location IDs
+  const locationIds = [...new Set(rateCardsData.map(rc => rc.location_id))]
+  
+  // Fetch all radius tiers for these locations
+  const { data: tiersData, error: tiersError } = await supabase
+    .from('radius_pricing_tiers')
+    .select('*')
+    .in('location_id', locationIds)
+    .order('sort_order', { ascending: true })
+  
+  if (tiersError) {
+    console.error('Failed to load radius tiers:', tiersError.message)
+  }
+  
+  // Group tiers by location_id
+  const tiersByLocation = new Map<string, typeof tiersData>()
+  for (const tier of (tiersData || [])) {
+    const locationId = tier.location_id as string
+    if (!tiersByLocation.has(locationId)) {
+      tiersByLocation.set(locationId, [])
+    }
+    tiersByLocation.get(locationId)!.push(tier)
+  }
+  
+  // Map rate cards with their tiers
+  return rateCardsData.map(row => {
+    const tiers = tiersByLocation.get(row.location_id as string) || []
+    return mapRateCardRow({ ...row, radius_pricing_tiers: tiers })
+  })
 }
 
 export async function loadSettings(): Promise<SystemSettings> {
