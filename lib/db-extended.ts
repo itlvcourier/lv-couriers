@@ -557,6 +557,7 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     notify_recipient_sms: rateCard.notifyRecipientSms,
     // billing_email and backup_email are stored on business_locations, not rate_cards
     contract_notes: rateCard.contractNotes,
+    use_radius_pricing: rateCard.useRadiusPricing,
     updated_at: new Date().toISOString(),
   }
   const { data, error } = await supabase
