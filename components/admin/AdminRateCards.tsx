@@ -474,18 +474,30 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                   className="shrink-0 text-xs h-7"
                   onClick={async () => {
                     try {
+                      console.log('[v0] Geocoding address:', location.address)
                       const res = await fetch(`/api/maps/geocode?address=${encodeURIComponent(location.address)}`)
                       if (res.ok) {
                         const data = await res.json()
+                        console.log('[v0] Geocode response:', data)
                         if (data.lat && data.lng) {
+                          console.log('[v0] Updating location coordinates:', location.id, data.lat, data.lng)
                           const { updateLocationCoordinates } = await import('@/lib/db-extended')
-                          await updateLocationCoordinates(location.id, data.lat, data.lng)
-                          toast.success('Location geocoded successfully! Please reopen this dialog.')
+                          const success = await updateLocationCoordinates(location.id, data.lat, data.lng)
+                          console.log('[v0] Update result:', success)
+                          if (success) {
+                            toast.success('Location geocoded successfully! Please reopen this dialog.')
+                          } else {
+                            toast.error('Failed to save coordinates to database.')
+                          }
                         } else {
                           toast.error('Could not geocode address. Please check the address is correct.')
                         }
+                      } else {
+                        console.log('[v0] Geocode API failed:', res.status)
+                        toast.error('Geocode API failed')
                       }
                     } catch (e) {
+                      console.error('[v0] Geocode error:', e)
                       toast.error('Failed to geocode location')
                     }
                   }}
