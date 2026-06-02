@@ -32,6 +32,8 @@ import {
   UserRound,
   BookmarkPlus,
   CheckCircle2,
+  Ruler,
+  Loader2,
 } from 'lucide-react'
 import type { ManifestItem, Delivery, SavedContact } from '@/lib/types'
 
@@ -106,15 +108,11 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   // Live billing preview — uses postedQty (not yet picked up) and recalculates
   // every time the manifest or rush/OOT flags change.
   const rateCard = effectiveLocationId ? getRateCardForLocation(effectiveLocationId) : null
+  const isDistanceBased = rateCard?.useRadiusPricing && (rateCard.radiusTiers?.length ?? 0) > 0
   
-  // Calculate distance when radius pricing is enabled and we have coordinates
+  // Calculate distance when we have both pickup and dropoff coordinates
+  // This runs for all businesses (to show distance) but is also used for billing when radius pricing is enabled
   const calculateDistance = useCallback(async () => {
-    // Only calculate if radius pricing is enabled
-    if (!rateCard?.useRadiusPricing) {
-      setDistanceKm(null)
-      return
-    }
-    
     // Need both pickup and dropoff coordinates
     const originLat = location?.lat ?? form.pickupLat
     const originLng = location?.lng ?? form.pickupLng
@@ -143,7 +141,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
     } finally {
       setIsCalculatingDistance(false)
     }
-  }, [rateCard?.useRadiusPricing, location?.lat, location?.lng, form.pickupLat, form.pickupLng, form.dropoffLat, form.dropoffLng])
+  }, [location?.lat, location?.lng, form.pickupLat, form.pickupLng, form.dropoffLat, form.dropoffLng])
   
   // Trigger distance calculation when dropoff coordinates change
   useEffect(() => {
@@ -535,6 +533,25 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 required
               />
             </div>
+
+            {/* Distance Display */}
+            {(distanceKm !== null || isCalculatingDistance) && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border">
+                <Ruler className="w-4 h-4 text-muted-foreground" />
+                {isCalculatingDistance ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Calculating distance...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm font-medium">{distanceKm?.toFixed(1)} km</span>
+                    <span className="text-sm text-muted-foreground">from pickup to delivery</span>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="dropoffPostalCode">Delivery Postal Code</Label>
               <Input
