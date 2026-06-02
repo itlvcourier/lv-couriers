@@ -461,11 +461,38 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
         {formData.useRadiusPricing && (
           <CardContent className="space-y-4">
             {!location.lat && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0" />
-                <p className="text-xs text-yellow-400">
-                  Store location not geocoded. Distance pricing requires store coordinates. Save the business address to auto-geocode.
-                </p>
+              <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0" />
+                  <p className="text-xs text-yellow-400">
+                    Store location not geocoded. Distance pricing requires store coordinates.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 text-xs h-7"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/maps/geocode?address=${encodeURIComponent(location.address)}`)
+                      if (res.ok) {
+                        const data = await res.json()
+                        if (data.lat && data.lng) {
+                          const { updateLocationCoordinates } = await import('@/lib/db-extended')
+                          await updateLocationCoordinates(location.id, data.lat, data.lng)
+                          toast.success('Location geocoded successfully! Please reopen this dialog.')
+                        } else {
+                          toast.error('Could not geocode address. Please check the address is correct.')
+                        }
+                      }
+                    } catch (e) {
+                      toast.error('Failed to geocode location')
+                    }
+                  }}
+                >
+                  <MapPin className="h-3 w-3 mr-1" />
+                  Geocode Now
+                </Button>
               </div>
             )}
             
