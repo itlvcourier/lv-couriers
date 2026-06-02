@@ -1586,19 +1586,15 @@ export async function updateLocationCoordinates(
   lat: number,
   lng: number
 ): Promise<boolean> {
-  console.log('[v0] updateLocationCoordinates called with:', { locationId, lat, lng })
   const supabase = createClient()
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('business_locations')
     .update({ lat, lng })
     .eq('id', locationId)
-    .select()
-
-  console.log('[v0] Supabase update result:', { data, error })
 
   if (error) {
-    console.error('[v0] Failed to update location coordinates:', error.message)
+    console.error('Failed to update location coordinates:', error.message)
     return false
   }
 
