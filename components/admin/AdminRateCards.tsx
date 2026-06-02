@@ -229,7 +229,8 @@ interface RadiusTierInput {
   rateRush: number
   rateBigParcel: number
   rateRushBig: number
-  label: string
+  label: string | null
+  sortOrder?: number
 }
 
 function RateCardEditor({ business, location, existingRateCard, onSave, onClose }: RateCardEditorProps) {
@@ -320,7 +321,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     setRadiusTiers(radiusTiers.filter((_, i) => i !== index))
   }
 
-  const updateTier = (index: number, field: keyof RadiusTierInput, value: number | string) => {
+  const updateTier = (index: number, field: keyof RadiusTierInput, value: number | string | null) => {
     const updated = [...radiusTiers]
     updated[index] = { ...updated[index], [field]: value }
     setRadiusTiers(updated)
@@ -491,8 +492,8 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                         <tr key={index} className="border-b border-border/30">
                           <td className="py-2 px-1">
                             <Input
-                              value={tier.label}
-                              onChange={(e) => updateTier(index, 'label', e.target.value)}
+                              value={tier.label ?? ''}
+                              onChange={(e) => updateTier(index, 'label', e.target.value || null)}
                               className="w-16 h-7 text-xs"
                               placeholder="Zone"
                             />

@@ -348,6 +348,7 @@ export interface RadiusPricingTier {
   rateRegular: number
   rateRush: number
   rateBigParcel: number
+  rateRushBig: number
   label: string | null
   sortOrder: number
 }

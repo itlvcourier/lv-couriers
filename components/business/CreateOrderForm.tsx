@@ -349,6 +349,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       isOutOfTown: form.isOutOfTown,
       requireSignature: form.requireSignature,
       requirePhoto: form.requirePhoto,
+      distanceKm: distanceKm,
     })
 
     resetForm()

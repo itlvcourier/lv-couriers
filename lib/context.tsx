@@ -895,6 +895,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isOutOfTown: data.isOutOfTown ?? false,
         requireSignature: data.requireSignature ?? false,
         requirePhoto: data.requirePhoto ?? true,
+        distanceKm: data.distanceKm ?? null,
         manifest: (data.manifest || []).map(m => ({
           type: m.type,
           quantity: m.postedQty,

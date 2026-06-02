@@ -97,6 +97,7 @@ export function mapRadiusTierRow(row: Row): RadiusPricingTier {
     rateRegular: Number(row.rate_regular) || 0,
     rateRush: Number(row.rate_rush) || 0,
     rateBigParcel: Number(row.rate_big_parcel) || 0,
+    rateRushBig: Number(row.rate_rush_big) || 0,
     label: (row.label as string | null) ?? null,
     sortOrder: Number(row.sort_order) || 0,
   }
@@ -429,6 +430,7 @@ export async function createDeliveryInDb(input: {
   requireSignature?: boolean
   requirePhoto?: boolean
   manifest: Array<{ type: ManifestItem['type']; quantity: number; notes?: string }>
+  distanceKm?: number | null
 }): Promise<Delivery> {
   const supabase = createClient()
   const { data: delivery, error } = await supabase
@@ -456,6 +458,7 @@ export async function createDeliveryInDb(input: {
       is_out_of_town: input.isOutOfTown,
       require_signature: input.requireSignature ?? false,
       require_photo: input.requirePhoto ?? true,
+      distance_km: input.distanceKm ?? null,
       posted_at: new Date().toISOString(),
       retry_count: 0,
     })
@@ -1483,6 +1486,7 @@ export async function upsertRadiusTier(
       rate_regular: tier.rateRegular,
       rate_rush: tier.rateRush,
       rate_big_parcel: tier.rateBigParcel,
+      rate_rush_big: tier.rateRushBig,
       label: tier.label,
       sort_order: tier.sortOrder,
     })
@@ -1540,7 +1544,7 @@ export async function deleteAllRadiusTiers(locationId: string): Promise<boolean>
  */
 export async function saveRadiusTiers(
   locationId: string,
-  tiers: Array<Omit<RadiusPricingTier, 'id' | 'locationId'>>
+  tiers: Array<Omit<RadiusPricingTier, 'id' | 'locationId' | 'sortOrder'> & { sortOrder?: number }>
 ): Promise<RadiusPricingTier[]> {
   const supabase = createClient()
 
@@ -1559,6 +1563,7 @@ export async function saveRadiusTiers(
         rate_regular: tier.rateRegular,
         rate_rush: tier.rateRush,
         rate_big_parcel: tier.rateBigParcel,
+        rate_rush_big: tier.rateRushBig,
         label: tier.label,
         sort_order: index,
       }))

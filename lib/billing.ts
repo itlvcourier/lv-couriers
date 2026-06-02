@@ -113,7 +113,8 @@ export function calculateRate(
   ) {
     const tier = findMatchingTier(distanceKm, rateCard.radiusTiers)
     if (tier) {
-      // Rush takes highest priority, then big packages
+      // Rush + Big packages combo gets highest rate
+      if (isRush && hasBigPackages) return tier.rateRushBig
       if (isRush) return tier.rateRush
       if (hasBigPackages) return tier.rateBigParcel
       return tier.rateRegular
