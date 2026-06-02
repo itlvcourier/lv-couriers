@@ -22,7 +22,7 @@ import { AlertTriangle, Building2, Check, ChevronRight, DollarSign, FileText, X,
 import { toast } from 'sonner'
 import { CostCalculator } from '@/components/shared/CostCalculator'
 import { BillingScenarioTests } from './BillingScenarioTests'
-import { saveRadiusTiers, getRadiusTiers } from '@/lib/db-extended'
+import { getRadiusTiers } from '@/lib/db-extended'
 
 export function AdminRateCards() {
   const { businesses, rateCards, saveRateCard, updateLocationEmails, updateLocationCoords } = useApp()
@@ -192,13 +192,31 @@ export function AdminRateCards() {
               location={selectedLocation.location}
               existingRateCard={rateCards.find(rc => rc.locationId === selectedLocation.location.id) || null}
               onSave={async (data, billingEmail, backupEmail, radiusTiers) => {
-                // Save radius tiers to DB first if radius pricing is enabled
+                // Save radius tiers via API (server-side to handle RLS)
                 let savedTiers: RadiusPricingTier[] = []
-                if (data.useRadiusPricing && radiusTiers.length > 0) {
-                  savedTiers = await saveRadiusTiers(selectedLocation.location.id, radiusTiers)
-                } else if (!data.useRadiusPricing) {
-                  // Clear tiers when disabled
-                  await saveRadiusTiers(selectedLocation.location.id, [])
+                try {
+                  const tiersToSave = data.useRadiusPricing ? radiusTiers : []
+                  const res = await fetch('/api/admin/radius-tiers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      locationId: selectedLocation.location.id,
+                      tiers: tiersToSave,
+                    }),
+                  })
+                  if (res.ok) {
+                    const result = await res.json()
+                    savedTiers = result.tiers || []
+                  } else {
+                    const errData = await res.json()
+                    console.error('Failed to save tiers:', errData.error)
+                    toast.error('Failed to save distance zones: ' + errData.error)
+                    return
+                  }
+                } catch (e) {
+                  console.error('Error saving tiers:', e)
+                  toast.error('Failed to save distance zones')
+                  return
                 }
                 // Save rate card to rate_cards table (include tiers in local state)
                 saveRateCard(selectedLocation.location.id, {
