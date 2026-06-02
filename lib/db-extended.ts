@@ -1551,26 +1551,29 @@ export async function saveRadiusTiers(
 ): Promise<RadiusPricingTier[]> {
   const supabase = createClient()
 
-  // Delete existing tiers
-  await deleteAllRadiusTiers(locationId)
+  // Delete existing tiers first
+  const deleteResult = await deleteAllRadiusTiers(locationId)
+  console.log('[v0] Delete tiers result:', deleteResult, 'for location:', locationId)
 
   if (tiers.length === 0) return []
+
+  const insertData = tiers.map((tier, index) => ({
+    location_id: locationId,
+    max_distance_km: tier.maxDistanceKm,
+    rate_regular: tier.rateRegular,
+    rate_rush: tier.rateRush,
+    rate_big_parcel: tier.rateBigParcel,
+    rate_rush_big: tier.rateRushBig ?? 0,
+    label: tier.label || null,
+    sort_order: index,
+  }))
+  
+  console.log('[v0] Inserting tiers:', JSON.stringify(insertData, null, 2))
 
   // Insert new tiers
   const { data, error } = await supabase
     .from('radius_pricing_tiers')
-    .insert(
-      tiers.map((tier, index) => ({
-        location_id: locationId,
-        max_distance_km: tier.maxDistanceKm,
-        rate_regular: tier.rateRegular,
-        rate_rush: tier.rateRush,
-        rate_big_parcel: tier.rateBigParcel,
-        rate_rush_big: tier.rateRushBig,
-        label: tier.label,
-        sort_order: index,
-      }))
-    )
+    .insert(insertData)
     .select()
 
   if (error) {
