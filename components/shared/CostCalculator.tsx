@@ -258,6 +258,7 @@ export function RuleBadge({ rule }: { rule: BillingRuleName }) {
     orange: 'border-orange-500/40 bg-orange-500/15 text-orange-300',
     purple: 'border-purple-500/40 bg-purple-500/15 text-purple-300',
     blue: 'border-blue-500/40 bg-blue-500/15 text-blue-300',
+    green: 'border-green-500/40 bg-green-500/15 text-green-300',
     gray: 'border-[var(--border-color)] bg-[var(--bg-card)] text-muted-foreground',
   }
   return (

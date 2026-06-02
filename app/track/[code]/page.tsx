@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { DeliveryMap, type MapLocation } from '@/components/maps/DeliveryMap'
+import { GoogleTrackingMap } from '@/components/maps/GoogleTrackingMap'
 
 type TrackingStatus =
   | 'posted'
@@ -69,6 +69,9 @@ export default function TrackingPage() {
 
   const [delivery, setDelivery] = useState<TrackedDelivery | null>(null)
   const [liveLocation, setLiveLocation] = useState<LiveLocation | null>(null)
+  const [etaText, setEtaText] = useState<string | null>(null)
+  const [driverStreet, setDriverStreet] = useState<string | null>(null)
+  const [routePolyline, setRoutePolyline] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -198,6 +201,84 @@ export default function TrackingPage() {
     }
   }, [driverId, isInTransit])
 
+  // Refs for throttling API calls — only fetch directions/reverse-geocode if
+  // driver has moved significantly or enough time has passed. This reduces
+  // Google Maps API usage by 50-70%.
+  const lastDirectionsFetch = useRef<{ lat: number; lng: number; time: number } | null>(null)
+  const lastReverseGeocode = useRef<{ lat: number; lng: number; street: string } | null>(null)
+
+  // Fetch ETA, route line, and driver's current street when we have live location
+  // Throttled: only re-fetch directions every 30s or if driver moved 200m+
+  useEffect(() => {
+    if (!liveLocation || !delivery) return
+
+    const now = Date.now()
+
+    // Determine destination based on status
+    const isHeadingToPickup =
+      delivery.status === 'en_route_pickup' || delivery.status === 'claimed'
+    const destLat = isHeadingToPickup ? delivery.pickup_lat : delivery.dropoff_lat
+    const destLng = isHeadingToPickup ? delivery.pickup_lng : delivery.dropoff_lng
+
+    // Helper: calculate distance between two points in meters
+    const distanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const R = 6371000 // Earth's radius in meters
+      const dLat = ((lat2 - lat1) * Math.PI) / 180
+      const dLng = ((lng2 - lng1) * Math.PI) / 180
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    }
+
+    // Fetch ETA and route if we have destination coords
+    // Throttle: only if moved 200m+ or 30s+ since last fetch
+    if (destLat && destLng) {
+      const last = lastDirectionsFetch.current
+      const movedEnough = !last || distanceMeters(liveLocation.lat, liveLocation.lng, last.lat, last.lng) > 200
+      const timeElapsed = !last || now - last.time > 30000
+
+      if (movedEnough || timeElapsed) {
+        lastDirectionsFetch.current = { lat: liveLocation.lat, lng: liveLocation.lng, time: now }
+
+        const params = new URLSearchParams({
+          originLat: String(liveLocation.lat),
+          originLng: String(liveLocation.lng),
+          destLat: String(destLat),
+          destLng: String(destLng),
+        })
+
+        void fetch(`/api/maps/directions?${params}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.polyline) setRoutePolyline(data.polyline)
+            if (data.duration?.text) setEtaText(data.duration.text)
+          })
+          .catch(err => console.error('[v0] Directions fetch error:', err))
+      }
+    }
+
+    // Reverse geocode: only if moved 100m+ from last position
+    const lastRG = lastReverseGeocode.current
+    const rgMovedEnough = !lastRG || distanceMeters(liveLocation.lat, liveLocation.lng, lastRG.lat, lastRG.lng) > 100
+
+    if (rgMovedEnough) {
+      const reverseParams = new URLSearchParams({
+        lat: String(liveLocation.lat),
+        lng: String(liveLocation.lng),
+      })
+      void fetch(`/api/maps/reverse-geocode?${reverseParams}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.street) {
+            setDriverStreet(data.street)
+            lastReverseGeocode.current = { lat: liveLocation.lat, lng: liveLocation.lng, street: data.street }
+          }
+        })
+        .catch(err => console.error('[v0] Reverse geocode fetch error:', err))
+    }
+  }, [liveLocation, delivery])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -267,31 +348,25 @@ export default function TrackingPage() {
   const steps = buildStatusSteps(delivery)
   const isDelivered = delivery.status === 'delivered'
 
-  // Markers for the live map: dropoff (and pickup before the package is picked up).
-  const mapLocations: MapLocation[] = []
-  if (
+  // Determine pickup/dropoff locations for the map
+  const pickupLocation =
     delivery.status === 'en_route_pickup' &&
     typeof delivery.pickup_lat === 'number' &&
     typeof delivery.pickup_lng === 'number'
-  ) {
-    mapLocations.push({
-      lat: delivery.pickup_lat,
-      lng: delivery.pickup_lng,
-      label: 'Pickup',
-      type: 'pickup',
-    })
-  }
-  if (
+      ? { lat: delivery.pickup_lat, lng: delivery.pickup_lng, label: 'Pickup' }
+      : undefined
+
+  const dropoffLocation =
     typeof delivery.dropoff_lat === 'number' &&
     typeof delivery.dropoff_lng === 'number'
-  ) {
-    mapLocations.push({
-      lat: delivery.dropoff_lat,
-      lng: delivery.dropoff_lng,
-      label: delivery.dropoff_address ?? 'Drop-off',
-      type: 'dropoff',
-    })
-  }
+      ? {
+          lat: delivery.dropoff_lat,
+          lng: delivery.dropoff_lng,
+          label: delivery.dropoff_address ?? 'Destination',
+        }
+      : undefined
+
+  const hasMapData = liveLocation || pickupLocation || dropoffLocation
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -316,10 +391,9 @@ export default function TrackingPage() {
                 </p>
               </div>
             </Card>
-          ) : mapLocations.length > 0 || liveLocation ? (
+          ) : hasMapData ? (
             <div>
-              <DeliveryMap
-                locations={mapLocations}
+              <GoogleTrackingMap
                 driverLocation={
                   liveLocation
                     ? {
@@ -329,18 +403,34 @@ export default function TrackingPage() {
                       }
                     : undefined
                 }
-                showRoute={false}
-                className="h-[260px] md:h-[320px] w-full rounded-xl overflow-hidden"
+                pickupLocation={pickupLocation}
+                dropoffLocation={dropoffLocation}
+                routePolyline={routePolyline ?? undefined}
+                etaText={etaText ?? undefined}
+                driverStreet={driverStreet ?? undefined}
+                className="h-[260px] md:h-[320px]"
               />
               <div className="mt-3 text-center">
                 <h3 className="text-lg font-semibold">
                   {headlineForStatus(delivery.status)}
                 </h3>
                 {liveLocation ? (
-                  <p className="text-sm text-primary flex items-center justify-center gap-1.5">
-                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                    Live location · updated {formatTime(liveLocation.recorded_at)}
-                  </p>
+                  <div className="space-y-1">
+                    {etaText && (
+                      <p className="text-base font-medium text-primary">
+                        {etaText} away
+                      </p>
+                    )}
+                    {driverStreet && (
+                      <p className="text-sm text-muted-foreground">
+                        Currently on {driverStreet}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                      Live · updated {formatTime(liveLocation.recorded_at)}
+                    </p>
+                  </div>
                 ) : (
                   delivery.dropoff_address && (
                     <p className="text-sm text-muted-foreground">

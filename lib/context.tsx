@@ -879,9 +879,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pickupAddress: data.pickupAddress || '',
         pickupArea: data.pickupArea || '',
         pickupPostalCode: data.pickupPostalCode ?? null,
+        pickupLat: data.pickupLat ?? null,
+        pickupLng: data.pickupLng ?? null,
         dropoffAddress: data.dropoffAddress || '',
         dropoffArea: data.dropoffArea || '',
         dropoffPostalCode: data.dropoffPostalCode ?? null,
+        dropoffLat: data.dropoffLat ?? null,
+        dropoffLng: data.dropoffLng ?? null,
         recipientName: data.recipientName ?? null,
         recipientPhone: data.recipientPhone ?? null,
         recipientNote: data.recipientNote ?? null,
@@ -891,6 +895,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isOutOfTown: data.isOutOfTown ?? false,
         requireSignature: data.requireSignature ?? false,
         requirePhoto: data.requirePhoto ?? true,
+        distanceKm: data.distanceKm ?? null,
         manifest: (data.manifest || []).map(m => ({
           type: m.type,
           quantity: m.postedQty,
@@ -917,6 +922,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deliveryId: saved.id }),
         }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
+
+        // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
+        // show map pins. This runs async and updates the row via realtime.
+        void fetch('/api/delivery/geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deliveryId: saved.id }),
+        }).catch(err => console.error('[v0] geocode failed', err))
       }),
       'postDelivery',
     )

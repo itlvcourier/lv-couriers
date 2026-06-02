@@ -30,6 +30,7 @@ import type {
   CustomerFeedback,
   DriverRatingsSummary,
   BusinessRatingsSummary,
+  RadiusPricingTier,
 } from './types'
 
 type Row = Record<string, unknown>
@@ -61,6 +62,8 @@ export function mapLocationRow(row: Row): BusinessLocation {
     contactName: (row.contact_name as string) || '',
     phone: (row.phone as string) || '',
     savedAddresses: [],
+    lat: row.lat != null ? Number(row.lat) : null,
+    lng: row.lng != null ? Number(row.lng) : null,
   }
 }
 
@@ -83,6 +86,20 @@ export function mapDriverRow(row: Row): Driver {
     inviteStatus: (row.invite_status as Driver['inviteStatus']) || 'active',
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
+  }
+}
+
+export function mapRadiusTierRow(row: Row): RadiusPricingTier {
+  return {
+    id: row.id as string,
+    locationId: row.location_id as string,
+    maxDistanceKm: Number(row.max_distance_km) || 0,
+    rateRegular: Number(row.rate_regular) || 0,
+    rateRush: Number(row.rate_rush) || 0,
+    rateBigParcel: Number(row.rate_big_parcel) || 0,
+    rateRushBig: Number(row.rate_rush_big) || 0,
+    label: (row.label as string | null) ?? null,
+    sortOrder: Number(row.sort_order) || 0,
   }
 }
 
@@ -113,6 +130,8 @@ export function mapRateCardRow(row: Row): RateCard {
     contractNotes: (row.contract_notes as string) || '',
     createdAt: (row.created_at as string) || new Date().toISOString(),
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
+    useRadiusPricing: !!row.use_radius_pricing,
+    radiusTiers: undefined, // Loaded separately when needed
   }
 }
 
@@ -188,6 +207,7 @@ export function mapDeliveryRow(row: Row): Delivery {
     cancellationStage: (row.cancellation_stage as Delivery['cancellationStage']) ?? null,
     cancellationFee: (row.cancellation_fee as number | null) ?? null,
     cancellationReason: (row.cancellation_reason as string | null) ?? null,
+    distanceKm: (row.distance_km as number | null) ?? null,
     tripId: (row.trip_id as string | null) ?? null,
     tripOrder: (row.trip_order as number | null) ?? null,
     // Admin assignment tracking
@@ -393,9 +413,13 @@ export async function createDeliveryInDb(input: {
   pickupAddress: string
   pickupArea: string
   pickupPostalCode?: string | null
+  pickupLat?: number | null
+  pickupLng?: number | null
   dropoffAddress: string
   dropoffArea: string
   dropoffPostalCode?: string | null
+  dropoffLat?: number | null
+  dropoffLng?: number | null
   recipientName?: string | null
   recipientPhone?: string | null
   recipientNote?: string | null
@@ -406,6 +430,7 @@ export async function createDeliveryInDb(input: {
   requireSignature?: boolean
   requirePhoto?: boolean
   manifest: Array<{ type: ManifestItem['type']; quantity: number; notes?: string }>
+  distanceKm?: number | null
 }): Promise<Delivery> {
   const supabase = createClient()
   const { data: delivery, error } = await supabase
@@ -417,9 +442,13 @@ export async function createDeliveryInDb(input: {
       pickup_address: input.pickupAddress,
       pickup_area: input.pickupArea,
       pickup_postal_code: input.pickupPostalCode ?? null,
+      pickup_lat: input.pickupLat ?? null,
+      pickup_lng: input.pickupLng ?? null,
       dropoff_address: input.dropoffAddress,
       dropoff_area: input.dropoffArea,
       dropoff_postal_code: input.dropoffPostalCode ?? null,
+      dropoff_lat: input.dropoffLat ?? null,
+      dropoff_lng: input.dropoffLng ?? null,
       recipient_name: input.recipientName ?? null,
       recipient_phone: input.recipientPhone ?? null,
       recipient_note: input.recipientNote ?? null,
@@ -429,6 +458,7 @@ export async function createDeliveryInDb(input: {
       is_out_of_town: input.isOutOfTown,
       require_signature: input.requireSignature ?? false,
       require_photo: input.requirePhoto ?? true,
+      distance_km: input.distanceKm ?? null,
       posted_at: new Date().toISOString(),
       retry_count: 0,
     })
@@ -1413,4 +1443,182 @@ export async function getBusinessRatingsSummary(businessId: string, locationId: 
   }
   
   return data ? mapBusinessRatingsSummaryRow(data) : null
+}
+
+// ============================================================================
+// Radius Pricing Tiers
+// ============================================================================
+
+/**
+ * Get all radius pricing tiers for a location
+ */
+export async function getRadiusTiers(locationId: string): Promise<RadiusPricingTier[]> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('radius_pricing_tiers')
+    .select('*')
+    .eq('location_id', locationId)
+    .order('max_distance_km', { ascending: true })
+
+  if (error) {
+    console.error('[v0] Failed to fetch radius tiers:', error.message)
+    return []
+  }
+
+  return (data || []).map(mapRadiusTierRow)
+}
+
+/**
+ * Create or update a radius pricing tier
+ */
+export async function upsertRadiusTier(
+  tier: Omit<RadiusPricingTier, 'id'> & { id?: string }
+): Promise<RadiusPricingTier | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('radius_pricing_tiers')
+    .upsert({
+      id: tier.id,
+      location_id: tier.locationId,
+      max_distance_km: tier.maxDistanceKm,
+      rate_regular: tier.rateRegular,
+      rate_rush: tier.rateRush,
+      rate_big_parcel: tier.rateBigParcel,
+      rate_rush_big: tier.rateRushBig,
+      label: tier.label,
+      sort_order: tier.sortOrder,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[v0] Failed to upsert radius tier:', error.message)
+    return null
+  }
+
+  return mapRadiusTierRow(data)
+}
+
+/**
+ * Delete a radius pricing tier
+ */
+export async function deleteRadiusTier(tierId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('radius_pricing_tiers')
+    .delete()
+    .eq('id', tierId)
+
+  if (error) {
+    console.error('[v0] Failed to delete radius tier:', error.message)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Delete all radius tiers for a location
+ */
+export async function deleteAllRadiusTiers(locationId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('radius_pricing_tiers')
+    .delete()
+    .eq('location_id', locationId)
+
+  if (error) {
+    console.error('[v0] Failed to delete radius tiers:', error.message)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Save all radius tiers for a location (replaces existing)
+ */
+export async function saveRadiusTiers(
+  locationId: string,
+  tiers: Array<Omit<RadiusPricingTier, 'id' | 'locationId' | 'sortOrder'> & { sortOrder?: number }>
+): Promise<RadiusPricingTier[]> {
+  const supabase = createClient()
+
+  // Delete existing tiers
+  await deleteAllRadiusTiers(locationId)
+
+  if (tiers.length === 0) return []
+
+  // Insert new tiers
+  const { data, error } = await supabase
+    .from('radius_pricing_tiers')
+    .insert(
+      tiers.map((tier, index) => ({
+        location_id: locationId,
+        max_distance_km: tier.maxDistanceKm,
+        rate_regular: tier.rateRegular,
+        rate_rush: tier.rateRush,
+        rate_big_parcel: tier.rateBigParcel,
+        rate_rush_big: tier.rateRushBig,
+        label: tier.label,
+        sort_order: index,
+      }))
+    )
+    .select()
+
+  if (error) {
+    console.error('[v0] Failed to save radius tiers:', error.message)
+    return []
+  }
+
+  return (data || []).map(mapRadiusTierRow)
+}
+
+/**
+ * Update business location coordinates
+ */
+export async function updateLocationCoordinates(
+  locationId: string,
+  lat: number,
+  lng: number
+): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('business_locations')
+    .update({ lat, lng })
+    .eq('id', locationId)
+
+  if (error) {
+    console.error('[v0] Failed to update location coordinates:', error.message)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Update delivery distance
+ */
+export async function updateDeliveryDistance(
+  deliveryId: string,
+  distanceKm: number
+): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('deliveries')
+    .update({ distance_km: distanceKm })
+    .eq('id', deliveryId)
+
+  if (error) {
+    console.error('[v0] Failed to update delivery distance:', error.message)
+    return false
+  }
+
+  return true
 }
