@@ -104,6 +104,7 @@ export function mapRadiusTierRow(row: Row): RadiusPricingTier {
 }
 
 export function mapRateCardRow(row: Row): RateCard {
+  const tiersData = (row as { radius_pricing_tiers?: Row[] }).radius_pricing_tiers
   return {
     id: row.id as string,
     businessId: row.business_id as string,
@@ -131,7 +132,7 @@ export function mapRateCardRow(row: Row): RateCard {
     createdAt: (row.created_at as string) || new Date().toISOString(),
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
     useRadiusPricing: !!row.use_radius_pricing,
-    radiusTiers: undefined, // Loaded separately when needed
+    radiusTiers: Array.isArray(tiersData) ? tiersData.map(mapRadiusTierRow) : undefined,
   }
 }
 
@@ -354,7 +355,9 @@ export async function loadAllDrivers(): Promise<Driver[]> {
 
 export async function loadAllRateCards(): Promise<RateCard[]> {
   const supabase = createClient()
-  const { data, error } = await supabase.from('rate_cards').select('*')
+  const { data, error } = await supabase
+    .from('rate_cards')
+    .select('*, radius_pricing_tiers(*)')
   if (error) throw error
   return (data || []).map(mapRateCardRow)
 }

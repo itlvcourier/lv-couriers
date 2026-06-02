@@ -192,17 +192,21 @@ export function AdminRateCards() {
               location={selectedLocation.location}
               existingRateCard={rateCards.find(rc => rc.locationId === selectedLocation.location.id) || null}
               onSave={async (data, billingEmail, backupEmail, radiusTiers) => {
-                // Save rate card to rate_cards table
-                saveRateCard(selectedLocation.location.id, data)
-                // Save billing emails to business_locations table (separate from rate card)
-                updateLocationEmails(selectedLocation.location.id, billingEmail, backupEmail || null)
-                // Save radius tiers if radius pricing is enabled
+                // Save radius tiers to DB first if radius pricing is enabled
+                let savedTiers: RadiusPricingTier[] = []
                 if (data.useRadiusPricing && radiusTiers.length > 0) {
-                  await saveRadiusTiers(selectedLocation.location.id, radiusTiers)
+                  savedTiers = await saveRadiusTiers(selectedLocation.location.id, radiusTiers)
                 } else if (!data.useRadiusPricing) {
                   // Clear tiers when disabled
                   await saveRadiusTiers(selectedLocation.location.id, [])
                 }
+                // Save rate card to rate_cards table (include tiers in local state)
+                saveRateCard(selectedLocation.location.id, {
+                  ...data,
+                  radiusTiers: data.useRadiusPricing ? savedTiers : undefined,
+                })
+                // Save billing emails to business_locations table (separate from rate card)
+                updateLocationEmails(selectedLocation.location.id, billingEmail, backupEmail || null)
                 toast.success('Rate card and billing info saved successfully')
                 setIsEditing(false)
               }}
