@@ -76,6 +76,7 @@ import {
   createInvoiceInDb,
   updateLocationBillingEmails,
   updateLocationCoordinates,
+  updateTripOrder,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -2536,14 +2537,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [trips, drivers])
 
-  const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
-    setTrips(prev => prev.map(t => {
-      if (t.id === tripId) {
-        return { ...t, order: newOrder }
-      }
-      return t
-    }))
-  }, [])
+const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
+  setTrips(prev => prev.map(t => {
+    if (t.id === tripId) {
+      return { ...t, order: newOrder }
+    }
+    return t
+  }))
+  // Persist to database
+  updateTripOrder(tripId, newOrder).catch(err => {
+    console.error('[v0] Failed to persist trip order:', err)
+  })
+}, [])
 
   const retryDelivery = useCallback((deliveryId: string) => {
     setDeliveries(prev => prev.map(d => {

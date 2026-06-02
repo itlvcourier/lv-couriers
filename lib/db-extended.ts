@@ -1661,3 +1661,34 @@ export async function updateDeliveryDistance(
 
   return true
 }
+
+/**
+ * Update trip order for deliveries
+ * @param tripId The trip ID
+ * @param orderedDeliveryIds Array of delivery IDs in the desired order
+ */
+export async function updateTripOrder(
+  tripId: string,
+  orderedDeliveryIds: string[]
+): Promise<boolean> {
+  const supabase = createClient()
+  
+  // Update each delivery's trip_order based on its position in the array
+  const updates = orderedDeliveryIds.map((deliveryId, index) => 
+    supabase
+      .from('deliveries')
+      .update({ trip_order: index })
+      .eq('id', deliveryId)
+      .eq('trip_id', tripId)
+  )
+  
+  const results = await Promise.all(updates)
+  const errors = results.filter(r => r.error)
+  
+  if (errors.length > 0) {
+    console.error('[v0] Failed to update trip order:', errors[0].error?.message)
+    return false
+  }
+  
+  return true
+}

@@ -20,10 +20,13 @@ import {
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, isWithinInterval } from 'date-fns'
 
 export function DriverEarnings() {
-  const { currentUser } = useApp()
+  const { currentUser, settings: appSettings } = useApp()
   const driverId = currentUser?.driverId || ''
 
-  // Fetch system settings to check if pay system is enabled
+  // Use app context settings for driverPayEnabled check
+  const isPayEnabled = appSettings.driverPayEnabled
+
+  // Fetch system settings for pay calculation rates
   const { data: settings, isLoading: settingsLoading } = useSWR('system-settings', getSystemSettings)
 
   // Fetch driver's deliveries
@@ -37,7 +40,8 @@ export function DriverEarnings() {
 
   // Calculate earnings based on settings
   const earnings = useMemo(() => {
-    if (!settings?.driver_pay_enabled) {
+    // Use app context setting for enabled check
+    if (!isPayEnabled || !settings) {
       return null
     }
 
@@ -117,7 +121,7 @@ export function DriverEarnings() {
   }
 
   // Show disabled message if pay system is off
-  if (!settings?.driver_pay_enabled) {
+  if (!isPayEnabled) {
     return (
       <div className="p-4 pb-24">
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
