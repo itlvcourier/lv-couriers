@@ -378,6 +378,22 @@ export function AdminBusinesses() {
       return
     }
 
+    // Geocode the address to get lat/lng for radius pricing
+    let lat: number | null = null
+    let lng: number | null = null
+    try {
+      const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(locationForm.address)}`)
+      if (geocodeRes.ok) {
+        const geocodeData = await geocodeRes.json()
+        if (geocodeData.lat && geocodeData.lng) {
+          lat = geocodeData.lat
+          lng = geocodeData.lng
+        }
+      }
+    } catch (e) {
+      console.error('[v0] Failed to geocode location address:', e)
+    }
+
     const supabase = createClient()
     const { error } = await supabase
       .from('business_locations')
@@ -390,6 +406,8 @@ export function AdminBusinesses() {
         backup_email: locationForm.backup_email || null,
         notes: locationForm.notes || null,
         is_active: true,
+        lat,
+        lng,
       })
 
     if (error) {
@@ -407,6 +425,22 @@ export function AdminBusinesses() {
   const handleUpdateLocation = async () => {
     if (!editingLocation) return
 
+    // Geocode the address to get lat/lng for radius pricing
+    let lat: number | null = null
+    let lng: number | null = null
+    try {
+      const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(editingLocation.address)}`)
+      if (geocodeRes.ok) {
+        const geocodeData = await geocodeRes.json()
+        if (geocodeData.lat && geocodeData.lng) {
+          lat = geocodeData.lat
+          lng = geocodeData.lng
+        }
+      }
+    } catch (e) {
+      console.error('[v0] Failed to geocode location address:', e)
+    }
+
     const supabase = createClient()
     const { error } = await supabase
       .from('business_locations')
@@ -416,6 +450,8 @@ export function AdminBusinesses() {
         contact_phone: editingLocation.contact_phone,
         billing_email: editingLocation.billing_email,
         backup_email: editingLocation.backup_email,
+        lat,
+        lng,
       })
       .eq('id', editingLocation.id)
 

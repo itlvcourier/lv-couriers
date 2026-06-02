@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useApp } from '@/lib/context'
 import { calculateBreakdown } from '@/lib/billing'
 import { BillingBreakdownCard } from '@/components/shared/CostCalculator'
@@ -100,10 +100,60 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   }
 
   const [form, setForm] = useState(initialFormState)
+  const [distanceKm, setDistanceKm] = useState<number | null>(null)
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
 
   // Live billing preview — uses postedQty (not yet picked up) and recalculates
   // every time the manifest or rush/OOT flags change.
   const rateCard = effectiveLocationId ? getRateCardForLocation(effectiveLocationId) : null
+  
+  // Calculate distance when radius pricing is enabled and we have coordinates
+  const calculateDistance = useCallback(async () => {
+    // Only calculate if radius pricing is enabled
+    if (!rateCard?.useRadiusPricing) {
+      setDistanceKm(null)
+      return
+    }
+    
+    // Need both pickup and dropoff coordinates
+    const originLat = location?.lat ?? form.pickupLat
+    const originLng = location?.lng ?? form.pickupLng
+    const destLat = form.dropoffLat
+    const destLng = form.dropoffLng
+    
+    if (!originLat || !originLng || !destLat || !destLng) {
+      setDistanceKm(null)
+      return
+    }
+    
+    setIsCalculatingDistance(true)
+    try {
+      const res = await fetch(
+        `/api/maps/distance?originLat=${originLat}&originLng=${originLng}&destLat=${destLat}&destLng=${destLng}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setDistanceKm(data.distanceKm)
+      } else {
+        setDistanceKm(null)
+      }
+    } catch (e) {
+      console.error('[v0] Failed to calculate distance:', e)
+      setDistanceKm(null)
+    } finally {
+      setIsCalculatingDistance(false)
+    }
+  }, [rateCard?.useRadiusPricing, location?.lat, location?.lng, form.pickupLat, form.pickupLng, form.dropoffLat, form.dropoffLng])
+  
+  // Trigger distance calculation when dropoff coordinates change
+  useEffect(() => {
+    if (form.dropoffLat && form.dropoffLng) {
+      calculateDistance()
+    } else {
+      setDistanceKm(null)
+    }
+  }, [form.dropoffLat, form.dropoffLng, calculateDistance])
+  
   const previewBreakdown = useMemo(() => {
     const previewManifest = [
       ...(form.smallPackages > 0
@@ -127,8 +177,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
           }]
         : []),
     ]
-    return calculateBreakdown(previewManifest, form.isOutOfTown, form.isRush, rateCard, false)
-  }, [form.smallPackages, form.bigPackages, form.isOutOfTown, form.isRush, rateCard])
+    return calculateBreakdown(previewManifest, form.isOutOfTown, form.isRush, rateCard, false, distanceKm)
+  }, [form.smallPackages, form.bigPackages, form.isOutOfTown, form.isRush, rateCard, distanceKm])
 
   const hasPackages = form.smallPackages + form.bigPackages > 0
 
