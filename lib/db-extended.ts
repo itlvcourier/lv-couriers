@@ -132,6 +132,7 @@ export function mapRateCardRow(row: Row): RateCard {
     createdAt: (row.created_at as string) || new Date().toISOString(),
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
     useRadiusPricing: !!row.use_radius_pricing,
+    radiusFallbackRate: Number(row.radius_fallback_rate) || 15, // Default fallback rate
     radiusTiers: Array.isArray(tiersData) ? tiersData.map(mapRadiusTierRow) : undefined,
   }
 }
@@ -558,6 +559,7 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     // billing_email and backup_email are stored on business_locations, not rate_cards
     contract_notes: rateCard.contractNotes,
     use_radius_pricing: rateCard.useRadiusPricing,
+    radius_fallback_rate: rateCard.radiusFallbackRate ?? 15,
     updated_at: new Date().toISOString(),
   }
   const { data, error } = await supabase

@@ -271,6 +271,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     cancelEnRoute: existingRateCard?.cancelEnRoute ?? 5,
     contractNotes: existingRateCard?.contractNotes || '',
     useRadiusPricing: existingRateCard?.useRadiusPricing ?? false,
+    radiusFallbackRate: existingRateCard?.radiusFallbackRate ?? 15,
   })
   
   // Radius pricing tiers
@@ -648,8 +649,31 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                   Add Distance Zone
                 </Button>
                 
+                {/* Fallback Rate */}
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="fallbackRate" className="text-sm font-medium">Fallback Rate</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Used when distance cannot be calculated (e.g., invalid address)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-muted-foreground">$</span>
+                      <Input
+                        id="fallbackRate"
+                        type="number"
+                        step="0.50"
+                        value={formData.radiusFallbackRate}
+                        onChange={(e) => setFormData({ ...formData, radiusFallbackRate: parseFloat(e.target.value) || 0 })}
+                        className="w-20 h-8 text-sm text-center"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
                 <p className="text-xs text-muted-foreground">
-                  Deliveries beyond the last zone use that zone&apos;s rates. 
+                  Deliveries beyond the last zone use that zone&apos;s rates.
                   Distance is calculated as driving distance from store to delivery address.
                 </p>
               </div>
