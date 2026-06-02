@@ -1552,8 +1552,7 @@ export async function saveRadiusTiers(
   const supabase = createClient()
 
   // Delete existing tiers first
-  const deleteResult = await deleteAllRadiusTiers(locationId)
-  console.log('[v0] Delete tiers result:', deleteResult, 'for location:', locationId)
+  await deleteAllRadiusTiers(locationId)
 
   if (tiers.length === 0) return []
 
@@ -1567,8 +1566,6 @@ export async function saveRadiusTiers(
     label: tier.label || null,
     sort_order: index,
   }))
-  
-  console.log('[v0] Inserting tiers:', JSON.stringify(insertData, null, 2))
 
   // Insert new tiers
   const { data, error } = await supabase
@@ -1577,7 +1574,7 @@ export async function saveRadiusTiers(
     .select()
 
   if (error) {
-    console.error('[v0] Failed to save radius tiers:', error.message)
+    console.error('Failed to save radius tiers:', error.message)
     return []
   }
 
