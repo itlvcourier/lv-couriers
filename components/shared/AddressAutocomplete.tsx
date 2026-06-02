@@ -5,11 +5,21 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { MapPin, Loader2 } from 'lucide-react'
 
+export interface AddressComponents {
+  streetNumber?: string
+  streetName?: string
+  city?: string
+  province?: string
+  postalCode?: string
+  country?: string
+}
+
 export interface AddressResult {
   address: string
   placeId: string
   lat?: number
   lng?: number
+  components?: AddressComponents
 }
 
 interface AddressAutocompleteProps {
@@ -22,6 +32,35 @@ interface AddressAutocompleteProps {
   id?: string
   name?: string
   required?: boolean
+}
+
+/**
+ * Parse Google Places address_components into a structured object
+ */
+function parseAddressComponents(
+  components: google.maps.GeocoderAddressComponent[]
+): AddressComponents {
+  const result: AddressComponents = {}
+  
+  for (const component of components) {
+    const types = component.types
+    
+    if (types.includes('street_number')) {
+      result.streetNumber = component.long_name
+    } else if (types.includes('route')) {
+      result.streetName = component.long_name
+    } else if (types.includes('locality')) {
+      result.city = component.long_name
+    } else if (types.includes('administrative_area_level_1')) {
+      result.province = component.short_name
+    } else if (types.includes('postal_code')) {
+      result.postalCode = component.long_name
+    } else if (types.includes('country')) {
+      result.country = component.short_name
+    }
+  }
+  
+  return result
 }
 
 /**
@@ -43,6 +82,7 @@ export function AddressAutocomplete({
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSelectingPlace, setIsSelectingPlace] = useState(false)
 
   // Load Google Maps script
   useEffect(() => {
@@ -90,7 +130,7 @@ export function AddressAutocomplete({
 
     const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: { country: 'ca' }, // Restrict to Canada
-      fields: ['formatted_address', 'place_id', 'geometry'],
+      fields: ['formatted_address', 'place_id', 'geometry', 'address_components'],
       types: ['address'],
     })
 
@@ -98,15 +138,27 @@ export function AddressAutocomplete({
       const place = autocomplete.getPlace()
       if (!place.formatted_address) return
 
+      // Parse address components
+      const components = place.address_components 
+        ? parseAddressComponents(place.address_components)
+        : undefined
+
       const result: AddressResult = {
         address: place.formatted_address,
         placeId: place.place_id || '',
         lat: place.geometry?.location?.lat(),
         lng: place.geometry?.location?.lng(),
+        components,
       }
 
+      // Mark that we're selecting a place (to prevent form submission)
+      setIsSelectingPlace(true)
+      
       onChange(result.address)
       onSelect?.(result)
+      
+      // Reset the flag after a short delay
+      setTimeout(() => setIsSelectingPlace(false), 100)
     })
 
     autocompleteRef.current = autocomplete
@@ -120,6 +172,22 @@ export function AddressAutocomplete({
     [onChange],
   )
 
+  // Prevent form submission when Enter is pressed while suggestions are showing
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Check if the autocomplete dropdown is open (pac-container is visible)
+      const pacContainer = document.querySelector('.pac-container')
+      const isDropdownVisible = pacContainer && 
+        getComputedStyle(pacContainer).display !== 'none' &&
+        pacContainer.querySelectorAll('.pac-item').length > 0
+      
+      if (isDropdownVisible || isSelectingPlace) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+  }, [isSelectingPlace])
+
   return (
     <div className="relative">
       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -130,6 +198,7 @@ export function AddressAutocomplete({
         type="text"
         value={value}
         onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled || isLoading}
         required={required}

@@ -412,14 +412,16 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               <AddressAutocomplete
                 id="pickupAddress"
                 value={form.pickupAddress}
-                onChange={(value) => setForm({ ...form, pickupAddress: value, pickupLat: null, pickupLng: null })}
+                onChange={(value) => setForm(prev => ({ ...prev, pickupAddress: value }))}
                 onSelect={(result: AddressResult) => {
-                  setForm({
-                    ...form,
+                  setForm(prev => ({
+                    ...prev,
                     pickupAddress: result.address,
                     pickupLat: result.lat ?? null,
                     pickupLng: result.lng ?? null,
-                  })
+                    // Auto-fill postal code if available from address components
+                    pickupPostalCode: result.components?.postalCode || prev.pickupPostalCode,
+                  }))
                 }}
                 placeholder="Enter pickup address"
                 required
@@ -518,14 +520,16 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               <AddressAutocomplete
                 id="dropoffAddress"
                 value={form.dropoffAddress}
-                onChange={(value) => setForm({ ...form, dropoffAddress: value, dropoffLat: null, dropoffLng: null })}
+                onChange={(value) => setForm(prev => ({ ...prev, dropoffAddress: value }))}
                 onSelect={(result: AddressResult) => {
-                  setForm({
-                    ...form,
+                  setForm(prev => ({
+                    ...prev,
                     dropoffAddress: result.address,
                     dropoffLat: result.lat ?? null,
                     dropoffLng: result.lng ?? null,
-                  })
+                    // Auto-fill postal code if available from address components
+                    dropoffPostalCode: result.components?.postalCode || prev.dropoffPostalCode,
+                  }))
                 }}
                 placeholder="Enter delivery address"
                 required
