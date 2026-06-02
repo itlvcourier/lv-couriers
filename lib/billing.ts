@@ -24,6 +24,7 @@ export const DEFAULT_RATE_CARD_VALUES = {
   notifyPaymentReminder: true,
   notifyRecipientSms: true,
   useRadiusPricing: false,
+  radiusFallbackRate: 15,
 } as const
 
 /**
