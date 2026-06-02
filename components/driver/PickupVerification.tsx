@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { X, Package, AlertCircle, CheckCircle, Navigation, Zap, Camera } from 'lucide-react'
+import { X, Package, AlertCircle, CheckCircle, Navigation, Zap, Camera, Ruler } from 'lucide-react'
 import type { Delivery, PickupVerification as VerificationType, ManifestItem } from '@/lib/types'
-import { calculateBreakdown } from '@/lib/billing'
+import { calculateBreakdown, findMatchingTier } from '@/lib/billing'
 import { RuleBadge } from '@/components/shared/CostCalculator'
 import { CameraCapture } from '@/components/shared/CameraCapture'
 
@@ -35,6 +35,10 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
   )
   const [hasDiscrepancy, setHasDiscrepancy] = useState(false)
 
+  // Check if this rate card uses distance-based pricing
+  const isDistanceBased = rateCard?.useRadiusPricing && (rateCard.radiusTiers?.length ?? 0) > 0
+  const distanceKm = delivery.distanceKm ?? null
+
   // Build a pseudo-manifest for "confirmed" using the driver's current inputs.
   const confirmedManifest: ManifestItem[] = useMemo(
     () =>
@@ -46,19 +50,26 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
   )
 
   // OOT for billing = delivery-level flag OR any per-item OOT toggle set at pickup.
-  const effectiveOot =
-    delivery.isOutOfTown ||
-    Object.values(verifications).some(v => v?.outOfTown === true)
+  // Note: For distance-based pricing, OOT toggle is ignored - distance determines the rate
+  const effectiveOot = isDistanceBased 
+    ? false 
+    : (delivery.isOutOfTown || Object.values(verifications).some(v => v?.outOfTown === true))
 
   const postedBreakdown = useMemo(
-    () => calculateBreakdown(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, false),
-    [delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard],
+    () => calculateBreakdown(delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, false, isDistanceBased ? distanceKm : null),
+    [delivery.manifest, delivery.isOutOfTown, delivery.isUrgent, rateCard, isDistanceBased, distanceKm],
   )
 
   const confirmedBreakdown = useMemo(
-    () => calculateBreakdown(confirmedManifest, effectiveOot, delivery.isUrgent, rateCard, true),
-    [confirmedManifest, effectiveOot, delivery.isUrgent, rateCard],
+    () => calculateBreakdown(confirmedManifest, effectiveOot, delivery.isUrgent, rateCard, true, isDistanceBased ? distanceKm : null),
+    [confirmedManifest, effectiveOot, delivery.isUrgent, rateCard, isDistanceBased, distanceKm],
   )
+
+  // Get matched tier for display
+  const matchedTier = useMemo(() => {
+    if (!isDistanceBased || !rateCard?.radiusTiers || distanceKm === null) return null
+    return findMatchingTier(distanceKm, rateCard.radiusTiers)
+  }, [isDistanceBased, distanceKm, rateCard?.radiusTiers])
 
   const ruleChanged = postedBreakdown.rule !== confirmedBreakdown.rule
   const rateChanged = postedBreakdown.rate !== confirmedBreakdown.rate
@@ -300,20 +311,22 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
                 )}
               </div>
 
-              {/* Out of town toggle */}
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id={`oot-${item.id}`}
-                  checked={verifications[item.id]?.outOfTown || false}
-                  onCheckedChange={(checked) => handleOutOfTownToggle(item.id, checked as boolean)}
-                />
-                <label 
-                  htmlFor={`oot-${item.id}`} 
-                  className="text-sm text-muted-foreground cursor-pointer"
-                >
-                  Out of town delivery
-                </label>
-              </div>
+              {/* Out of town toggle - hidden for distance-based pricing */}
+              {!isDistanceBased && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`oot-${item.id}`}
+                    checked={verifications[item.id]?.outOfTown || false}
+                    onCheckedChange={(checked) => handleOutOfTownToggle(item.id, checked as boolean)}
+                  />
+                  <label 
+                    htmlFor={`oot-${item.id}`} 
+                    className="text-sm text-muted-foreground cursor-pointer"
+                  >
+                    Out of town delivery
+                  </label>
+                </div>
+              )}
             </div>
           ))}
 
@@ -354,6 +367,16 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
                   <RuleBadge rule={confirmedBreakdown.rule} />
                 </span>
               </div>
+
+              {/* Distance info for distance-based pricing */}
+              {isDistanceBased && distanceKm !== null && matchedTier && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Ruler className="w-4 h-4" />
+                  <span>{distanceKm.toFixed(1)} km</span>
+                  <span className="text-foreground">&middot;</span>
+                  <span className="text-foreground">{matchedTier.label || `Up to ${matchedTier.maxDistanceKm}km`}</span>
+                </div>
+              )}
 
               {(ruleChanged || rateChanged) ? (
                 <div className="space-y-2 text-sm">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -20,10 +20,15 @@ export default function ResetPasswordPage() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [isValidSession, setIsValidSession] = useState<boolean | null>(null)
   const router = useRouter()
-  const supabase = createClient()
+  
+  // Create Supabase client inside the component to avoid SSR issues
+  const supabase = useMemo(() => createClient(), [])
 
   // Check if we have a valid recovery session
   useEffect(() => {
+    // Guard against SSR - supabase might be null during prerender
+    if (!supabase) return
+    
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       
@@ -36,7 +41,7 @@ export default function ResetPasswordPage() {
     }
     
     checkSession()
-  }, [supabase.auth])
+  }, [supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

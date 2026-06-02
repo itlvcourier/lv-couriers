@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useApp } from '@/lib/context'
 import type { Invoice, InvoiceLine } from '@/lib/types'
-import { formatCurrency, getDeliveryTypeLabel, getRateForType, estimateDeliveryPrice } from '@/lib/billing'
+import { formatCurrency, getDeliveryTypeLabel, getRateForType, estimateDeliveryPrice, getRuleApplied, findMatchingTier } from '@/lib/billing'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -455,27 +455,35 @@ function MonthlyBreakdown({
   deliveries: any[]
   rateCard: any
 }) {
-  // Group deliveries by type
-  const breakdown: Record<string, { count: number; rate: number; total: number }> = {}
+  const isDistanceBased = rateCard?.useRadiusPricing && (rateCard.radiusTiers?.length ?? 0) > 0
+  
+  // For distance-based pricing, group by zone
+  // For flat pricing, group by delivery type
+  const breakdown: Record<string, { count: number; rate: number; total: number; label: string }> = {}
 
   deliveries.forEach(d => {
-    const bigCount = d.manifest?.filter((i: any) => i.type === 'big_package').reduce((sum: number, i: any) => sum + (i.confirmedQty ?? i.postedQty), 0) || 0
-    const isRush = d.isUrgent
-    const isOOT = d.isOutOfTown
-
-    let type = 'regular'
-    if (isRush && isOOT) type = 'rush_out_of_town'
-    else if (isRush) type = 'rush'
-    else if (bigCount >= 2 && isOOT) type = 'out_of_town_big'
-    else if (bigCount >= 2) type = 'big_double'
-
-    const rate = rateCard ? getRateForType(type as any, rateCard) : 9
-
-    if (!breakdown[type]) {
-      breakdown[type] = { count: 0, rate, total: 0 }
+    const rate = estimateDeliveryPrice(d, rateCard)
+    
+    let groupKey: string
+    let label: string
+    
+    if (isDistanceBased && d.distanceKm != null) {
+      // Group by zone
+      const tier = findMatchingTier(d.distanceKm, rateCard.radiusTiers || [])
+      groupKey = tier ? `zone_${tier.maxDistanceKm}` : 'zone_unknown'
+      label = tier?.label || (tier ? `Up to ${tier.maxDistanceKm}km` : 'Unknown Zone')
+    } else {
+      // Group by rule type
+      const rule = getRuleApplied(d.manifest || [], d.isOutOfTown, d.isUrgent, false, rateCard, d.distanceKm)
+      groupKey = rule.toLowerCase().replace(/[^a-z0-9]/g, '_')
+      label = rule
     }
-    breakdown[type].count++
-    breakdown[type].total += rate
+
+    if (!breakdown[groupKey]) {
+      breakdown[groupKey] = { count: 0, rate, total: 0, label }
+    }
+    breakdown[groupKey].count++
+    breakdown[groupKey].total += rate
   })
 
   const subtotal = Object.values(breakdown).reduce((sum, b) => sum + b.total, 0)
@@ -483,12 +491,12 @@ function MonthlyBreakdown({
 
   return (
     <div className="space-y-4">
-      {Object.entries(breakdown).map(([type, data]) => (
-        <div key={type} className="flex justify-between items-center">
+      {Object.entries(breakdown).map(([key, data]) => (
+        <div key={key} className="flex justify-between items-center">
           <div>
-            <p className="font-medium">{getDeliveryTypeLabel(type as any)}</p>
+            <p className="font-medium">{data.label}</p>
             <p className="text-sm text-muted-foreground">
-              {data.count} x {formatCurrency(data.rate)}
+              {data.count} deliveries
             </p>
           </div>
           <p className="font-medium">{formatCurrency(data.total)}</p>

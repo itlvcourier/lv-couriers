@@ -24,6 +24,7 @@ export const DEFAULT_RATE_CARD_VALUES = {
   notifyPaymentReminder: true,
   notifyRecipientSms: true,
   useRadiusPricing: false,
+  radiusFallbackRate: 15,
 } as const
 
 /**
@@ -121,7 +122,12 @@ export function calculateRate(
     }
   }
 
-  // Standard flat-rate pricing (fallback or when radius pricing disabled)
+  // Fallback rate when radius pricing is enabled but distance is unavailable
+  if (rateCard.useRadiusPricing) {
+    return rateCard.radiusFallbackRate ?? 15
+  }
+
+  // Standard flat-rate pricing (when radius pricing disabled)
   // Priority 1: Rush + Out of Town
   if (isRush && isOutOfTown) return rateCard.rateRushOot
 

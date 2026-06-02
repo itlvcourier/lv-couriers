@@ -104,6 +104,7 @@ export function mapRadiusTierRow(row: Row): RadiusPricingTier {
 }
 
 export function mapRateCardRow(row: Row): RateCard {
+  const tiersData = (row as { radius_pricing_tiers?: Row[] }).radius_pricing_tiers
   return {
     id: row.id as string,
     businessId: row.business_id as string,
@@ -131,7 +132,8 @@ export function mapRateCardRow(row: Row): RateCard {
     createdAt: (row.created_at as string) || new Date().toISOString(),
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
     useRadiusPricing: !!row.use_radius_pricing,
-    radiusTiers: undefined, // Loaded separately when needed
+    radiusFallbackRate: Number(row.radius_fallback_rate) || 15, // Default fallback rate
+    radiusTiers: Array.isArray(tiersData) ? tiersData.map(mapRadiusTierRow) : undefined,
   }
 }
 
@@ -354,9 +356,44 @@ export async function loadAllDrivers(): Promise<Driver[]> {
 
 export async function loadAllRateCards(): Promise<RateCard[]> {
   const supabase = createClient()
-  const { data, error } = await supabase.from('rate_cards').select('*')
-  if (error) throw error
-  return (data || []).map(mapRateCardRow)
+  
+  // Fetch rate cards
+  const { data: rateCardsData, error: rateCardsError } = await supabase
+    .from('rate_cards')
+    .select('*')
+  if (rateCardsError) throw rateCardsError
+  
+  if (!rateCardsData || rateCardsData.length === 0) return []
+  
+  // Get all unique location IDs
+  const locationIds = [...new Set(rateCardsData.map((rc: Row) => rc.location_id as string))]
+  
+  // Fetch all radius tiers for these locations
+  const { data: tiersData, error: tiersError } = await supabase
+    .from('radius_pricing_tiers')
+    .select('*')
+    .in('location_id', locationIds)
+    .order('sort_order', { ascending: true })
+  
+  if (tiersError) {
+    console.error('Failed to load radius tiers:', tiersError.message)
+  }
+  
+  // Group tiers by location_id
+  const tiersByLocation = new Map<string, typeof tiersData>()
+  for (const tier of (tiersData || [])) {
+    const locationId = tier.location_id as string
+    if (!tiersByLocation.has(locationId)) {
+      tiersByLocation.set(locationId, [])
+    }
+    tiersByLocation.get(locationId)!.push(tier)
+  }
+  
+  // Map rate cards with their tiers
+  return rateCardsData.map((row: Row) => {
+    const tiers = tiersByLocation.get(row.location_id as string) || []
+    return mapRateCardRow({ ...row, radius_pricing_tiers: tiers })
+  })
 }
 
 export async function loadSettings(): Promise<SystemSettings> {
@@ -521,6 +558,8 @@ export async function saveRateCardToDb(rateCard: RateCard): Promise<RateCard> {
     notify_recipient_sms: rateCard.notifyRecipientSms,
     // billing_email and backup_email are stored on business_locations, not rate_cards
     contract_notes: rateCard.contractNotes,
+    use_radius_pricing: rateCard.useRadiusPricing,
+    radius_fallback_rate: rateCard.radiusFallbackRate ?? 15,
     updated_at: new Date().toISOString(),
   }
   const { data, error } = await supabase
@@ -1548,30 +1587,30 @@ export async function saveRadiusTiers(
 ): Promise<RadiusPricingTier[]> {
   const supabase = createClient()
 
-  // Delete existing tiers
+  // Delete existing tiers first
   await deleteAllRadiusTiers(locationId)
 
   if (tiers.length === 0) return []
 
+  const insertData = tiers.map((tier, index) => ({
+    location_id: locationId,
+    max_distance_km: tier.maxDistanceKm,
+    rate_regular: tier.rateRegular,
+    rate_rush: tier.rateRush,
+    rate_big_parcel: tier.rateBigParcel,
+    rate_rush_big: tier.rateRushBig ?? 0,
+    label: tier.label || null,
+    sort_order: index,
+  }))
+
   // Insert new tiers
   const { data, error } = await supabase
     .from('radius_pricing_tiers')
-    .insert(
-      tiers.map((tier, index) => ({
-        location_id: locationId,
-        max_distance_km: tier.maxDistanceKm,
-        rate_regular: tier.rateRegular,
-        rate_rush: tier.rateRush,
-        rate_big_parcel: tier.rateBigParcel,
-        rate_rush_big: tier.rateRushBig,
-        label: tier.label,
-        sort_order: index,
-      }))
-    )
+    .insert(insertData)
     .select()
 
   if (error) {
-    console.error('[v0] Failed to save radius tiers:', error.message)
+    console.error('Failed to save radius tiers:', error.message)
     return []
   }
 
@@ -1594,7 +1633,7 @@ export async function updateLocationCoordinates(
     .eq('id', locationId)
 
   if (error) {
-    console.error('[v0] Failed to update location coordinates:', error.message)
+    console.error('Failed to update location coordinates:', error.message)
     return false
   }
 

@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Plus, Minus, X, Package, Box, Zap, MapPin, Info } from 'lucide-react'
-import { calculateBreakdown, getRuleBadgeColor, type BillingRuleName } from '@/lib/billing'
+import { Input } from '@/components/ui/input'
+import { Plus, Minus, X, Package, Box, Zap, MapPin, Info, Ruler } from 'lucide-react'
+import { calculateBreakdown, getRuleBadgeColor, findMatchingTier, type BillingRuleName } from '@/lib/billing'
 import type { ManifestItem, RateCard } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +24,9 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
   const [items, setItems] = useState<CalcItem[]>([{ id: '1', kind: 'small_package', qty: 1 }])
   const [outOfTown, setOutOfTown] = useState(false)
   const [rush, setRush] = useState(false)
+  const [distanceKm, setDistanceKm] = useState<number>(5)
+
+  const isDistanceBased = rateCard?.useRadiusPricing && (rateCard.radiusTiers?.length ?? 0) > 0
 
   const manifest: ManifestItem[] = useMemo(() =>
     items.map(i => ({
@@ -37,9 +41,22 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
   )
 
   const breakdown = useMemo(
-    () => calculateBreakdown(manifest, outOfTown, rush, rateCard, false),
-    [manifest, outOfTown, rush, rateCard]
+    () => calculateBreakdown(
+      manifest, 
+      isDistanceBased ? false : outOfTown, 
+      rush, 
+      rateCard, 
+      false,
+      isDistanceBased ? distanceKm : null
+    ),
+    [manifest, outOfTown, rush, rateCard, isDistanceBased, distanceKm]
   )
+
+  // Get matched tier for display
+  const matchedTier = useMemo(() => {
+    if (!isDistanceBased || !rateCard?.radiusTiers) return null
+    return findMatchingTier(distanceKm, rateCard.radiusTiers)
+  }, [isDistanceBased, distanceKm, rateCard?.radiusTiers])
 
   const addItem = (kind: 'small_package' | 'big_package') => {
     setItems(prev => [...prev, { id: `${Date.now()}-${prev.length}`, kind, qty: 1 }])
@@ -61,6 +78,7 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
     setItems([{ id: '1', kind: 'small_package', qty: 1 }])
     setOutOfTown(false)
     setRush(false)
+    setDistanceKm(5)
   }
 
   return (
@@ -69,6 +87,12 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
         <CardTitle className="text-base flex items-center gap-2 text-foreground">
           <Info className="w-4 h-4" />
           Cost Calculator
+          {isDistanceBased && (
+            <Badge variant="outline" className="text-xs font-normal gap-1 ml-1">
+              <Ruler className="w-3 h-3" />
+              Distance-Based
+            </Badge>
+          )}
         </CardTitle>
         <CardDescription>
           See exactly how this delivery will be billed
@@ -142,15 +166,60 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
           </div>
         </div>
 
-        {/* Toggles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-3 cursor-pointer">
-            <span className="flex items-center gap-2 text-sm text-foreground">
-              <MapPin className="w-4 h-4 text-muted-foreground" aria-hidden />
-              Out of Town delivery
-            </span>
-            <Switch checked={outOfTown} onCheckedChange={setOutOfTown} />
-          </label>
+        {/* Distance input for distance-based pricing */}
+        {isDistanceBased && (
+          <div className="space-y-2">
+            <Label className="text-foreground text-sm flex items-center gap-2">
+              <Ruler className="w-4 h-4 text-muted-foreground" />
+              Delivery Distance
+            </Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min="0"
+                step="0.5"
+                value={distanceKm}
+                onChange={(e) => setDistanceKm(parseFloat(e.target.value) || 0)}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">km</span>
+              {matchedTier && (
+                <Badge variant="outline" className="text-xs">
+                  {matchedTier.label || `Up to ${matchedTier.maxDistanceKm}km`}
+                </Badge>
+              )}
+            </div>
+            {rateCard?.radiusTiers && rateCard.radiusTiers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[...rateCard.radiusTiers]
+                  .sort((a, b) => a.maxDistanceKm - b.maxDistanceKm)
+                  .map((tier, idx) => (
+                    <Button
+                      key={tier.id || idx}
+                      variant={matchedTier?.maxDistanceKm === tier.maxDistanceKm ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setDistanceKm(tier.maxDistanceKm - 0.1)}
+                    >
+                      {tier.label || `Zone ${idx + 1}`} ({tier.maxDistanceKm}km)
+                    </Button>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Toggles - hide Out of Town when using distance pricing */}
+        <div className={cn("grid gap-2", isDistanceBased ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+          {!isDistanceBased && (
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-3 cursor-pointer">
+              <span className="flex items-center gap-2 text-sm text-foreground">
+                <MapPin className="w-4 h-4 text-muted-foreground" aria-hidden />
+                Out of Town delivery
+              </span>
+              <Switch checked={outOfTown} onCheckedChange={setOutOfTown} />
+            </label>
+          )}
           <label className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-3 cursor-pointer">
             <span className="flex items-center gap-2 text-sm text-foreground">
               <Zap className="w-4 h-4 text-muted-foreground" aria-hidden />
@@ -164,13 +233,15 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
         <BillingBreakdownCard
           rule={breakdown.rule}
           bigPackageCount={breakdown.bigPackageCount}
-          outOfTown={outOfTown}
+          outOfTown={isDistanceBased ? false : outOfTown}
           rush={rush}
           rate={breakdown.rate}
           gst={breakdown.gst}
           total={breakdown.total}
           gstApplicable={breakdown.gstApplicable}
           hasRateCard={Boolean(rateCard)}
+          distanceKm={isDistanceBased ? distanceKm : null}
+          zoneTier={matchedTier}
         />
 
         <div className="flex justify-end">
@@ -196,6 +267,8 @@ export function BillingBreakdownCard({
   total,
   gstApplicable,
   hasRateCard,
+  distanceKm,
+  zoneTier,
 }: {
   rule: BillingRuleName
   bigPackageCount: number
@@ -206,7 +279,11 @@ export function BillingBreakdownCard({
   total: number
   gstApplicable: boolean
   hasRateCard: boolean
+  distanceKm?: number | null
+  zoneTier?: { label?: string | null; maxDistanceKm: number } | null
 }) {
+  const isZoneBased = distanceKm != null && zoneTier != null
+
   return (
     <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card-2)] p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -219,8 +296,19 @@ export function BillingBreakdownCard({
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
         <dt className="text-muted-foreground">Big packages</dt>
         <dd className="text-foreground text-right tabular-nums">{bigPackageCount}</dd>
-        <dt className="text-muted-foreground">Out of town</dt>
-        <dd className="text-foreground text-right">{outOfTown ? 'Yes' : 'No'}</dd>
+        {isZoneBased ? (
+          <>
+            <dt className="text-muted-foreground">Distance</dt>
+            <dd className="text-foreground text-right tabular-nums">{distanceKm.toFixed(1)} km</dd>
+            <dt className="text-muted-foreground">Zone</dt>
+            <dd className="text-foreground text-right">{zoneTier.label || `Up to ${zoneTier.maxDistanceKm}km`}</dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-muted-foreground">Out of town</dt>
+            <dd className="text-foreground text-right">{outOfTown ? 'Yes' : 'No'}</dd>
+          </>
+        )}
         <dt className="text-muted-foreground">Rush</dt>
         <dd className="text-foreground text-right">{rush ? 'Yes' : 'No'}</dd>
       </dl>

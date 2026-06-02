@@ -385,6 +385,7 @@ export interface RateCard {
   updatedAt: string
   // Radius-based pricing
   useRadiusPricing: boolean
+  radiusFallbackRate: number // Fallback rate when distance cannot be calculated
   radiusTiers?: RadiusPricingTier[]
 }
 

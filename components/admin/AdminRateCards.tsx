@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/context'
 import type { RateCard, Business, BusinessLocation, RadiusPricingTier } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -22,10 +22,10 @@ import { AlertTriangle, Building2, Check, ChevronRight, DollarSign, FileText, X,
 import { toast } from 'sonner'
 import { CostCalculator } from '@/components/shared/CostCalculator'
 import { BillingScenarioTests } from './BillingScenarioTests'
-import { saveRadiusTiers, getRadiusTiers } from '@/lib/db-extended'
+import { getRadiusTiers } from '@/lib/db-extended'
 
 export function AdminRateCards() {
-  const { businesses, rateCards, saveRateCard, updateLocationEmails } = useApp()
+  const { businesses, rateCards, saveRateCard, updateLocationEmails, updateLocationCoords } = useApp()
   const [selectedLocation, setSelectedLocation] = useState<{ business: Business; location: BusinessLocation } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [testRateCardId, setTestRateCardId] = useState<string>('')
@@ -192,17 +192,39 @@ export function AdminRateCards() {
               location={selectedLocation.location}
               existingRateCard={rateCards.find(rc => rc.locationId === selectedLocation.location.id) || null}
               onSave={async (data, billingEmail, backupEmail, radiusTiers) => {
-                // Save rate card to rate_cards table
-                saveRateCard(selectedLocation.location.id, data)
+                // Save radius tiers via API (server-side to handle RLS)
+                let savedTiers: RadiusPricingTier[] = []
+                try {
+                  const tiersToSave = data.useRadiusPricing ? radiusTiers : []
+                  const res = await fetch('/api/admin/radius-tiers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      locationId: selectedLocation.location.id,
+                      tiers: tiersToSave,
+                    }),
+                  })
+                  if (res.ok) {
+                    const result = await res.json()
+                    savedTiers = result.tiers || []
+                  } else {
+                    const errData = await res.json()
+                    console.error('Failed to save tiers:', errData.error)
+                    toast.error('Failed to save distance zones: ' + errData.error)
+                    return
+                  }
+                } catch (e) {
+                  console.error('Error saving tiers:', e)
+                  toast.error('Failed to save distance zones')
+                  return
+                }
+                // Save rate card to rate_cards table (include tiers in local state)
+                saveRateCard(selectedLocation.location.id, {
+                  ...data,
+                  radiusTiers: data.useRadiusPricing ? savedTiers : undefined,
+                })
                 // Save billing emails to business_locations table (separate from rate card)
                 updateLocationEmails(selectedLocation.location.id, billingEmail, backupEmail || null)
-                // Save radius tiers if radius pricing is enabled
-                if (data.useRadiusPricing && radiusTiers.length > 0) {
-                  await saveRadiusTiers(selectedLocation.location.id, radiusTiers)
-                } else if (!data.useRadiusPricing) {
-                  // Clear tiers when disabled
-                  await saveRadiusTiers(selectedLocation.location.id, [])
-                }
                 toast.success('Rate card and billing info saved successfully')
                 setIsEditing(false)
               }}
@@ -234,6 +256,8 @@ interface RadiusTierInput {
 }
 
 function RateCardEditor({ business, location, existingRateCard, onSave, onClose }: RateCardEditorProps) {
+  const { updateLocationCoords } = useApp()
+  
   // Rate card fields (stored in rate_cards table)
   const [formData, setFormData] = useState({
     effectiveDate: existingRateCard?.effectiveDate || new Date().toISOString().split('T')[0],
@@ -247,6 +271,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     cancelEnRoute: existingRateCard?.cancelEnRoute ?? 5,
     contractNotes: existingRateCard?.contractNotes || '',
     useRadiusPricing: existingRateCard?.useRadiusPricing ?? false,
+    radiusFallbackRate: existingRateCard?.radiusFallbackRate ?? 15,
   })
   
   // Radius pricing tiers
@@ -254,22 +279,24 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
   const [loadingTiers, setLoadingTiers] = useState(false)
   
   // Load existing tiers when opening editor
-  useState(() => {
+  useEffect(() => {
     if (existingRateCard?.useRadiusPricing) {
       setLoadingTiers(true)
       getRadiusTiers(location.id).then(tiers => {
-        setRadiusTiers(tiers.map(t => ({
-          maxDistanceKm: t.maxDistanceKm,
-          rateRegular: t.rateRegular,
-          rateRush: t.rateRush,
-          rateBigParcel: t.rateBigParcel,
-          rateRushBig: t.rateRushBig,
-          label: t.label || '',
-        })))
+        if (tiers.length > 0) {
+          setRadiusTiers(tiers.map(t => ({
+            maxDistanceKm: t.maxDistanceKm,
+            rateRegular: t.rateRegular,
+            rateRush: t.rateRush,
+            rateBigParcel: t.rateBigParcel,
+            rateRushBig: t.rateRushBig,
+            label: t.label || '',
+          })))
+        }
         setLoadingTiers(false)
       })
     }
-  })
+  }, [existingRateCard?.useRadiusPricing, location.id])
   
   // Billing emails (stored in business_locations table, not rate_cards)
   const [billingEmail, setBillingEmail] = useState(location.billingEmail || '')
@@ -280,15 +307,24 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
   const validate = () => {
     const newErrors: string[] = []
     
-    // Required rates cannot be $0 (except OOT big and cancellation fees)
-    if (formData.rateRegular <= 0) newErrors.push('Regular delivery rate must be greater than $0')
-    if (formData.rateBigDouble <= 0) newErrors.push('2+ big packages rate must be greater than $0')
-    if (formData.rateRush <= 0) newErrors.push('Rush delivery rate must be greater than $0')
-    if (formData.rateRushOot <= 0) newErrors.push('Rush + out of town rate must be greater than $0')
+    // Validate flat rates only if not using distance-based pricing
+    if (!formData.useRadiusPricing) {
+      if (formData.rateRegular <= 0) newErrors.push('Regular delivery rate must be greater than $0')
+      if (formData.rateBigDouble <= 0) newErrors.push('2+ big packages rate must be greater than $0')
+      if (formData.rateRush <= 0) newErrors.push('Rush delivery rate must be greater than $0')
+      if (formData.rateRushOot <= 0) newErrors.push('Rush + out of town rate must be greater than $0')
+    }
     
-    // OOT big rate warning (can be 0 but show warning)
-    if (formData.rateOotBig === 0) {
-      // This is just a warning, not an error
+    // Validate distance tiers if using distance-based pricing
+    if (formData.useRadiusPricing) {
+      if (radiusTiers.length === 0) {
+        newErrors.push('At least one distance zone is required for distance-based pricing')
+      }
+      radiusTiers.forEach((tier, index) => {
+        if (tier.maxDistanceKm <= 0) newErrors.push(`Zone ${index + 1}: Distance must be greater than 0`)
+        if (tier.rateRegular <= 0) newErrors.push(`Zone ${index + 1}: Regular rate must be greater than $0`)
+        if (tier.rateRush <= 0) newErrors.push(`Zone ${index + 1}: Rush rate must be greater than $0`)
+      })
     }
 
     if (!billingEmail) newErrors.push('Primary billing email is required')
@@ -345,14 +381,27 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
       </div>
 
       {/* Rate Fields */}
-      <Card className="bg-muted/30">
+      <Card className={`bg-muted/30 ${formData.useRadiusPricing ? 'opacity-50' : ''}`}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            Delivery Rates
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Flat Delivery Rates
+            </CardTitle>
+            {formData.useRadiusPricing && (
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                Disabled - Using Distance Pricing
+              </span>
+            )}
+          </div>
+          {!formData.useRadiusPricing && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Fixed rates regardless of delivery distance
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
+          <fieldset disabled={formData.useRadiusPricing}>
           <div className="grid gap-4">
             <div className="flex items-center justify-between">
               <Label className="text-sm">Regular delivery</Label>
@@ -383,7 +432,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-sm">Out of town 2+ big</Label>
-                {formData.rateOotBig === 0 && (
+                {formData.rateOotBig === 0 && !formData.useRadiusPricing && (
                   <p className="text-xs text-yellow-400 mt-0.5">Rate not set - this scenario cannot be billed</p>
                 )}
               </div>
@@ -425,6 +474,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
               </div>
             </div>
           </div>
+          </fieldset>
         </CardContent>
       </Card>
 
@@ -478,12 +528,13 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                       if (res.ok) {
                         const data = await res.json()
                         if (data.lat && data.lng) {
-                          const { updateLocationCoordinates } = await import('@/lib/db-extended')
-                          await updateLocationCoordinates(location.id, data.lat, data.lng)
-                          toast.success('Location geocoded successfully! Please reopen this dialog.')
+                          updateLocationCoords(location.id, data.lat, data.lng)
+                          toast.success('Location geocoded successfully!')
                         } else {
                           toast.error('Could not geocode address. Please check the address is correct.')
                         }
+                      } else {
+                        toast.error('Geocode API failed')
                       }
                     } catch (e) {
                       toast.error('Failed to geocode location')
@@ -497,106 +548,96 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
             )}
             
             {loadingTiers ? (
-              <div className="text-center py-4 text-muted-foreground text-sm">Loading tiers...</div>
+              <div className="text-center py-4 text-muted-foreground text-sm">Loading zones...</div>
             ) : (
-              <>
-                {/* Tier Table */}
-                <div className="overflow-x-auto -mx-4 px-4">
-                  <table className="w-full text-sm min-w-[500px]">
-                    <thead>
-                      <tr className="border-b border-border/50">
-                        <th className="text-left py-2 px-1 font-medium text-muted-foreground text-xs">Zone</th>
-                        <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs">Up to km</th>
-                        <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs">Regular</th>
-                        <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs">Rush</th>
-                        <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs">Big Pkg</th>
-                        <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs">Rush+Big</th>
-                        <th className="w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {radiusTiers.map((tier, index) => (
-                        <tr key={index} className="border-b border-border/30">
-                          <td className="py-2 px-1">
-                            <Input
-                              value={tier.label ?? ''}
-                              onChange={(e) => updateTier(index, 'label', e.target.value || null)}
-                              className="w-16 h-7 text-xs"
-                              placeholder="Zone"
-                            />
-                          </td>
-                          <td className="py-2 px-1 text-center">
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={tier.maxDistanceKm}
-                              onChange={(e) => updateTier(index, 'maxDistanceKm', parseFloat(e.target.value) || 0)}
-                              className="w-14 h-7 text-xs text-center"
-                            />
-                          </td>
-                          <td className="py-2 px-1 text-center">
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span className="text-muted-foreground text-xs">$</span>
-                              <Input
-                                type="number"
-                                step="0.5"
-                                value={tier.rateRegular}
-                                onChange={(e) => updateTier(index, 'rateRegular', parseFloat(e.target.value) || 0)}
-                                className="w-12 h-7 text-xs text-center"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-2 px-1 text-center">
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span className="text-muted-foreground text-xs">$</span>
-                              <Input
-                                type="number"
-                                step="0.5"
-                                value={tier.rateRush}
-                                onChange={(e) => updateTier(index, 'rateRush', parseFloat(e.target.value) || 0)}
-                                className="w-12 h-7 text-xs text-center"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-2 px-1 text-center">
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span className="text-muted-foreground text-xs">$</span>
-                              <Input
-                                type="number"
-                                step="0.5"
-                                value={tier.rateBigParcel}
-                                onChange={(e) => updateTier(index, 'rateBigParcel', parseFloat(e.target.value) || 0)}
-                                className="w-12 h-7 text-xs text-center"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-2 px-1 text-center">
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span className="text-muted-foreground text-xs">$</span>
-                              <Input
-                                type="number"
-                                step="0.5"
-                                value={tier.rateRushBig}
-                                onChange={(e) => updateTier(index, 'rateRushBig', parseFloat(e.target.value) || 0)}
-                                className="w-12 h-7 text-xs text-center"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-2 px-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground hover:text-red-400"
-                              onClick={() => removeTier(index)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="space-y-3">
+                {radiusTiers.map((tier, index) => (
+                  <div key={index} className="p-3 rounded-lg bg-background/50 border border-border/50 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={tier.label ?? ''}
+                          onChange={(e) => updateTier(index, 'label', e.target.value || null)}
+                          className="w-20 h-8 text-sm font-medium"
+                          placeholder="Zone A"
+                        />
+                        <span className="text-muted-foreground text-sm">up to</span>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={tier.maxDistanceKm}
+                            onChange={(e) => updateTier(index, 'maxDistanceKm', parseFloat(e.target.value) || 0)}
+                            className="w-16 h-8 text-sm text-center"
+                          />
+                          <span className="text-muted-foreground text-sm">km</span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                        onClick={() => removeTier(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center justify-between gap-2 p-2 rounded bg-muted/30">
+                        <Label className="text-xs text-muted-foreground">Regular</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground text-xs">$</span>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={tier.rateRegular}
+                            onChange={(e) => updateTier(index, 'rateRegular', parseFloat(e.target.value) || 0)}
+                            className="w-16 h-7 text-sm text-right"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 p-2 rounded bg-muted/30">
+                        <Label className="text-xs text-muted-foreground">Rush</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground text-xs">$</span>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={tier.rateRush}
+                            onChange={(e) => updateTier(index, 'rateRush', parseFloat(e.target.value) || 0)}
+                            className="w-16 h-7 text-sm text-right"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 p-2 rounded bg-muted/30">
+                        <Label className="text-xs text-muted-foreground">Big Parcel</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground text-xs">$</span>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={tier.rateBigParcel}
+                            onChange={(e) => updateTier(index, 'rateBigParcel', parseFloat(e.target.value) || 0)}
+                            className="w-16 h-7 text-sm text-right"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 p-2 rounded bg-muted/30">
+                        <Label className="text-xs text-muted-foreground">Rush + Big</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground text-xs">$</span>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={tier.rateRushBig}
+                            onChange={(e) => updateTier(index, 'rateRushBig', parseFloat(e.target.value) || 0)}
+                            className="w-16 h-7 text-sm text-right"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
                 
                 <Button
                   variant="outline"
@@ -608,11 +649,34 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                   Add Distance Zone
                 </Button>
                 
+                {/* Fallback Rate */}
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="fallbackRate" className="text-sm font-medium">Fallback Rate</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Used when distance cannot be calculated (e.g., invalid address)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-muted-foreground">$</span>
+                      <Input
+                        id="fallbackRate"
+                        type="number"
+                        step="0.50"
+                        value={formData.radiusFallbackRate}
+                        onChange={(e) => setFormData({ ...formData, radiusFallbackRate: parseFloat(e.target.value) || 0 })}
+                        className="w-20 h-8 text-sm text-center"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
                 <p className="text-xs text-muted-foreground">
-                  Deliveries beyond the last zone use that zone&apos;s rates. 
+                  Deliveries beyond the last zone use that zone&apos;s rates.
                   Distance is calculated as driving distance from store to delivery address.
                 </p>
-              </>
+              </div>
             )}
           </CardContent>
         )}

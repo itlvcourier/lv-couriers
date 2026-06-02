@@ -75,6 +75,7 @@ import {
   updateInvoiceStatusOnly,
   createInvoiceInDb,
   updateLocationBillingEmails,
+  updateLocationCoordinates,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -228,6 +229,7 @@ interface AppContextType {
   // Billing functions
   saveRateCard: (locationId: string, rateCard: Partial<RateCard>) => void
   updateLocationEmails: (locationId: string, billingEmail: string, backupEmail: string | null) => void
+  updateLocationCoords: (locationId: string, lat: number, lng: number) => void
   getRateCardForLocation: (locationId: string) => RateCard | null
   generateInvoice: (businessId: string, locationId: string, periodStart: string, periodEnd: string) => Invoice | null
   generateBusinessInvoices: (
@@ -1705,6 +1707,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     persist(updateLocationBillingEmails(locationId, billingEmail, backupEmail), 'updateLocationEmails')
   }, [])
 
+  // Update location coordinates after geocoding
+  const updateLocationCoords = useCallback((
+    locationId: string,
+    lat: number,
+    lng: number
+  ) => {
+    setBusinesses(prev => prev.map(business => ({
+      ...business,
+      locations: business.locations.map(loc => 
+        loc.id === locationId
+          ? { ...loc, lat, lng }
+          : loc
+      ),
+    })))
+    // Persist to database
+    persist(updateLocationCoordinates(locationId, lat, lng), 'updateLocationCoords')
+  }, [])
+
   const generateInvoice = useCallback((
     businessId: string,
     locationId: string,
@@ -2748,8 +2768,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         disputes,
         unmatchedPayments,
     saveRateCard,
-    updateLocationEmails,
-    getRateCardForLocation,
+        updateLocationEmails,
+        updateLocationCoords,
+        getRateCardForLocation,
     generateInvoice,
     generateBusinessInvoices,
     markInvoicePaid,
