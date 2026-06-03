@@ -2572,10 +2572,12 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
     }
     return t
   }))
-  // Persist to database
-  updateTripOrder(tripId, newOrder).catch(err => {
-    console.error('[v0] Failed to persist trip order:', err)
-  })
+  // Only persist to database if it's a real trip (not a virtual one)
+  if (tripId !== 'virtual-trip') {
+    updateTripOrder(tripId, newOrder).catch(err => {
+      console.error('[v0] Failed to persist trip order:', err)
+    })
+  }
 }, [])
 
   const retryDelivery = useCallback((deliveryId: string) => {

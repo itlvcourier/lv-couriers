@@ -316,27 +316,17 @@ function TripView({
   const progress = (completedCount / orderedDeliveries.length) * 100
   
   const handleMoveUp = (index: number) => {
-    console.log('[v0] handleMoveUp called', { index, tripOrder: trip.order, tripId: trip.id })
-    if (index === 0) {
-      console.log('[v0] handleMoveUp: index is 0, returning early')
-      return
-    }
+    if (index === 0) return
     const newOrder = [...trip.order]
     ;[newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]]
-    console.log('[v0] handleMoveUp: calling reorderTrip with newOrder', newOrder)
     reorderTrip(trip.id, newOrder)
     toast.success('Trip order updated')
   }
   
   const handleMoveDown = (index: number) => {
-    console.log('[v0] handleMoveDown called', { index, tripOrder: trip.order, tripId: trip.id })
-    if (index === trip.order.length - 1) {
-      console.log('[v0] handleMoveDown: index is last, returning early')
-      return
-    }
+    if (index === trip.order.length - 1) return
     const newOrder = [...trip.order]
     ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-    console.log('[v0] handleMoveDown: calling reorderTrip with newOrder', newOrder)
     reorderTrip(trip.id, newOrder)
     toast.success('Trip order updated')
   }
