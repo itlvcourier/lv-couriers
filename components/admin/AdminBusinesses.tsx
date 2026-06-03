@@ -231,11 +231,14 @@ export function AdminBusinesses() {
     
     const supabase = createClient()
     
-    // First create the business (only use columns that exist in the schema)
+    // Create the business with all required fields
     const { data: newBusiness, error: businessError } = await supabase
       .from('businesses')
       .insert({
         name: form.name,
+        contact_name: form.contact_name || form.name,
+        email: form.billing_email,
+        phone: form.contact_phone || '',
         invoice_format: 'combined',
         invite_status: 'pending',
       })
