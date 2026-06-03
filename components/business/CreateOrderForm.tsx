@@ -377,7 +377,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-6 pb-8">
+      <form onSubmit={handleSubmit} className="space-y-6 pb-8 overflow-x-hidden">
         <div>
           <h2 className="text-xl font-semibold mb-1">Create New Delivery</h2>
           <p className="text-sm text-muted-foreground">

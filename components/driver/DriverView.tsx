@@ -87,10 +87,10 @@ export function DriverView() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] pb-20">
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col overflow-x-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[var(--bg-card)] border-b border-[var(--border-color)]">
-        <div className="flex items-center justify-between h-14 px-4">
+      <header className="sticky top-0 z-50 bg-[var(--bg-card)] border-b border-[var(--border-color)] safe-area-top">
+        <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
           </div>
@@ -98,8 +98,8 @@ export function DriverView() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 tap-target">
-                <span className="text-sm text-foreground hidden sm:block">{currentUser?.name}</span>
-                <div className="w-9 h-9 rounded-full bg-[var(--accent-orange)] flex items-center justify-center">
+                <span className="text-sm text-foreground hidden sm:block truncate max-w-[120px]">{currentUser?.name}</span>
+                <div className="w-9 h-9 rounded-full bg-[var(--accent-orange)] flex items-center justify-center shrink-0">
                   <span className="text-sm font-semibold text-white">
                     {getInitials(currentUser?.name || 'D')}
                   </span>
@@ -108,7 +108,7 @@ export function DriverView() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-[var(--bg-card)] border-[var(--border-color)]">
               <div className="px-3 py-2">
-                <p className="text-sm font-medium text-foreground">{currentUser?.name}</p>
+                <p className="text-sm font-medium text-foreground truncate">{currentUser?.name}</p>
                 <p className="text-xs text-muted-foreground">Driver</p>
               </div>
               <DropdownMenuSeparator className="bg-[var(--border-color)]" />
@@ -125,7 +125,7 @@ export function DriverView() {
       </header>
 
       {/* Content */}
-      <main className="px-4 py-4">
+      <main className="flex-1 px-4 py-4 pb-24 max-w-lg mx-auto w-full overflow-x-hidden">
         {activeTab === 'available' && (
           <AvailableJobs onJobClaimed={() => setActiveTab('active')} />
         )}

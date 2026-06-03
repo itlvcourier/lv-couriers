@@ -164,6 +164,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    overflow-x: hidden;
   }
 }
 
@@ -179,6 +180,32 @@
 
   .text-balance {
     text-wrap: balance;
+  }
+  
+  /* Safe area for mobile devices */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  
+  /* Prevent content overflow */
+  .overflow-wrap {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+  
+  /* Container with max width and auto margins */
+  .container-app {
+    @apply w-full max-w-7xl mx-auto px-4;
+  }
+  
+  /* Scrollable container that respects bounds */
+  .scroll-container {
+    @apply overflow-x-hidden overflow-y-auto;
   }
 }
 

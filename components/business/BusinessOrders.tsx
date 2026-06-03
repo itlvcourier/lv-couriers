@@ -221,24 +221,24 @@ export function BusinessOrders() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-x-hidden">
       {/* Stats Summary */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Card className="bg-primary/10 border-primary/20">
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-primary">{businessOrders.length}</p>
+            <p className="text-xl sm:text-2xl font-bold text-primary">{businessOrders.length}</p>
             <p className="text-xs text-muted-foreground">Total</p>
           </CardContent>
         </Card>
         <Card className="bg-warning/10 border-warning/20">
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-warning">{activeOrders.length}</p>
+            <p className="text-xl sm:text-2xl font-bold text-warning">{activeOrders.length}</p>
             <p className="text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
         <Card className="bg-success/10 border-success/20">
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-success">
+            <p className="text-xl sm:text-2xl font-bold text-success">
               {deliveredOrders.length}
             </p>
             <p className="text-xs text-muted-foreground">Delivered</p>
@@ -246,7 +246,7 @@ export function BusinessOrders() {
         </Card>
         <Card className="bg-destructive/10 border-destructive/20">
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-destructive">
+            <p className="text-xl sm:text-2xl font-bold text-destructive">
               {cancelledOrders.length}
             </p>
             <p className="text-xs text-muted-foreground">Cancelled</p>
@@ -256,18 +256,18 @@ export function BusinessOrders() {
 
       {/* Filter Tabs */}
       <Tabs value={filter} onValueChange={v => setFilter(v as typeof filter)}>
-        <TabsList className="w-full">
-          <TabsTrigger value="all" className="flex-1">
+        <TabsList className="w-full h-auto flex-wrap">
+          <TabsTrigger value="all" className="flex-1 min-w-[70px] text-xs sm:text-sm">
             All ({businessOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="active" className="flex-1">
+          <TabsTrigger value="active" className="flex-1 min-w-[70px] text-xs sm:text-sm">
             Active ({activeOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="delivered" className="flex-1">
-            Delivered ({deliveredOrders.length})
+          <TabsTrigger value="delivered" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+            Done ({deliveredOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="cancelled" className="flex-1">
-            Cancelled ({cancelledOrders.length})
+          <TabsTrigger value="cancelled" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+            Cancel ({cancelledOrders.length})
           </TabsTrigger>
         </TabsList>
       </Tabs>
