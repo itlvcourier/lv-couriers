@@ -69,7 +69,7 @@ type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<DbBusiness['status'] | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<DbBusiness['invite_status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessWithLocations | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -214,7 +214,7 @@ export function AdminBusinesses() {
     const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) ||
       b.billing_email.toLowerCase().includes(search.toLowerCase()) ||
       (b.contact_name?.toLowerCase().includes(search.toLowerCase()))
-    const matchesStatus = statusFilter === 'all' || b.status === statusFilter
+    const matchesStatus = statusFilter === 'all' || b.invite_status === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -609,11 +609,11 @@ export function AdminBusinesses() {
     return { total: businessDeliveries.length, completed, totalSpent }
   }
 
-  const statusColors: Record<DbBusiness['status'], string> = {
-    active: 'bg-green-500/10 text-green-400 border-green-500/20',
-    pending: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-    suspended: 'bg-red-500/10 text-red-400 border-red-500/20',
-  }
+    const statusColors: Record<DbBusiness['invite_status'], string> = {
+      pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
+      accepted: 'bg-green-500/10 text-green-500 border-green-500/30',
+      declined: 'bg-red-500/10 text-red-500 border-red-500/30',
+    }
 
   if (isLoading) {
     return (
@@ -647,8 +647,8 @@ export function AdminBusinesses() {
             <div>
               <h2 className="text-xl font-semibold">{detailBusiness.name}</h2>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className={statusColors[detailBusiness.status]}>
-                  {detailBusiness.status}
+                    <Badge variant="outline" className={statusColors[detailBusiness.invite_status]}>
+                      {detailBusiness.invite_status}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
                   {detailBusiness.locations.length} location(s)
