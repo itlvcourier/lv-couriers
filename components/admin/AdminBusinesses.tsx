@@ -324,7 +324,7 @@ export function AdminBusinesses() {
     }
     
     mutate('all-businesses')
-    toast.success(`Business ${newStatus === 'active' ? 'activated' : 'suspended'}`)
+    toast.success(`Business ${newStatus === 'accepted' ? 'activated' : 'suspended'}`)
   }
 
   const handleDeleteBusiness = async () => {
@@ -1562,7 +1562,7 @@ export function AdminBusinesses() {
                 className="pl-9 bg-[var(--bg-card)] border-[var(--border-color)]"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['status'] | 'all')}>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['invite_status'] | 'all')}>
               <SelectTrigger className="w-full sm:w-40 bg-[var(--bg-card)] border-[var(--border-color)]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Status" />
@@ -1603,8 +1603,8 @@ export function AdminBusinesses() {
                       </Avatar>
                       <div>
                         <h3 className="font-medium text-foreground">{business.name}</h3>
-                        <Badge variant="outline" className={statusColors[business.status]}>
-                          {business.status}
+                        <Badge variant="outline" className={statusColors[business.invite_status]}>
+                          {business.invite_status}
                         </Badge>
                       </div>
                     </div>
