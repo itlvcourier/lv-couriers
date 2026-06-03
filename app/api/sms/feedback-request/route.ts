@@ -26,6 +26,7 @@ export async function POST(req: Request) {
     .select('sms_notify_feedback_request')
     .limit(1)
     .maybeSingle()
+  
   if (settings?.sms_notify_feedback_request === false) {
     return NextResponse.json({ ok: false, reason: 'Feature disabled in settings' })
   }
