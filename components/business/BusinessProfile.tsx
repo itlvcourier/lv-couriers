@@ -387,26 +387,26 @@ export function BusinessProfile() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         <Card>
-          <CardContent className="p-4 text-center">
-            <Package className="w-5 h-5 text-primary mx-auto mb-2" />
-            <p className="text-2xl font-bold">{businessDeliveries.length}</p>
-            <p className="text-xs text-muted-foreground">Total Orders</p>
+          <CardContent className="p-3 text-center">
+            <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary mx-auto mb-1" />
+            <p className="text-lg sm:text-2xl font-bold">{businessDeliveries.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Total Orders</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 text-center">
-            <Star className="w-5 h-5 text-success mx-auto mb-2" />
-            <p className="text-2xl font-bold">{completedDeliveries.length}</p>
-            <p className="text-xs text-muted-foreground">Completed</p>
+          <CardContent className="p-3 text-center">
+            <Star className="w-4 h-4 sm:w-5 sm:h-5 text-success mx-auto mb-1" />
+            <p className="text-lg sm:text-2xl font-bold">{completedDeliveries.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Completed</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 text-center">
-            <DollarSign className="w-5 h-5 text-warning mx-auto mb-2" />
-            <p className="text-2xl font-bold">${totalSpent.toFixed(0)}</p>
-            <p className="text-xs text-muted-foreground">Total Spent</p>
+          <CardContent className="p-3 text-center">
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-warning mx-auto mb-1" />
+            <p className="text-lg sm:text-2xl font-bold">${totalSpent.toFixed(0)}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Total Spent</p>
           </CardContent>
         </Card>
       </div>
@@ -492,48 +492,49 @@ export function BusinessProfile() {
       {/* Locations */}
       {business.locations.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Store className="w-4 h-4" />
-                Locations ({business.locations.length})
+                <span className="text-sm">Locations ({business.locations.length})</span>
               </span>
               {userIsOwner && (
                 <Button 
                   variant="ghost" 
                   size="sm"
+                  className="h-7 text-xs px-2"
                   onClick={() => {
                     setStoreRequestType('add')
                     setShowStoreRequestSheet(true)
                   }}
                 >
-                  <Plus className="w-4 h-4 mr-1" />
+                  <Plus className="w-3.5 h-3.5 mr-1" />
                   Request New
                 </Button>
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 pt-0">
             {business.locations.map((loc) => (
-              <div key={loc.id} className="p-3 rounded-lg bg-muted/30 border border-border/50">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{loc.name}</p>
-                    <p className="text-xs text-muted-foreground">{loc.address}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{loc.phone}</p>
+              <div key={loc.id} className="p-2.5 sm:p-3 rounded-lg bg-muted/30 border border-border/50">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{loc.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{loc.address}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{loc.phone}</p>
                   </div>
                   {userIsOwner && business.locations.length > 1 && (
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      className="text-muted-foreground hover:text-destructive"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => {
                         setStoreRequestType('remove')
                         setStoreRequestForm(prev => ({ ...prev, locationIdToRemove: loc.id }))
                         setShowStoreRequestSheet(true)
                       }}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   )}
                 </div>
@@ -546,28 +547,29 @@ export function BusinessProfile() {
       {/* Team Management (Owner Only) */}
       {userIsOwner && (
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
-                Team Members
+                <span className="text-sm">Team</span>
               </span>
               <Button 
                 variant="ghost" 
                 size="sm"
+                className="h-7 text-xs px-2"
                 onClick={() => {
                   setShowInviteSheet(true)
                   fetchTeamMembers()
                 }}
               >
-                <UserPlus className="w-4 h-4 mr-1" />
+                <UserPlus className="w-3.5 h-3.5 mr-1" />
                 Invite
               </Button>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <p className="text-xs text-muted-foreground mb-3">
-              Invite store managers or viewers to access specific locations
+              Invite managers to access specific locations
             </p>
             {loadingTeam ? (
               <div className="flex justify-center py-4">
@@ -577,28 +579,28 @@ export function BusinessProfile() {
               <div className="text-center py-4 text-muted-foreground">
                 <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No team members yet</p>
-                <p className="text-xs">Invite managers to help manage your stores</p>
+                <p className="text-xs">Invite managers to help manage stores</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {teamMembers.map((member) => (
-                  <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="text-xs">
+                  <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30">
+                    <Avatar className="w-7 h-7 shrink-0">
+                      <AvatarFallback className="text-[10px]">
                         {getInitials(member.name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{member.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                      <p className="text-xs sm:text-sm font-medium truncate">{member.name}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{member.email}</p>
                     </div>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-[10px] px-1.5 shrink-0">
                       {member.business_role}
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="w-4 h-4" />
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
+                          <MoreVertical className="w-3.5 h-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">

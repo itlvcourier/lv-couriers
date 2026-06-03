@@ -377,10 +377,10 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-6 pb-8 overflow-x-hidden">
+      <form onSubmit={handleSubmit} className="space-y-4 pb-8 overflow-x-hidden">
         <div>
-          <h2 className="text-xl font-semibold mb-1">Create New Delivery</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-lg sm:text-xl font-semibold mb-1">Create New Delivery</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Fill in the delivery details below
           </p>
         </div>
@@ -396,15 +396,15 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
         {/* Pickup Details */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                <MapPin className="w-3.5 h-3.5 text-primary" />
+          <CardHeader className="pb-3 px-3 sm:px-6">
+            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
               </div>
               Pickup Details
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 px-3 sm:px-6 pt-0">
             <div className="space-y-2">
               <Label htmlFor="pickupAddress">Pickup Address *</Label>
               <AddressAutocomplete
@@ -425,9 +425,9 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 required
               />
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
-                <Label htmlFor="pickupPostalCode">Postal Code</Label>
+                <Label htmlFor="pickupPostalCode" className="text-xs sm:text-sm">Postal Code</Label>
                 <Input
                   id="pickupPostalCode"
                   value={form.pickupPostalCode}
@@ -435,16 +435,17 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   placeholder="T2Y 3Z1"
                   autoComplete="postal-code"
                   maxLength={7}
-                  className="uppercase tracking-wider"
+                  className="uppercase tracking-wider h-9"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pickupContact">Contact Phone</Label>
+                <Label htmlFor="pickupContact" className="text-xs sm:text-sm">Contact Phone</Label>
                 <Input
                   id="pickupContact"
                   value={form.pickupContact}
                   onChange={e => setForm({ ...form, pickupContact: e.target.value })}
-                  placeholder="Phone number at pickup"
+                  placeholder="Phone number"
+                  className="h-9"
                 />
               </div>
             </div>
@@ -453,22 +454,22 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
         {/* Recipient + Delivery */}
         <Card>
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <UserRound className="w-3.5 h-3.5 text-green-500" />
+          <CardHeader className="pb-3 px-3 sm:px-6">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <UserRound className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
                 </div>
-                Recipient &amp; Delivery
+                Recipient
               </CardTitle>
               <RecipientPicker businessId={businessId} onSelect={handleSelectContact} />
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 px-3 sm:px-6 pt-0">
             {fromSavedContactId && (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2">
-                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 min-w-0">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-2 py-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 min-w-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">Using saved recipient</span>
                 </div>
                 <Button
@@ -476,18 +477,17 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   variant="ghost"
                   size="sm"
                   onClick={clearRecipient}
-                  className="h-7 px-2 text-xs"
+                  className="h-6 px-2 text-xs"
                 >
                   Clear
                 </Button>
               </div>
             )}
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
-                <Label htmlFor="recipientName">
-                  Recipient Name{' '}
-                  <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                <Label htmlFor="recipientName" className="text-xs sm:text-sm">
+                  Recipient Name
                 </Label>
                 <Input
                   id="recipientName"
@@ -495,12 +495,12 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   onChange={e => setForm({ ...form, recipientName: e.target.value })}
                   placeholder="e.g. Jane Doe"
                   autoComplete="off"
+                  className="h-9"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dropoffContact">
-                  Phone{' '}
-                  <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                <Label htmlFor="dropoffContact" className="text-xs sm:text-sm">
+                  Phone
                 </Label>
                 <Input
                   id="dropoffContact"
@@ -509,12 +509,13 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   onChange={e => setForm({ ...form, dropoffContact: e.target.value })}
                   placeholder="(555) 123-4567"
                   autoComplete="off"
+                  className="h-9"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dropoffAddress">Delivery Address *</Label>
+              <Label htmlFor="dropoffAddress" className="text-xs sm:text-sm">Delivery Address *</Label>
               <AddressAutocomplete
                 id="dropoffAddress"
                 value={form.dropoffAddress}
@@ -536,47 +537,48 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
             {/* Distance Display */}
             {(distanceKm !== null || isCalculatingDistance) && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border">
-                <Ruler className="w-4 h-4 text-muted-foreground" />
+              <div className="flex items-center gap-2 p-2 sm:p-3 rounded-lg bg-muted/50 border border-border">
+                <Ruler className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground shrink-0" />
                 {isCalculatingDistance ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Calculating distance...</span>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                    <span className="text-xs sm:text-sm text-muted-foreground">Calculating...</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-sm font-medium">{distanceKm?.toFixed(1)} km</span>
-                    <span className="text-sm text-muted-foreground">from pickup to delivery</span>
+                    <span className="text-xs sm:text-sm font-medium">{distanceKm?.toFixed(1)} km</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">from pickup</span>
                   </>
                 )}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="dropoffPostalCode">Delivery Postal Code</Label>
-              <Input
-                id="dropoffPostalCode"
-                value={form.dropoffPostalCode}
-                onChange={e => setForm({ ...form, dropoffPostalCode: e.target.value.toUpperCase() })}
-                placeholder="T2P 1J9"
-                autoComplete="postal-code"
-                maxLength={7}
-                className="uppercase tracking-wider max-w-[200px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="buzzCode">
-                Buzz / Unit Code{' '}
-                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
-              </Label>
-              <Input
-                id="buzzCode"
-                value={form.buzzCode}
-                onChange={e => setForm({ ...form, buzzCode: e.target.value })}
-                placeholder="e.g. #204, Buzz 1234"
-                autoComplete="off"
-              />
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="dropoffPostalCode" className="text-xs sm:text-sm">Postal Code</Label>
+                <Input
+                  id="dropoffPostalCode"
+                  value={form.dropoffPostalCode}
+                  onChange={e => setForm({ ...form, dropoffPostalCode: e.target.value.toUpperCase() })}
+                  placeholder="T2P 1J9"
+                  autoComplete="postal-code"
+                  maxLength={7}
+                  className="uppercase tracking-wider h-9"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="buzzCode" className="text-xs sm:text-sm">
+                  Buzz / Unit Code
+                </Label>
+                <Input
+                  id="buzzCode"
+                  value={form.buzzCode}
+                  onChange={e => setForm({ ...form, buzzCode: e.target.value })}
+                  placeholder="e.g. #204, Buzz 1234"
+                  autoComplete="off"
+                  className="h-9"
+                />
+              </div>
             </div>
 
             {form.recipientName.trim() && !fromSavedContactId && (
@@ -606,18 +608,18 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
         {/* Package Details */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center">
-                <Package className="w-3.5 h-3.5 text-orange-500" />
+          <CardHeader className="pb-3 px-3 sm:px-6">
+            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500" />
               </div>
               Package Details
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="smallPackages">Small Packages</Label>
+          <CardContent className="space-y-3 px-3 sm:px-6 pt-0">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="smallPackages" className="text-xs sm:text-sm">Small Packages</Label>
                 <Input
                   id="smallPackages"
                   type="number"
@@ -626,10 +628,11 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   onChange={e =>
                     setForm({ ...form, smallPackages: parseInt(e.target.value) || 0 })
                   }
+                  className="h-9"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="bigPackages">Big Packages</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="bigPackages" className="text-xs sm:text-sm">Big Packages</Label>
                 <Input
                   id="bigPackages"
                   type="number"
@@ -638,39 +641,41 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   onChange={e =>
                     setForm({ ...form, bigPackages: parseInt(e.target.value) || 0 })
                   }
+                  className="h-9"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="packageDescription">Description</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="packageDescription" className="text-xs sm:text-sm">Description</Label>
               <Input
                 id="packageDescription"
                 value={form.packageDescription}
                 onChange={e => setForm({ ...form, packageDescription: e.target.value })}
-                placeholder="e.g., Documents, Groceries, Medical supplies"
+                placeholder="e.g., Documents, Groceries"
+                className="h-9"
               />
             </div>
 
-            <div className="flex flex-col gap-3 pt-2">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="isRush"
                   checked={form.isRush}
                   onCheckedChange={c => setForm({ ...form, isRush: c === true })}
                 />
-                <Label htmlFor="isRush" className="text-sm font-normal cursor-pointer">
-                  Rush delivery (45 min SLA)
+                <Label htmlFor="isRush" className="text-xs sm:text-sm font-normal cursor-pointer">
+                  Rush (45 min)
                 </Label>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="isOutOfTown"
                   checked={form.isOutOfTown}
                   onCheckedChange={c => setForm({ ...form, isOutOfTown: c === true })}
                 />
-                <Label htmlFor="isOutOfTown" className="text-sm font-normal cursor-pointer">
-                  Out of town delivery
+                <Label htmlFor="isOutOfTown" className="text-xs sm:text-sm font-normal cursor-pointer">
+                  Out of town
                 </Label>
               </div>
             </div>
@@ -708,28 +713,29 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
         {/* Delivery Options */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Clock className="w-3.5 h-3.5 text-blue-500" />
+          <CardHeader className="pb-3 px-3 sm:px-6">
+            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
               </div>
               Delivery Options
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="specialInstructions">Special Instructions</Label>
+          <CardContent className="space-y-3 px-3 sm:px-6 pt-0">
+            <div className="space-y-1.5">
+              <Label htmlFor="specialInstructions" className="text-xs sm:text-sm">Special Instructions</Label>
               <Textarea
                 id="specialInstructions"
                 value={form.specialInstructions}
                 onChange={e => setForm({ ...form, specialInstructions: e.target.value })}
-                placeholder="Gate codes, delivery instructions, handling notes..."
-                rows={3}
+                placeholder="Gate codes, instructions..."
+                rows={2}
+                className="text-sm"
               />
             </div>
 
-            <div className="flex flex-col gap-3 pt-2">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="requireSignature"
                   checked={form.requireSignature}
@@ -739,12 +745,12 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 />
                 <Label
                   htmlFor="requireSignature"
-                  className="text-sm font-normal cursor-pointer"
+                  className="text-xs sm:text-sm font-normal cursor-pointer"
                 >
-                  Require signature on delivery
+                  Require signature
                 </Label>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="requirePhoto"
                   checked={form.requirePhoto}
@@ -752,21 +758,21 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 />
                 <Label
                   htmlFor="requirePhoto"
-                  className="text-sm font-normal cursor-pointer"
+                  className="text-xs sm:text-sm font-normal cursor-pointer"
                 >
-                  Require photo proof of delivery
+                  Require photo proof
                 </Label>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Button type="submit" className="w-full h-12 text-base" disabled={isSubmitting}>
+        <Button type="submit" className="w-full h-11 text-sm sm:text-base" disabled={isSubmitting}>
           {isSubmitting ? (
             <>Creating Order...</>
           ) : (
             <>
-              <Truck className="w-5 h-5 mr-2" />
+              <Truck className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
               Post Delivery
             </>
           )}

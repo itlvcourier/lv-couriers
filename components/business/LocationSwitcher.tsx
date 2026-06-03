@@ -49,9 +49,9 @@ export function LocationSwitcher() {
   // Non-owners with single location - just show a label, no switcher
   if (!userIsOwner && accessibleLocations.length === 1) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-lg border border-border/50">
-        <Building2 className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-medium truncate max-w-[150px]">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/50 rounded-lg border border-border/50">
+        <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="text-xs sm:text-sm font-medium truncate max-w-[80px] sm:max-w-[120px]">
           {accessibleLocations[0].name}
         </span>
       </div>
@@ -69,56 +69,54 @@ export function LocationSwitcher() {
     : accessibleLocations.find(l => l.id === activeLocationId)
   
   return (
-    <div className="flex items-center gap-2">
-      <Select
-        value={activeLocationId === 'all' ? 'all' : (activeLocationId || accessibleLocations[0]?.id || '')}
-        onValueChange={(value) => setActiveLocation(value as string | 'all')}
-      >
-        <SelectTrigger className="w-[200px] h-9 bg-muted/50 border-border/50">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-muted-foreground" />
-            <SelectValue placeholder="Select location">
-              {activeLocationId === 'all' ? (
-                <span className="flex items-center gap-2">
-                  All Locations
-                  <Badge variant="secondary" className="text-xs py-0 px-1.5">
-                    {accessibleLocations.length}
-                  </Badge>
-                </span>
-              ) : (
-                <span className="truncate">
-                  {currentLocation?.name || accessibleLocations[0]?.name || 'Select location'}
-                </span>
-              )}
-            </SelectValue>
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          {/* Only owners can see "All Locations" */}
-          {userIsOwner && (
-            <SelectItem value="all" className="font-medium">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4" />
-                All Locations
-                <Badge variant="secondary" className="text-xs py-0 px-1.5 ml-auto">
+    <Select
+      value={activeLocationId === 'all' ? 'all' : (activeLocationId || accessibleLocations[0]?.id || '')}
+      onValueChange={(value) => setActiveLocation(value as string | 'all')}
+    >
+      <SelectTrigger className="w-auto max-w-[140px] sm:max-w-[180px] h-8 sm:h-9 bg-muted/50 border-border/50 px-2 sm:px-3">
+        <div className="flex items-center gap-1.5">
+          <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <SelectValue placeholder="Location">
+            {activeLocationId === 'all' ? (
+              <span className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <span className="truncate">All</span>
+                <Badge variant="secondary" className="text-[10px] py-0 px-1">
                   {accessibleLocations.length}
                 </Badge>
-              </div>
-            </SelectItem>
-          )}
-          
-          {accessibleLocations.map((location) => (
-            <SelectItem key={location.id} value={location.id}>
-              <div className="flex flex-col">
-                <span>{location.name}</span>
-                <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                  {location.address}
-                </span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+              </span>
+            ) : (
+              <span className="truncate text-xs sm:text-sm">
+                {currentLocation?.name || accessibleLocations[0]?.name || 'Location'}
+              </span>
+            )}
+          </SelectValue>
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        {/* Only owners can see "All Locations" */}
+        {userIsOwner && (
+          <SelectItem value="all" className="font-medium">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" />
+              All Locations
+              <Badge variant="secondary" className="text-xs py-0 px-1.5 ml-auto">
+                {accessibleLocations.length}
+              </Badge>
+            </div>
+          </SelectItem>
+        )}
+        
+        {accessibleLocations.map((location) => (
+          <SelectItem key={location.id} value={location.id}>
+            <div className="flex flex-col">
+              <span>{location.name}</span>
+              <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                {location.address}
+              </span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
