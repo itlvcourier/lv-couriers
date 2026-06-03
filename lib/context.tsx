@@ -36,7 +36,7 @@ import type {
   LocationReport,
   BusinessReport,
 } from './types'
-import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES } from './billing'
+import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES, calculateBreakdown } from './billing'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 import { unregisterDevicePush } from '@/lib/native/push'
 import {
@@ -76,6 +76,7 @@ import {
   createInvoiceInDb,
   updateLocationBillingEmails,
   updateLocationCoordinates,
+  updateTripOrder,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -535,13 +536,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // server-side via the existing billing trigger when we update the row.
     const delivery = deliveries.find(d => d.id === deliveryId)
     const rateCardForLoc = delivery ? rateCards.find(rc => rc.locationId === delivery.locationId) : null
+    
+    // Build confirmed manifest with verified quantities
+    const confirmedManifest = delivery?.manifest.map(item => {
+      const v = verifications.find(ver => ver.itemId === item.id)
+      return { ...item, confirmedQty: v?.confirmedQty ?? item.postedQty }
+    }) || []
+    
+    // Check if any item was marked out of town
+    const hasOutOfTown = verifications.some(v => v.outOfTown)
+    const effectiveOot = hasOutOfTown || delivery?.isOutOfTown || false
+    
+    // Calculate the rate using confirmed quantities
+    const breakdown = calculateBreakdown(
+      confirmedManifest,
+      effectiveOot,
+      delivery?.isUrgent || false,
+      rateCardForLoc || null,
+      true, // useConfirmed
+      delivery?.distanceKm ?? null
+    )
+    
+    const calculatedRate = breakdown.rate
+    const gstAmount = rateCardForLoc?.gstApplicable ? Math.round(calculatedRate * 0.05 * 100) / 100 : 0
+    const totalAmount = calculatedRate + gstAmount
+    
     persist(
       applyPickupVerifications(
         deliveryId,
         verifications,
-        delivery?.calculatedRate || 0,
-        delivery?.gstAmount || 0,
-        delivery?.totalAmount || 0,
+        calculatedRate,
+        gstAmount,
+        totalAmount,
         rateCardForLoc?.id || null,
       ),
       'verifyPickup',
@@ -570,6 +596,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           isOutOfTown: hasOutOfTown || d.isOutOfTown,
           status: 'picked_up' as DeliveryStatus,
           pickedUpAt: new Date().toISOString(),
+          calculatedRate,
+          gstAmount,
+          totalAmount,
           trackingCode: `LVC-${d.id.split('-')[1]}-${d.driverName?.split(' ').map(n => n[0]).join('') || 'XX'}`,
           statusHistory: [
             ...d.statusHistory,
@@ -585,7 +614,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [])
+  }, [deliveries, rateCards])
 
   const advanceStatus = useCallback((deliveryId: string) => {
     // Compute next status outside the updater so we can persist it.
@@ -2536,14 +2565,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [trips, drivers])
 
-  const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
-    setTrips(prev => prev.map(t => {
-      if (t.id === tripId) {
-        return { ...t, order: newOrder }
-      }
-      return t
-    }))
-  }, [])
+const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
+  setTrips(prev => prev.map(t => {
+    if (t.id === tripId) {
+      return { ...t, order: newOrder }
+    }
+    return t
+  }))
+  // Persist to database
+  updateTripOrder(tripId, newOrder).catch(err => {
+    console.error('[v0] Failed to persist trip order:', err)
+  })
+}, [])
 
   const retryDelivery = useCallback((deliveryId: string) => {
     setDeliveries(prev => prev.map(d => {

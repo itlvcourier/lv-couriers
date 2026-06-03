@@ -91,7 +91,7 @@ export function AdminView() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex overflow-x-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div 
@@ -102,7 +102,7 @@ export function AdminView() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border flex flex-col transition-transform duration-200 lg:translate-x-0",
+        "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border flex flex-col transition-transform duration-200 lg:translate-x-0 shrink-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Sidebar Header */}
@@ -173,21 +173,21 @@ export function AdminView() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 h-16 bg-card/95 backdrop-blur border-b border-border flex items-center justify-between px-4 lg:px-6">
-          <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-30 h-16 bg-card/95 backdrop-blur border-b border-border flex items-center justify-between px-4 lg:px-6 shrink-0">
+          <div className="flex items-center gap-4 min-w-0">
             <Button 
               variant="ghost" 
               size="icon" 
-              className="lg:hidden"
+              className="lg:hidden shrink-0"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <h2 className="text-lg font-semibold capitalize">{activePage}</h2>
+            <h2 className="text-lg font-semibold capitalize truncate">{activePage.replace('_', ' ')}</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <NotificationCenter />
             <Avatar className="w-9 h-9 lg:hidden">
               <AvatarImage src={admin?.avatar} />
@@ -199,8 +199,10 @@ export function AdminView() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto">
-          {renderPage()}
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto overflow-x-hidden">
+          <div className="max-w-full">
+            {renderPage()}
+          </div>
         </main>
       </div>
     </div>

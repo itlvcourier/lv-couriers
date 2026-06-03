@@ -126,8 +126,8 @@ export function AdminDashboard() {
     toast.info(`Call ${name}: ${phone}`)
   }
 
-  return (
-    <div className="space-y-6">
+return (
+  <div className="space-y-6 overflow-x-hidden">
       {/* Invoice alert banners - appear at the very top, highest priority */}
       {escalatedInvoices.length > 0 && (
         <InvoiceAlertBanner
