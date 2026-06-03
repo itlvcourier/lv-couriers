@@ -231,12 +231,12 @@ export function AdminBusinesses() {
     
     const supabase = createClient()
     
-    // Create the business with all required fields
+    // Create the business with all required fields (contact_name is NOT NULL in DB)
     const { data: newBusiness, error: businessError } = await supabase
       .from('businesses')
       .insert({
         name: form.name,
-        contact_name: form.contact_name || form.name,
+        contact_name: form.contact_name || form.name, // Falls back to business name if no contact name
         email: form.billing_email,
         phone: form.contact_phone || '',
         invoice_format: 'combined',
