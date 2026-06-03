@@ -113,6 +113,7 @@ export function AdminBusinesses() {
     billing_email: '',
     contact_name: '',
     contact_phone: '',
+    temp_password: '',
   })
 
   const [locationForm, setLocationForm] = useState({
@@ -219,12 +220,19 @@ export function AdminBusinesses() {
 
   const handleAddBusiness = async () => {
     if (!form.name || !form.billing_email) {
-      toast.error('Please fill in required fields')
+      toast.error('Please fill in required fields (Business Name and Email)')
+      return
+    }
+
+    if (!form.temp_password || form.temp_password.length < 6) {
+      toast.error('Please provide a temporary password (at least 6 characters)')
       return
     }
     
     const supabase = createClient()
-    const { error } = await supabase
+    
+    // First create the business
+    const { data: newBusiness, error } = await supabase
       .from('businesses')
       .insert({
         name: form.name,
@@ -234,17 +242,49 @@ export function AdminBusinesses() {
         invoice_format: 'combined',
         status: 'pending',
       })
+      .select()
+      .single()
     
     if (error) {
       toast.error('Failed to create business')
       console.error(error)
       return
     }
+
+    // Now create the owner user account
+    try {
+      const response = await fetch('/api/admin/create-business-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.billing_email,
+          password: form.temp_password,
+          name: form.contact_name || form.name,
+          businessId: newBusiness.id,
+          locationId: null, // Owner doesn't have a specific location
+          role: 'owner',
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Business was created but user wasn't - show partial success
+        toast.warning(`Business created but user account failed: ${data.error}`)
+        mutate('all-businesses')
+        setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '', temp_password: '' })
+        setShowAddSheet(false)
+        return
+      }
+
+      toast.success(`Business created! Login: ${form.billing_email} / ${form.temp_password}`, { duration: 10000 })
+    } catch {
+      toast.warning('Business created but user account creation failed')
+    }
     
     mutate('all-businesses')
-    setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '' })
+    setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '', temp_password: '' })
     setShowAddSheet(false)
-    toast.success('Business created successfully')
   }
 
   const handleToggleStatus = async (business: BusinessWithLocations) => {
@@ -1667,6 +1707,19 @@ export function AdminBusinesses() {
                 placeholder="(403) 555-0100"
                 className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">Temporary Password *</Label>
+              <Input
+                type="text"
+                value={form.temp_password}
+                onChange={(e) => setForm({ ...form, temp_password: e.target.value })}
+                placeholder="Min 6 characters"
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+              <p className="text-xs text-muted-foreground">
+                This will be the owner&apos;s login password. They should change it after first login.
+              </p>
             </div>
             <Button onClick={handleAddBusiness} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
               <Plus className="w-4 h-4 mr-2" />
