@@ -461,12 +461,9 @@ export function AdminBusinesses() {
         business_id: detailBusiness.id,
         name: locationForm.name,
         address: locationForm.address,
-        phone: locationForm.phone || null,
         billing_email: locationForm.billing_email || detailBusiness.billing_email,
         backup_email: locationForm.backup_email || null,
-        notes: locationForm.notes || null,
-        lat,
-        lng,
+        contact_phone: locationForm.phone || null,
       })
 
     if (error) {
