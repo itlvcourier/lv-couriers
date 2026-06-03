@@ -335,70 +335,78 @@ export function BusinessOrders() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-3 border-t border-border gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {driver ? (
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-muted-foreground truncate">
-                          {driver.name}
-                        </span>
-                      </div>
-                    ) : order.status === 'posted' ? (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="w-3.5 h-3.5" />
-                        Awaiting driver
-                      </div>
-                    ) : null}
+                <div className="pt-3 border-t border-border space-y-2">
+                  {/* Driver info row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {driver ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-muted-foreground truncate">
+                            {driver.name}
+                          </span>
+                        </div>
+                      ) : order.status === 'posted' ? (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="w-3.5 h-3.5" />
+                          Awaiting driver
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-primary">
+                        ${order.price.toFixed(2)}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {canCancel && delivery && (
-                      <>
+                  {/* Action buttons row */}
+                  {(canCancel || (delivery && order.status !== 'posted')) && (
+                    <div className="flex items-center gap-2">
+                      {canCancel && delivery && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={e => {
+                              e.stopPropagation()
+                              openEditDialog(delivery)
+                            }}
+                          >
+                            <Pencil className="w-3 h-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={e => {
+                              e.stopPropagation()
+                              openCancelDialog(delivery)
+                            }}
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+                      {delivery && order.status !== 'posted' && (
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-8"
+                          variant="ghost"
+                          className="h-7 text-xs px-2"
                           onClick={e => {
                             e.stopPropagation()
-                            openEditDialog(delivery)
+                            openDuplicateDialog(delivery)
                           }}
                         >
-                          <Pencil className="w-3.5 h-3.5 mr-1" />
-                          Edit
+                          <Copy className="w-3 h-3 mr-1" />
+                          Reorder
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={e => {
-                            e.stopPropagation()
-                            openCancelDialog(delivery)
-                          }}
-                        >
-                          <XCircle className="w-3.5 h-3.5 mr-1" />
-                          Cancel
-                        </Button>
-                      </>
-                    )}
-                    {delivery && order.status !== 'posted' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8"
-                        onClick={e => {
-                          e.stopPropagation()
-                          openDuplicateDialog(delivery)
-                        }}
-                      >
-                        <Copy className="w-3.5 h-3.5 mr-1" />
-                        Reorder
-                      </Button>
-                    )}
-                    <span className="text-sm font-semibold text-primary">
-                      ${order.price.toFixed(2)}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
