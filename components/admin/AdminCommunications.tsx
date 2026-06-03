@@ -219,8 +219,8 @@ export function AdminCommunications() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {smsLog.map(sms => {
-                      const typeConfig = SMS_CONFIGS[sms.type]
-                      const statusConfig = SMS_STATUS_CONFIGS[sms.status]
+                      const typeConfig = SMS_CONFIGS[sms.type] || { label: sms.type, color: 'bg-gray-500/10 text-gray-400' }
+                      const statusConfig = SMS_STATUS_CONFIGS[sms.status] || { label: sms.status, color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' }
                       const canRetry = sms.status === 'failed' || sms.status === 'bounced'
                       
                       return (
