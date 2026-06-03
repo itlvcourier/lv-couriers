@@ -96,47 +96,47 @@ export function BusinessView() {
           <TabsList className="w-full h-16 rounded-none bg-transparent p-0 grid grid-cols-6 max-w-xl mx-auto">
             <TabsTrigger
               value="orders"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
             >
               <Package className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Orders</span>
+              <span className="text-[9px] sm:text-[10px] font-medium">Orders</span>
             </TabsTrigger>
             <TabsTrigger
               value="live"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
             >
               <Radio className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Live</span>
+              <span className="text-[9px] sm:text-[10px] font-medium">Live</span>
             </TabsTrigger>
             <TabsTrigger
               value="create"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
             >
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center -mt-4 shadow-lg">
-                <Plus className="w-5 h-5 text-primary-foreground" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary flex items-center justify-center -mt-4 shadow-lg">
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
               </div>
-              <span className="text-[10px] font-medium -mt-1">Create</span>
+              <span className="text-[9px] sm:text-[10px] font-medium -mt-1">Create</span>
             </TabsTrigger>
             <TabsTrigger
               value="invoices"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
             >
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Invoices</span>
+              <span className="text-[9px] sm:text-[10px] font-medium">Bills</span>
             </TabsTrigger>
             <TabsTrigger
               value="reports"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
             >
               <BarChart3 className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Reports</span>
+              <span className="text-[9px] sm:text-[10px] font-medium">Reports</span>
             </TabsTrigger>
             <TabsTrigger
               value="profile"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground"
+              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
             >
               <User className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Profile</span>
+              <span className="text-[9px] sm:text-[10px] font-medium">Profile</span>
             </TabsTrigger>
           </TabsList>
         </div>

@@ -165,31 +165,31 @@ export function DriverEarnings() {
   return (
     <div className="p-4 space-y-4 pb-24">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
-          <CardContent className="p-4 text-center">
-            <DollarSign className="w-5 h-5 mx-auto mb-1 text-green-500" />
-            <p className="text-2xl font-bold text-green-500">${earnings?.today.amount.toFixed(0) || 0}</p>
-            <p className="text-xs text-muted-foreground">Today</p>
-            <p className="text-xs text-green-500/70">{earnings?.today.count || 0} deliveries</p>
+          <CardContent className="p-2 sm:p-4 text-center">
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-green-500" />
+            <p className="text-lg sm:text-2xl font-bold text-green-500">${earnings?.today.amount.toFixed(0) || 0}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Today</p>
+            <p className="text-[10px] sm:text-xs text-green-500/70">{earnings?.today.count || 0} del</p>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-          <CardContent className="p-4 text-center">
-            <Calendar className="w-5 h-5 mx-auto mb-1 text-blue-500" />
-            <p className="text-2xl font-bold text-blue-500">${earnings?.week.amount.toFixed(0) || 0}</p>
-            <p className="text-xs text-muted-foreground">This Week</p>
-            <p className="text-xs text-blue-500/70">{earnings?.week.count || 0} deliveries</p>
+          <CardContent className="p-2 sm:p-4 text-center">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-blue-500" />
+            <p className="text-lg sm:text-2xl font-bold text-blue-500">${earnings?.week.amount.toFixed(0) || 0}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Week</p>
+            <p className="text-[10px] sm:text-xs text-blue-500/70">{earnings?.week.count || 0} del</p>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
-          <CardContent className="p-4 text-center">
-            <TrendingUp className="w-5 h-5 mx-auto mb-1 text-purple-500" />
-            <p className="text-2xl font-bold text-purple-500">${earnings?.month.amount.toFixed(0) || 0}</p>
-            <p className="text-xs text-muted-foreground">This Month</p>
-            <p className="text-xs text-purple-500/70">{earnings?.month.count || 0} deliveries</p>
+          <CardContent className="p-2 sm:p-4 text-center">
+            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-purple-500" />
+            <p className="text-lg sm:text-2xl font-bold text-purple-500">${earnings?.month.amount.toFixed(0) || 0}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Month</p>
+            <p className="text-[10px] sm:text-xs text-purple-500/70">{earnings?.month.count || 0} del</p>
           </CardContent>
         </Card>
       </div>

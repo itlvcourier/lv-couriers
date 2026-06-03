@@ -268,36 +268,37 @@ export function AdminDrivers() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">Drivers</h2>
-          <p className="text-sm text-muted-foreground">{drivers.length} total drivers</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* View Toggle */}
-          <div className="flex items-center rounded-lg border border-[var(--border-color)] p-1">
-            <Button 
-              variant={viewMode === 'cards' ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => setViewMode('cards')}
-              className="h-8 px-3"
-            >
-              <LayoutGrid className="w-4 h-4 mr-1" />
-              Cards
-            </Button>
-            <Button 
-              variant={viewMode === 'performance' ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => setViewMode('performance')}
-              className="h-8 px-3"
-            >
-              <Table className="w-4 h-4 mr-1" />
-              Performance
-            </Button>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">Drivers</h2>
+            <p className="text-sm text-muted-foreground">{drivers.length} total drivers</p>
           </div>
           <Button onClick={() => setShowAddSheet(true)} className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
             <Plus className="w-4 h-4" />
-            Add Driver
+            <span className="hidden sm:inline">Add Driver</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        </div>
+        {/* View Toggle */}
+        <div className="flex items-center rounded-lg border border-[var(--border-color)] p-1 w-fit">
+          <Button 
+            variant={viewMode === 'cards' ? 'secondary' : 'ghost'} 
+            size="sm"
+            onClick={() => setViewMode('cards')}
+            className="h-8 px-3"
+          >
+            <LayoutGrid className="w-4 h-4 sm:mr-1" />
+            <span className="hidden sm:inline">Cards</span>
+          </Button>
+          <Button 
+            variant={viewMode === 'performance' ? 'secondary' : 'ghost'} 
+            size="sm"
+            onClick={() => setViewMode('performance')}
+            className="h-8 px-3"
+          >
+            <Table className="w-4 h-4 sm:mr-1" />
+            <span className="hidden sm:inline">Performance</span>
           </Button>
         </div>
       </div>
@@ -514,7 +515,7 @@ export function AdminDrivers() {
               </SheetHeader>
               
               {/* Stats Row */}
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 py-4 border-b border-[var(--border-color)]">
+              <div className="grid grid-cols-3 gap-2 py-4 border-b border-[var(--border-color)]">
                 <div className="text-center">
                   <p className="text-lg font-bold text-foreground">{selectedDriver.today_deliveries}</p>
                   <p className="text-xs text-muted-foreground">Today</p>

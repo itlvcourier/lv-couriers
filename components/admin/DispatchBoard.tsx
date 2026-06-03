@@ -268,7 +268,7 @@ function DispatchBoardContent({
   return (
   <div className="space-y-6 overflow-x-hidden">
       {/* Top Row: Unassigned + Drivers */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Unassigned Jobs Column */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">

@@ -51,26 +51,26 @@ export function DriverHistory() {
   return (
     <div className="space-y-6">
       {/* Stats Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Card className="bg-success/10 border-success/20">
-          <CardContent className="p-4 text-center">
-            <CheckCircle className="w-5 h-5 text-success mx-auto mb-2" />
-            <p className="text-2xl font-bold text-success">{totalDelivered}</p>
-            <p className="text-xs text-muted-foreground">Completed</p>
+          <CardContent className="p-2 sm:p-4 text-center">
+            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-success mx-auto mb-1 sm:mb-2" />
+            <p className="text-lg sm:text-2xl font-bold text-success">{totalDelivered}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Done</p>
           </CardContent>
         </Card>
         <Card className="bg-destructive/10 border-destructive/20">
-          <CardContent className="p-4 text-center">
-            <XCircle className="w-5 h-5 text-destructive mx-auto mb-2" />
-            <p className="text-2xl font-bold text-destructive">{totalCancelled}</p>
-            <p className="text-xs text-muted-foreground">Cancelled</p>
+          <CardContent className="p-2 sm:p-4 text-center">
+            <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-destructive mx-auto mb-1 sm:mb-2" />
+            <p className="text-lg sm:text-2xl font-bold text-destructive">{totalCancelled}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Cancel</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/10 border-primary/20">
-          <CardContent className="p-4 text-center">
-            <DollarSign className="w-5 h-5 text-primary mx-auto mb-2" />
-            <p className="text-2xl font-bold text-primary">${totalEarnings.toFixed(0)}</p>
-            <p className="text-xs text-muted-foreground">Earned</p>
+          <CardContent className="p-2 sm:p-4 text-center">
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-primary mx-auto mb-1 sm:mb-2" />
+            <p className="text-lg sm:text-2xl font-bold text-primary">${totalEarnings.toFixed(0)}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Earned</p>
           </CardContent>
         </Card>
       </div>

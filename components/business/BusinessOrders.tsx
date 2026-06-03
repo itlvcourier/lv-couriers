@@ -223,50 +223,50 @@ export function BusinessOrders() {
   return (
     <div className="space-y-4 overflow-x-hidden">
       {/* Stats Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <Card className="bg-primary/10 border-primary/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-primary">{businessOrders.length}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-primary">{businessOrders.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Total</p>
           </CardContent>
         </Card>
         <Card className="bg-warning/10 border-warning/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-warning">{activeOrders.length}</p>
-            <p className="text-xs text-muted-foreground">Active</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-warning">{activeOrders.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
         <Card className="bg-success/10 border-success/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-success">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-success">
               {deliveredOrders.length}
             </p>
-            <p className="text-xs text-muted-foreground">Delivered</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Done</p>
           </CardContent>
         </Card>
         <Card className="bg-destructive/10 border-destructive/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-destructive">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-destructive">
               {cancelledOrders.length}
             </p>
-            <p className="text-xs text-muted-foreground">Cancelled</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Cancel</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filter Tabs */}
       <Tabs value={filter} onValueChange={v => setFilter(v as typeof filter)}>
-        <TabsList className="w-full h-auto flex-wrap">
-          <TabsTrigger value="all" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+        <TabsList className="w-full h-auto grid grid-cols-4">
+          <TabsTrigger value="all" className="text-[10px] sm:text-sm px-1 sm:px-3">
             All ({businessOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="active" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+          <TabsTrigger value="active" className="text-[10px] sm:text-sm px-1 sm:px-3">
             Active ({activeOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="delivered" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+          <TabsTrigger value="delivered" className="text-[10px] sm:text-sm px-1 sm:px-3">
             Done ({deliveredOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="cancelled" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+          <TabsTrigger value="cancelled" className="text-[10px] sm:text-sm px-1 sm:px-3">
             Cancel ({cancelledOrders.length})
           </TabsTrigger>
         </TabsList>

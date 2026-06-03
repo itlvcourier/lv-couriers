@@ -209,66 +209,66 @@ export function AdminDriverReports() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-blue-400" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{totals.deliveries}</p>
-                <p className="text-xs text-muted-foreground">Total Deliveries</p>
+              <div className="min-w-0">
+                <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.deliveries}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Total</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-400" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{totals.completed}</p>
-                <p className="text-xs text-muted-foreground">Completed</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{totals.failed}</p>
-                <p className="text-xs text-muted-foreground">Failed</p>
+              <div className="min-w-0">
+                <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.completed}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Done</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-yellow-400" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{totals.adjustments}</p>
-                <p className="text-xs text-muted-foreground">Adjustments</p>
+              <div className="min-w-0">
+                <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.failed}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Failed</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.adjustments}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Adjust</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Summary Table */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+      {/* Summary Table - Hidden on small screens */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)] hidden lg:block">
         <CardHeader>
           <CardTitle className="text-foreground">Driver Summary - {months.find(m => m.value === selectedMonth)?.label}</CardTitle>
         </CardHeader>
@@ -338,7 +338,7 @@ export function AdminDriverReports() {
       </Card>
 
       {/* Individual Driver Summary Cards */}
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         {filteredReports.map((report) => (
           <Card key={report.driverId} className="bg-[var(--bg-card)] border-[var(--border-color)]">
             <CardContent className="p-4">

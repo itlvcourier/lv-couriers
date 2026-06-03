@@ -113,19 +113,19 @@ export function BusinessReports() {
   return (
     <div className="space-y-6">
       {/* Header with Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Reports</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Reports</h2>
+          <p className="text-sm text-muted-foreground">
             Track delivery performance and spending
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Location Filter */}
           {(canViewAll || accessibleLocations.length > 1) && (
             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[140px] sm:w-[180px]">
                 <SelectValue placeholder="Select location" />
               </SelectTrigger>
               <SelectContent>
@@ -154,7 +154,7 @@ export function BusinessReports() {
             value={selectedRange} 
             onValueChange={(v) => setSelectedRange(v as keyof typeof DATE_RANGES)}
           >
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[120px] sm:w-[150px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -173,25 +173,25 @@ export function BusinessReports() {
       
       {/* Stats Overview Cards */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {/* Total Deliveries */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Deliveries</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Deliveries</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalDeliveries}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.completedDeliveries} completed, {stats.failedDeliveries} failed
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl sm:text-2xl font-bold">{stats.totalDeliveries}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                {stats.completedDeliveries} done, {stats.failedDeliveries} failed
               </p>
             </CardContent>
           </Card>
           
           {/* Success Rate */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Success</CardTitle>
               {successRate >= 95 ? (
                 <TrendingUp className="h-4 w-4 text-green-500" />
               ) : successRate >= 85 ? (
@@ -200,9 +200,9 @@ export function BusinessReports() {
                 <TrendingDown className="h-4 w-4 text-red-500" />
               )}
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{successRate}%</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl sm:text-2xl font-bold">{successRate}%</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 {stats.cancelledDeliveries} cancelled
               </p>
             </CardContent>
@@ -210,30 +210,30 @@ export function BusinessReports() {
           
           {/* Avg Delivery Time */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Delivery Time</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Avg Time</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {stats.avgDeliveryMins > 0 ? `${stats.avgDeliveryMins} min` : 'N/A'}
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl sm:text-2xl font-bold">
+                {stats.avgDeliveryMins > 0 ? `${stats.avgDeliveryMins}m` : 'N/A'}
               </div>
-              <p className="text-xs text-muted-foreground">
-                From order to delivery
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                Order to delivery
               </p>
             </CardContent>
           </Card>
           
           {/* Total Spend */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Spend</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Spend</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${stats.totalSpend.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">
-                ${stats.paidInvoices.toFixed(2)} paid, ${stats.pendingInvoices.toFixed(2)} pending
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl sm:text-2xl font-bold">${stats.totalSpend.toFixed(0)}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                ${stats.paidInvoices.toFixed(0)} paid
               </p>
             </CardContent>
           </Card>
@@ -241,22 +241,22 @@ export function BusinessReports() {
           {/* Customer Rating (shown when viewing a single location) */}
           {selectedLocationId !== 'all' && (
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Customer Rating</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">Rating</CardTitle>
                 <Star className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold flex items-center gap-1">
+              <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+                <div className="text-xl sm:text-2xl font-bold flex items-center gap-1">
                   {businessRatings?.avgOverallRating 
                     ? businessRatings.avgOverallRating.toFixed(1)
                     : 'N/A'
                   }
                   {businessRatings?.avgOverallRating && (
-                    <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                    <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 fill-yellow-400" />
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {businessRatings ? `${businessRatings.feedbackReceivedCount} of ${businessRatings.totalFeedback} reviews` : 'No reviews yet'}
+                <p className="text-[10px] sm:text-xs text-muted-foreground">
+                  {businessRatings ? `${businessRatings.feedbackReceivedCount} reviews` : 'No reviews'}
                 </p>
               </CardContent>
             </Card>

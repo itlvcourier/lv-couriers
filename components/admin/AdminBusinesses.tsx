@@ -605,47 +605,49 @@ export function AdminBusinesses() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-foreground">{businessStats.total}</div>
-              <div className="text-sm text-muted-foreground">Total Deliveries</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-foreground">{businessStats.total}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Total</div>
             </CardContent>
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-500">{businessStats.completed}</div>
-              <div className="text-sm text-muted-foreground">Completed</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-green-500">{businessStats.completed}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Done</div>
             </CardContent>
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-foreground">${businessStats.totalSpent.toFixed(0)}</div>
-              <div className="text-sm text-muted-foreground">Total Billed</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-foreground">${businessStats.totalSpent.toFixed(0)}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Billed</div>
             </CardContent>
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-foreground">{detailBusiness.locations.length}</div>
-              <div className="text-sm text-muted-foreground">Locations</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-foreground">{detailBusiness.locations.length}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Locations</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="locations" className="space-y-4">
-          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)]">
-            <TabsTrigger value="locations" className="gap-2">
+          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)] w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+            <TabsTrigger value="locations" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <MapPin className="w-4 h-4" />
-              Locations
+              <span className="hidden sm:inline">Locations</span>
+              <span className="sm:hidden">Loc</span>
             </TabsTrigger>
-            <TabsTrigger value="team" className="gap-2">
+            <TabsTrigger value="team" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <Users className="w-4 h-4" />
               Team
             </TabsTrigger>
-            <TabsTrigger value="billing" className="gap-2">
+            <TabsTrigger value="billing" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <FileText className="w-4 h-4" />
-              Billing
+              <span className="hidden sm:inline">Billing</span>
+              <span className="sm:hidden">Bill</span>
             </TabsTrigger>
           </TabsList>
 
