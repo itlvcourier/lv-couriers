@@ -405,7 +405,6 @@ export function AdminBusinesses() {
           name: request.store_name,
           address: request.store_address || '',
           phone: request.store_phone || null,
-          is_active: true,
         })
       
       if (locationError) {
@@ -414,15 +413,15 @@ export function AdminBusinesses() {
       }
     }
     
-    // If approved and it's a remove request, deactivate the location
+    // If approved and it's a remove request, delete the location
     if (action === 'approved' && request.request_type === 'remove' && request.location_id) {
-      const { error: deactivateError } = await supabase
+      const { error: deleteError } = await supabase
         .from('business_locations')
-        .update({ is_active: false })
+        .delete()
         .eq('id', request.location_id)
       
-      if (deactivateError) {
-        toast.error('Request approved but failed to deactivate location')
+      if (deleteError) {
+        toast.error('Request approved but failed to remove location')
         return
       }
     }
@@ -466,7 +465,6 @@ export function AdminBusinesses() {
         billing_email: locationForm.billing_email || detailBusiness.billing_email,
         backup_email: locationForm.backup_email || null,
         notes: locationForm.notes || null,
-        is_active: true,
         lat,
         lng,
       })
