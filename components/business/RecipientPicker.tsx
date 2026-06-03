@@ -78,12 +78,13 @@ export function RecipientPicker({
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        className="gap-2 h-9"
+        className="gap-1.5 h-8 px-2 sm:px-3 sm:h-9 sm:gap-2 shrink-0"
       >
-        <ContactRound className="w-4 h-4" />
-        {triggerLabel}
+        <ContactRound className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        <span className="hidden sm:inline">{triggerLabel}</span>
+        <span className="sm:hidden">Saved</span>
         {contacts.length > 0 && (
-          <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+          <Badge variant="secondary" className="h-4 sm:h-5 px-1 sm:px-1.5 text-[10px] sm:text-xs">
             {contacts.length}
           </Badge>
         )}
