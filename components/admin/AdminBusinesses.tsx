@@ -232,23 +232,41 @@ export function AdminBusinesses() {
     const supabase = createClient()
     
     // First create the business
-    const { data: newBusiness, error } = await supabase
+    const { data: newBusiness, error: businessError } = await supabase
       .from('businesses')
       .insert({
         name: form.name,
-        billing_email: form.billing_email,
-        contact_name: form.contact_name || null,
-        contact_phone: form.contact_phone || null,
         invoice_format: 'combined',
-        status: 'pending',
+        invite_status: 'pending',
       })
       .select()
       .single()
     
-    if (error) {
+    if (businessError) {
       toast.error('Failed to create business')
-      console.error(error)
+      console.error(businessError)
       return
+    }
+
+    // Create the first/main location for the business
+    const { data: newLocation, error: locationError } = await supabase
+      .from('business_locations')
+      .insert({
+        business_id: newBusiness.id,
+        name: 'Main Location',
+        address: '',
+        billing_email: form.billing_email,
+        contact_name: form.contact_name || null,
+        phone: form.contact_phone || null,
+        invite_status: 'pending',
+      })
+      .select()
+      .single()
+
+    if (locationError) {
+      toast.error('Business created but failed to create location')
+      console.error(locationError)
+      // Continue anyway to create the user
     }
 
     // Now create the owner user account
@@ -260,8 +278,9 @@ export function AdminBusinesses() {
           email: form.billing_email,
           password: form.temp_password,
           name: form.contact_name || form.name,
+          phone: form.contact_phone || null,
           businessId: newBusiness.id,
-          locationId: null, // Owner doesn't have a specific location
+          locationId: newLocation?.id || null,
           role: 'owner',
         }),
       })
@@ -288,13 +307,13 @@ export function AdminBusinesses() {
   }
 
   const handleToggleStatus = async (business: BusinessWithLocations) => {
-    const supabase = createClient()
-    const newStatus = business.status === 'active' ? 'suspended' : 'active'
-    
-    const { error } = await supabase
-      .from('businesses')
-      .update({ status: newStatus })
-      .eq('id', business.id)
+  const supabase = createClient()
+  const newStatus = business.invite_status === 'accepted' ? 'pending' : 'accepted'
+  
+  const { error } = await supabase
+  .from('businesses')
+  .update({ invite_status: newStatus })
+  .eq('id', business.id)
     
     if (error) {
       toast.error('Failed to update status')
@@ -1601,10 +1620,10 @@ export function AdminBusinesses() {
                           <Edit className="w-4 h-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
-                          <Ban className="w-4 h-4 mr-2" />
-                          {business.status === 'active' ? 'Suspend' : 'Activate'}
-                        </DropdownMenuItem>
+  <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
+  <Ban className="w-4 h-4 mr-2" />
+  {business.invite_status === 'accepted' ? 'Suspend' : 'Activate'}
+  </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             setSelectedBusiness(business)
