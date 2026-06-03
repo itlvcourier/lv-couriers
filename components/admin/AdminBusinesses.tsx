@@ -260,8 +260,7 @@ export function AdminBusinesses() {
         address: '',
         billing_email: form.billing_email,
         contact_name: form.contact_name || null,
-        phone: form.contact_phone || null,
-        invite_status: 'pending',
+        contact_phone: form.contact_phone || null,
       })
       .select()
       .single()
