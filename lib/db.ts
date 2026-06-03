@@ -9,11 +9,11 @@ import type {
 export interface DbBusiness {
   id: string
   name: string
-  billing_email: string
-  contact_name: string | null
-  contact_phone: string | null
+  contact_name: string
+  email: string
+  phone: string | null
   invoice_format: 'combined' | 'separate' | 'combined_breakdown'
-  status: 'pending' | 'active' | 'suspended'
+  invite_status: 'pending' | 'accepted' | 'declined'
   created_at: string
   updated_at: string
 }
