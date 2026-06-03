@@ -455,12 +455,12 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         {/* Recipient + Delivery */}
         <Card>
           <CardHeader className="pb-3 px-3 sm:px-6">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-500/10 flex items-center justify-center">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
                   <UserRound className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
                 </div>
-                Recipient
+                <span>Recipient</span>
               </CardTitle>
               <RecipientPicker businessId={businessId} onSelect={handleSelectContact} />
             </div>
