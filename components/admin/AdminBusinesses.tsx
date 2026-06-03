@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
 import { toast } from 'sonner'
+import { useApp } from '@/lib/context'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -68,6 +69,7 @@ import { createClient } from '@/lib/supabase/client'
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
+  const { refreshRateCards } = useApp()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DbBusiness['invite_status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -469,6 +471,8 @@ export function AdminBusinesses() {
     }
 
     mutate('all-businesses')
+    // Refresh rate cards since a new one is auto-seeded by the database trigger
+    await refreshRateCards()
     setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '' })
     setShowAddLocationSheet(false)
     toast.success('Location added successfully')
