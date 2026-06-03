@@ -3,7 +3,9 @@
 import { useState, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
 import { toast } from 'sonner'
+import { useApp } from '@/lib/context'
 import { Spinner } from '@/components/ui/spinner'
+import { AddressAutocomplete, type AddressResult } from '@/components/shared/AddressAutocomplete'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -68,6 +70,7 @@ import { createClient } from '@/lib/supabase/client'
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
+  const { refreshRateCards } = useApp()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DbBusiness['invite_status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -123,6 +126,8 @@ export function AdminBusinesses() {
     billing_email: '',
     backup_email: '',
     notes: '',
+    lat: null as number | null,
+    lng: null as number | null,
   })
 
   const [inviteForm, setInviteForm] = useState({
@@ -259,9 +264,6 @@ export function AdminBusinesses() {
         name: 'Main Location',
         address: '',
         billing_email: form.billing_email,
-        contact_name: form.contact_name || null,
-        phone: form.contact_phone || null,
-        invite_status: 'pending',
       })
       .select()
       .single()
@@ -311,7 +313,7 @@ export function AdminBusinesses() {
 
   const handleToggleStatus = async (business: BusinessWithLocations) => {
   const supabase = createClient()
-  const newStatus = business.invite_status === 'accepted' ? 'pending' : 'accepted'
+  const newStatus = business.invite_status === 'active' ? 'deactivated' : 'active'
   
   const { error } = await supabase
   .from('businesses')
@@ -406,7 +408,6 @@ export function AdminBusinesses() {
           name: request.store_name,
           address: request.store_address || '',
           phone: request.store_phone || null,
-          is_active: true,
         })
       
       if (locationError) {
@@ -415,15 +416,15 @@ export function AdminBusinesses() {
       }
     }
     
-    // If approved and it's a remove request, deactivate the location
+    // If approved and it's a remove request, delete the location
     if (action === 'approved' && request.request_type === 'remove' && request.location_id) {
-      const { error: deactivateError } = await supabase
+      const { error: deleteError } = await supabase
         .from('business_locations')
-        .update({ is_active: false })
+        .delete()
         .eq('id', request.location_id)
       
-      if (deactivateError) {
-        toast.error('Request approved but failed to deactivate location')
+      if (deleteError) {
+        toast.error('Request approved but failed to remove location')
         return
       }
     }
@@ -440,20 +441,22 @@ export function AdminBusinesses() {
       return
     }
 
-    // Geocode the address to get lat/lng for radius pricing
-    let lat: number | null = null
-    let lng: number | null = null
-    try {
-      const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(locationForm.address)}`)
-      if (geocodeRes.ok) {
-        const geocodeData = await geocodeRes.json()
-        if (geocodeData.lat && geocodeData.lng) {
-          lat = geocodeData.lat
-          lng = geocodeData.lng
+    // Use lat/lng from address autocomplete, or fall back to geocoding if not available
+    let lat: number | null = locationForm.lat
+    let lng: number | null = locationForm.lng
+    if (!lat || !lng) {
+      try {
+        const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(locationForm.address)}`)
+        if (geocodeRes.ok) {
+          const geocodeData = await geocodeRes.json()
+          if (geocodeData.lat && geocodeData.lng) {
+            lat = geocodeData.lat
+            lng = geocodeData.lng
+          }
         }
+      } catch (e) {
+        console.error('[v0] Failed to geocode location address:', e)
       }
-    } catch (e) {
-      console.error('[v0] Failed to geocode location address:', e)
     }
 
     const supabase = createClient()
@@ -463,11 +466,7 @@ export function AdminBusinesses() {
         business_id: detailBusiness.id,
         name: locationForm.name,
         address: locationForm.address,
-        phone: locationForm.phone || null,
         billing_email: locationForm.billing_email || detailBusiness.billing_email,
-        backup_email: locationForm.backup_email || null,
-        notes: locationForm.notes || null,
-        is_active: true,
         lat,
         lng,
       })
@@ -479,7 +478,9 @@ export function AdminBusinesses() {
     }
 
     mutate('all-businesses')
-    setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '' })
+    // Refresh rate cards since a new one is auto-seeded by the database trigger
+    await refreshRateCards()
+    setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '', lat: null, lng: null })
     setShowAddLocationSheet(false)
     toast.success('Location added successfully')
   }
@@ -611,8 +612,8 @@ export function AdminBusinesses() {
 
     const statusColors: Record<DbBusiness['invite_status'], string> = {
       pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
-      accepted: 'bg-green-500/10 text-green-500 border-green-500/30',
-      declined: 'bg-red-500/10 text-red-500 border-red-500/30',
+      active: 'bg-green-500/10 text-green-500 border-green-500/30',
+      deactivated: 'bg-red-500/10 text-red-500 border-red-500/30',
     }
 
   if (isLoading) {
@@ -984,9 +985,17 @@ export function AdminBusinesses() {
               </div>
               <div className="space-y-2">
                 <Label className="text-foreground">Address *</Label>
-                <Input
+                <AddressAutocomplete
                   value={locationForm.address}
-                  onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
+                  onChange={(value) => setLocationForm({ ...locationForm, address: value })}
+                  onSelect={(result: AddressResult) => {
+                    setLocationForm({
+                      ...locationForm,
+                      address: result.address,
+                      lat: result.lat ?? null,
+                      lng: result.lng ?? null,
+                    })
+                  }}
                   placeholder="123 Main St, Calgary, AB"
                   className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                 />
@@ -1562,7 +1571,7 @@ export function AdminBusinesses() {
                 className="pl-9 bg-[var(--bg-card)] border-[var(--border-color)]"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['status'] | 'all')}>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbBusiness['invite_status'] | 'all')}>
               <SelectTrigger className="w-full sm:w-40 bg-[var(--bg-card)] border-[var(--border-color)]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Status" />
@@ -1603,8 +1612,8 @@ export function AdminBusinesses() {
                       </Avatar>
                       <div>
                         <h3 className="font-medium text-foreground">{business.name}</h3>
-                        <Badge variant="outline" className={statusColors[business.status]}>
-                          {business.status}
+                        <Badge variant="outline" className={statusColors[business.invite_status]}>
+                          {business.invite_status}
                         </Badge>
                       </div>
                     </div>
@@ -1625,7 +1634,7 @@ export function AdminBusinesses() {
                         </DropdownMenuItem>
   <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
   <Ban className="w-4 h-4 mr-2" />
-  {business.invite_status === 'accepted' ? 'Suspend' : 'Activate'}
+  {business.invite_status === 'active' ? 'Suspend' : 'Activate'}
   </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {

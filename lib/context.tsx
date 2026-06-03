@@ -232,6 +232,7 @@ interface AppContextType {
   updateLocationEmails: (locationId: string, billingEmail: string, backupEmail: string | null) => void
   updateLocationCoords: (locationId: string, lat: number, lng: number) => void
   getRateCardForLocation: (locationId: string) => RateCard | null
+  refreshRateCards: () => Promise<void>
   generateInvoice: (businessId: string, locationId: string, periodStart: string, periodEnd: string) => Invoice | null
   generateBusinessInvoices: (
     businessId: string,
@@ -1722,6 +1723,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return rateCards.find(rc => rc.locationId === locationId) || null
   }, [rateCards])
 
+  // Refresh rate cards from the database (useful after adding locations)
+  const refreshRateCards = useCallback(async () => {
+    try {
+      const rc = await loadAllRateCards()
+      setRateCards(rc)
+    } catch (err) {
+      console.error('[db] failed to refresh rate cards', err)
+    }
+  }, [])
+
   // Update billing emails on a location (separate from rate card)
   const updateLocationEmails = useCallback((
     locationId: string,
@@ -2810,6 +2821,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         updateLocationEmails,
         updateLocationCoords,
         getRateCardForLocation,
+        refreshRateCards,
     generateInvoice,
     generateBusinessInvoices,
     markInvoicePaid,
