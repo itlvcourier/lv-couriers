@@ -308,7 +308,7 @@ export function AdminBusinesses() {
 
   const handleToggleStatus = async (business: BusinessWithLocations) => {
   const supabase = createClient()
-  const newStatus = business.invite_status === 'accepted' ? 'pending' : 'accepted'
+  const newStatus = business.invite_status === 'active' ? 'deactivated' : 'active'
   
   const { error } = await supabase
   .from('businesses')
@@ -321,7 +321,7 @@ export function AdminBusinesses() {
     }
     
     mutate('all-businesses')
-    toast.success(`Business ${newStatus === 'accepted' ? 'activated' : 'suspended'}`)
+    toast.success(`Business ${newStatus === 'active' ? 'activated' : 'suspended'}`)
   }
 
   const handleDeleteBusiness = async () => {
@@ -601,8 +601,8 @@ export function AdminBusinesses() {
 
     const statusColors: Record<DbBusiness['invite_status'], string> = {
       pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
-      accepted: 'bg-green-500/10 text-green-500 border-green-500/30',
-      declined: 'bg-red-500/10 text-red-500 border-red-500/30',
+      active: 'bg-green-500/10 text-green-500 border-green-500/30',
+      deactivated: 'bg-red-500/10 text-red-500 border-red-500/30',
     }
 
   if (isLoading) {
@@ -1615,7 +1615,7 @@ export function AdminBusinesses() {
                         </DropdownMenuItem>
   <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
   <Ban className="w-4 h-4 mr-2" />
-  {business.invite_status === 'accepted' ? 'Suspend' : 'Activate'}
+  {business.invite_status === 'active' ? 'Suspend' : 'Activate'}
   </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {

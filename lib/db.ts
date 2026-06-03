@@ -11,7 +11,9 @@ export interface DbBusiness {
   name: string
   contact_name: string
   email: string
+  billing_email: string
   phone: string | null
+  contact_phone: string | null
   invoice_format: 'combined' | 'separate' | 'combined_breakdown'
   invite_status: 'pending' | 'active' | 'deactivated'
   created_at: string
@@ -28,6 +30,7 @@ export interface DbLocation {
   lng: number | null
   billing_email: string
   backup_email: string | null
+  contact_phone: string | null
   created_at: string
 }
 

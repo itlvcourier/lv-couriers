@@ -335,7 +335,7 @@ return (
                 <p className="text-xs text-muted-foreground mb-1">Businesses</p>
                 <p className="text-2xl font-bold text-blue-400">{stats?.totalBusinesses || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {businesses.filter(b => b.invite_status === 'accepted').length} active
+                  {businesses.filter(b => b.invite_status === 'active').length} active
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
