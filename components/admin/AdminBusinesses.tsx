@@ -259,8 +259,6 @@ export function AdminBusinesses() {
         name: 'Main Location',
         address: '',
         billing_email: form.billing_email,
-        contact_name: form.contact_name || null,
-        contact_phone: form.contact_phone || null,
       })
       .select()
       .single()
@@ -462,8 +460,6 @@ export function AdminBusinesses() {
         name: locationForm.name,
         address: locationForm.address,
         billing_email: locationForm.billing_email || detailBusiness.billing_email,
-        backup_email: locationForm.backup_email || null,
-        contact_phone: locationForm.phone || null,
       })
 
     if (error) {
