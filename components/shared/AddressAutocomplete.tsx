@@ -202,7 +202,7 @@ export function AddressAutocomplete({
         placeholder={placeholder}
         disabled={disabled || isLoading}
         required={required}
-        className={cn('pl-9', className)}
+        className={cn('pl-9 text-sm truncate', className)}
         autoComplete="off"
       />
       {isLoading && (

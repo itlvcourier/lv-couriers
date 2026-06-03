@@ -337,7 +337,7 @@ export function AvailableJobs({ onJobClaimed }: AvailableJobsProps) {
       }
       // Check if we can add more
       if (prev.length >= remainingSlots) {
-        toast.error(`Max ${maxJobs} jobs - deselect one to add this`)
+        toast.error(`You can only select ${remainingSlots} more job${remainingSlots !== 1 ? 's' : ''} - deselect one to add this`)
         return prev
       }
       return [...prev, deliveryId]

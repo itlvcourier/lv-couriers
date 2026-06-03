@@ -719,10 +719,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId }),
     }).catch(err => console.error('[v0] delivered SMS failed', err))
-    // Note: the 30-minute client-side setTimeout feedback-request SMS was
-    // removed — a client timer can't survive the driver closing/refreshing the
-    // app, so it fired unreliably while still adding SMS volume. Feedback
-    // requests should be driven server-side (cron) if needed later.
+    
+    // Send feedback request SMS (setting-gated in the API endpoint)
+    void fetch('/api/sms/feedback-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId }),
+    }).catch(err => console.error('[v0] feedback request SMS failed', err))
+    
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
       persist(
@@ -2572,10 +2576,12 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
     }
     return t
   }))
-  // Persist to database
-  updateTripOrder(tripId, newOrder).catch(err => {
-    console.error('[v0] Failed to persist trip order:', err)
-  })
+  // Only persist to database if it's a real trip (not a virtual one)
+  if (tripId !== 'virtual-trip') {
+    updateTripOrder(tripId, newOrder).catch(err => {
+      console.error('[v0] Failed to persist trip order:', err)
+    })
+  }
 }, [])
 
   const retryDelivery = useCallback((deliveryId: string) => {

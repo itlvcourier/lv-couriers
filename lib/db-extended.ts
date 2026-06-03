@@ -1332,6 +1332,7 @@ export async function createFeedbackToken(
 
 /**
  * Get feedback by token (for public feedback form)
+ * Validates token expiration and checks if feedback was already submitted
  */
 export async function getFeedbackByToken(token: string): Promise<CustomerFeedback | null> {
   const supabase = createClient()
@@ -1348,6 +1349,19 @@ export async function getFeedbackByToken(token: string): Promise<CustomerFeedbac
   }
   
   if (!data) {
+    console.log('[v0] Feedback not found for token:', token)
+    return null
+  }
+  
+  // Check if token is expired
+  if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) {
+    console.log('[v0] Feedback token expired:', token)
+    return null
+  }
+  
+  // Check if feedback was already submitted
+  if (data.feedback_received) {
+    console.log('[v0] Feedback already submitted for token:', token)
     return null
   }
   

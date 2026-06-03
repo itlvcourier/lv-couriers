@@ -382,13 +382,14 @@ export function AdminInvoices() {
 
       {/* Filter Tabs */}
       <Tabs value={filter} onValueChange={(v) => setFilter(v as InvoiceFilter)}>
-        <div className="overflow-x-auto -mx-1 px-1">
-          <TabsList className="bg-muted/30 w-max">
+        <div className="overflow-x-auto -mx-1 px-1 pb-1">
+          <TabsList className="bg-muted/30 w-max min-w-full sm:min-w-0">
             {(Object.keys(filterLabels) as InvoiceFilter[]).map(key => (
-              <TabsTrigger key={key} value={key} className="gap-1.5">
-                {filterLabels[key]}
+              <TabsTrigger key={key} value={key} className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
+                <span className="hidden sm:inline">{filterLabels[key]}</span>
+                <span className="sm:hidden">{key === 'all' ? 'All' : key === 'disputed' ? 'Disp' : key === 'escalated' ? 'Esc' : filterLabels[key].slice(0, 4)}</span>
                 {counts[key] > 0 && (
-                  <span className="rounded-full bg-muted text-[10px] px-1.5 py-0.5 min-w-[18px] text-center">
+                  <span className="rounded-full bg-muted text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 min-w-[16px] sm:min-w-[18px] text-center">
                     {counts[key]}
                   </span>
                 )}

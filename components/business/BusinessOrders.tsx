@@ -223,50 +223,50 @@ export function BusinessOrders() {
   return (
     <div className="space-y-4 overflow-x-hidden">
       {/* Stats Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <Card className="bg-primary/10 border-primary/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-primary">{businessOrders.length}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-primary">{businessOrders.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Total</p>
           </CardContent>
         </Card>
         <Card className="bg-warning/10 border-warning/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-warning">{activeOrders.length}</p>
-            <p className="text-xs text-muted-foreground">Active</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-warning">{activeOrders.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
         <Card className="bg-success/10 border-success/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-success">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-success">
               {deliveredOrders.length}
             </p>
-            <p className="text-xs text-muted-foreground">Delivered</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Done</p>
           </CardContent>
         </Card>
         <Card className="bg-destructive/10 border-destructive/20">
-          <CardContent className="p-3 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-destructive">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-destructive">
               {cancelledOrders.length}
             </p>
-            <p className="text-xs text-muted-foreground">Cancelled</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Cancel</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filter Tabs */}
       <Tabs value={filter} onValueChange={v => setFilter(v as typeof filter)}>
-        <TabsList className="w-full h-auto flex-wrap">
-          <TabsTrigger value="all" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+        <TabsList className="w-full h-auto grid grid-cols-4">
+          <TabsTrigger value="all" className="text-[10px] sm:text-sm px-1 sm:px-3">
             All ({businessOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="active" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+          <TabsTrigger value="active" className="text-[10px] sm:text-sm px-1 sm:px-3">
             Active ({activeOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="delivered" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+          <TabsTrigger value="delivered" className="text-[10px] sm:text-sm px-1 sm:px-3">
             Done ({deliveredOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="cancelled" className="flex-1 min-w-[70px] text-xs sm:text-sm">
+          <TabsTrigger value="cancelled" className="text-[10px] sm:text-sm px-1 sm:px-3">
             Cancel ({cancelledOrders.length})
           </TabsTrigger>
         </TabsList>
@@ -335,70 +335,78 @@ export function BusinessOrders() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-3 border-t border-border gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {driver ? (
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-muted-foreground truncate">
-                          {driver.name}
-                        </span>
-                      </div>
-                    ) : order.status === 'posted' ? (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="w-3.5 h-3.5" />
-                        Awaiting driver
-                      </div>
-                    ) : null}
+                <div className="pt-3 border-t border-border space-y-2">
+                  {/* Driver info row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {driver ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-muted-foreground truncate">
+                            {driver.name}
+                          </span>
+                        </div>
+                      ) : order.status === 'posted' ? (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="w-3.5 h-3.5" />
+                          Awaiting driver
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-primary">
+                        ${order.price.toFixed(2)}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {canCancel && delivery && (
-                      <>
+                  {/* Action buttons row */}
+                  {(canCancel || (delivery && order.status !== 'posted')) && (
+                    <div className="flex items-center gap-2">
+                      {canCancel && delivery && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={e => {
+                              e.stopPropagation()
+                              openEditDialog(delivery)
+                            }}
+                          >
+                            <Pencil className="w-3 h-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={e => {
+                              e.stopPropagation()
+                              openCancelDialog(delivery)
+                            }}
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+                      {delivery && order.status !== 'posted' && (
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-8"
+                          variant="ghost"
+                          className="h-7 text-xs px-2"
                           onClick={e => {
                             e.stopPropagation()
-                            openEditDialog(delivery)
+                            openDuplicateDialog(delivery)
                           }}
                         >
-                          <Pencil className="w-3.5 h-3.5 mr-1" />
-                          Edit
+                          <Copy className="w-3 h-3 mr-1" />
+                          Reorder
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={e => {
-                            e.stopPropagation()
-                            openCancelDialog(delivery)
-                          }}
-                        >
-                          <XCircle className="w-3.5 h-3.5 mr-1" />
-                          Cancel
-                        </Button>
-                      </>
-                    )}
-                    {delivery && order.status !== 'posted' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8"
-                        onClick={e => {
-                          e.stopPropagation()
-                          openDuplicateDialog(delivery)
-                        }}
-                      >
-                        <Copy className="w-3.5 h-3.5 mr-1" />
-                        Reorder
-                      </Button>
-                    )}
-                    <span className="text-sm font-semibold text-primary">
-                      ${order.price.toFixed(2)}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

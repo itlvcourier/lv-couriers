@@ -347,54 +347,54 @@ return (
       </div>
 
       {/* Secondary Stats */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 sm:grid-cols-6">
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold">{completedDeliveries.length}</p>
-            <p className="text-xs text-muted-foreground">Delivered</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-base sm:text-lg font-bold">{completedDeliveries.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Done</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-red-400">{failedDeliveries.length}</p>
-            <p className="text-xs text-muted-foreground">Failed</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-base sm:text-lg font-bold text-red-400">{failedDeliveries.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Failed</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-yellow-400">{stats?.flaggedDeliveries || 0}</p>
-            <p className="text-xs text-muted-foreground">Flagged</p>
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-base sm:text-lg font-bold text-yellow-400">{stats?.flaggedDeliveries || 0}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Flagged</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-base sm:text-lg font-bold">
               {drivers.filter((d: DbDriver) => d.invite_status === 'active').length}
             </p>
-            <p className="text-xs text-muted-foreground">Verified</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Verified</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-base sm:text-lg font-bold">
               {drivers.filter((d: DbDriver) => d.status === 'on_delivery').length}
             </p>
-            <p className="text-xs text-muted-foreground">On Delivery</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Busy</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-base sm:text-lg font-bold">
               {completedDeliveries.length > 0 
                 ? ((completedDeliveries.length / (stats?.totalDeliveries || 1)) * 100).toFixed(0)
                 : 0}%
             </p>
-            <p className="text-xs text-muted-foreground">Success</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Success</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Pending Deliveries */}
         <Card>
           <CardHeader className="pb-3">

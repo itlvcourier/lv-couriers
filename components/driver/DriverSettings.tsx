@@ -6,6 +6,7 @@ import useSWR from 'swr'
 import { useApp } from '@/lib/context'
 import { createClient } from '@/lib/supabase/client'
 import { getSystemSettings } from '@/lib/settings'
+import { getDriverRatingsSummary } from '@/lib/db-extended'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,6 +65,14 @@ export function DriverSettings() {
   // Check if driver pay is enabled
   const { data: settings } = useSWR('system-settings', getSystemSettings)
   const showEarnings = settings?.driver_pay_enabled ?? false
+  
+  // Fetch driver ratings from the ratings summary table
+  const { data: ratingsSummary } = useSWR(
+    driverId ? `driver-ratings-${driverId}` : null,
+    () => getDriverRatingsSummary(driverId)
+  )
+  const avgRating = ratingsSummary?.avgOverallRating ?? null
+  const totalRatings = ratingsSummary?.totalRatings ?? 0
 
   // Calculate driver stats from deliveries
   const completedDeliveries = deliveries.filter(
@@ -77,9 +86,6 @@ export function DriverSettings() {
   const totalEarnings = completedDeliveries.reduce((sum, d) => {
     return sum + baseRate + (d.isUrgent ? rushBonus : 0)
   }, 0)
-  
-  // Average rating placeholder (would come from reviews)
-  const avgRating = 4.8
 
   const handleSignOut = async () => {
     await logout()
@@ -176,8 +182,12 @@ export function DriverSettings() {
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-4 text-center">
             <Star className="w-5 h-5 text-[var(--accent-orange)] mx-auto mb-2" />
-            <p className="text-xl font-bold text-foreground">{avgRating.toFixed(1)}</p>
-            <p className="text-xs text-muted-foreground">Rating</p>
+            <p className="text-xl font-bold text-foreground">
+              {avgRating !== null ? avgRating.toFixed(1) : '--'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {totalRatings > 0 ? `Rating (${totalRatings})` : 'No ratings'}
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">

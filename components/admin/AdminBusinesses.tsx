@@ -113,6 +113,7 @@ export function AdminBusinesses() {
     billing_email: '',
     contact_name: '',
     contact_phone: '',
+    temp_password: '',
   })
 
   const [locationForm, setLocationForm] = useState({
@@ -219,42 +220,103 @@ export function AdminBusinesses() {
 
   const handleAddBusiness = async () => {
     if (!form.name || !form.billing_email) {
-      toast.error('Please fill in required fields')
+      toast.error('Please fill in required fields (Business Name and Email)')
+      return
+    }
+
+    if (!form.temp_password || form.temp_password.length < 6) {
+      toast.error('Please provide a temporary password (at least 6 characters)')
       return
     }
     
     const supabase = createClient()
-    const { error } = await supabase
+    
+    // Create the business with all required fields (contact_name is NOT NULL in DB)
+    const { data: newBusiness, error: businessError } = await supabase
       .from('businesses')
       .insert({
         name: form.name,
+        contact_name: form.contact_name || form.name, // Falls back to business name if no contact name
+        email: form.billing_email,
+        phone: form.contact_phone || '',
+        invoice_format: 'combined',
+        invite_status: 'pending',
+      })
+      .select()
+      .single()
+    
+    if (businessError) {
+      toast.error('Failed to create business')
+      console.error(businessError)
+      return
+    }
+
+    // Create the first/main location for the business
+    const { data: newLocation, error: locationError } = await supabase
+      .from('business_locations')
+      .insert({
+        business_id: newBusiness.id,
+        name: 'Main Location',
+        address: '',
         billing_email: form.billing_email,
         contact_name: form.contact_name || null,
-        contact_phone: form.contact_phone || null,
-        invoice_format: 'combined',
-        status: 'pending',
+        phone: form.contact_phone || null,
+        invite_status: 'pending',
       })
-    
-    if (error) {
-      toast.error('Failed to create business')
-      console.error(error)
-      return
+      .select()
+      .single()
+
+    if (locationError) {
+      toast.error('Business created but failed to create location')
+      console.error(locationError)
+      // Continue anyway to create the user
+    }
+
+    // Now create the owner user account
+    try {
+      const response = await fetch('/api/admin/create-business-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.billing_email,
+          password: form.temp_password,
+          name: form.contact_name || form.name,
+          phone: form.contact_phone || null,
+          businessId: newBusiness.id,
+          locationId: newLocation?.id || null,
+          role: 'owner',
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Business was created but user wasn't - show partial success
+        toast.warning(`Business created but user account failed: ${data.error}`)
+        mutate('all-businesses')
+        setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '', temp_password: '' })
+        setShowAddSheet(false)
+        return
+      }
+
+      toast.success(`Business created! Login: ${form.billing_email} / ${form.temp_password}`, { duration: 10000 })
+    } catch {
+      toast.warning('Business created but user account creation failed')
     }
     
     mutate('all-businesses')
-    setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '' })
+    setForm({ name: '', billing_email: '', contact_name: '', contact_phone: '', temp_password: '' })
     setShowAddSheet(false)
-    toast.success('Business created successfully')
   }
 
   const handleToggleStatus = async (business: BusinessWithLocations) => {
-    const supabase = createClient()
-    const newStatus = business.status === 'active' ? 'suspended' : 'active'
-    
-    const { error } = await supabase
-      .from('businesses')
-      .update({ status: newStatus })
-      .eq('id', business.id)
+  const supabase = createClient()
+  const newStatus = business.invite_status === 'accepted' ? 'pending' : 'accepted'
+  
+  const { error } = await supabase
+  .from('businesses')
+  .update({ invite_status: newStatus })
+  .eq('id', business.id)
     
     if (error) {
       toast.error('Failed to update status')
@@ -605,47 +667,49 @@ export function AdminBusinesses() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-foreground">{businessStats.total}</div>
-              <div className="text-sm text-muted-foreground">Total Deliveries</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-foreground">{businessStats.total}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Total</div>
             </CardContent>
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-500">{businessStats.completed}</div>
-              <div className="text-sm text-muted-foreground">Completed</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-green-500">{businessStats.completed}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Done</div>
             </CardContent>
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-foreground">${businessStats.totalSpent.toFixed(0)}</div>
-              <div className="text-sm text-muted-foreground">Total Billed</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-foreground">${businessStats.totalSpent.toFixed(0)}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Billed</div>
             </CardContent>
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-foreground">{detailBusiness.locations.length}</div>
-              <div className="text-sm text-muted-foreground">Locations</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-foreground">{detailBusiness.locations.length}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Locations</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="locations" className="space-y-4">
-          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)]">
-            <TabsTrigger value="locations" className="gap-2">
+          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)] w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+            <TabsTrigger value="locations" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <MapPin className="w-4 h-4" />
-              Locations
+              <span className="hidden sm:inline">Locations</span>
+              <span className="sm:hidden">Loc</span>
             </TabsTrigger>
-            <TabsTrigger value="team" className="gap-2">
+            <TabsTrigger value="team" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <Users className="w-4 h-4" />
               Team
             </TabsTrigger>
-            <TabsTrigger value="billing" className="gap-2">
+            <TabsTrigger value="billing" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <FileText className="w-4 h-4" />
-              Billing
+              <span className="hidden sm:inline">Billing</span>
+              <span className="sm:hidden">Bill</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1559,10 +1623,10 @@ export function AdminBusinesses() {
                           <Edit className="w-4 h-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
-                          <Ban className="w-4 h-4 mr-2" />
-                          {business.status === 'active' ? 'Suspend' : 'Activate'}
-                        </DropdownMenuItem>
+  <DropdownMenuItem onClick={() => handleToggleStatus(business)}>
+  <Ban className="w-4 h-4 mr-2" />
+  {business.invite_status === 'accepted' ? 'Suspend' : 'Activate'}
+  </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             setSelectedBusiness(business)
@@ -1665,6 +1729,19 @@ export function AdminBusinesses() {
                 placeholder="(403) 555-0100"
                 className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">Temporary Password *</Label>
+              <Input
+                type="text"
+                value={form.temp_password}
+                onChange={(e) => setForm({ ...form, temp_password: e.target.value })}
+                placeholder="Min 6 characters"
+                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+              />
+              <p className="text-xs text-muted-foreground">
+                This will be the owner&apos;s login password. They should change it after first login.
+              </p>
             </div>
             <Button onClick={handleAddBusiness} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
               <Plus className="w-4 h-4 mr-2" />
