@@ -5,6 +5,7 @@ import useSWR, { mutate } from 'swr'
 import { toast } from 'sonner'
 import { useApp } from '@/lib/context'
 import { Spinner } from '@/components/ui/spinner'
+import { AddressAutocomplete, type AddressResult } from '@/components/shared/AddressAutocomplete'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -125,6 +126,8 @@ export function AdminBusinesses() {
     billing_email: '',
     backup_email: '',
     notes: '',
+    lat: null as number | null,
+    lng: null as number | null,
   })
 
   const [inviteForm, setInviteForm] = useState({
@@ -438,20 +441,22 @@ export function AdminBusinesses() {
       return
     }
 
-    // Geocode the address to get lat/lng for radius pricing
-    let lat: number | null = null
-    let lng: number | null = null
-    try {
-      const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(locationForm.address)}`)
-      if (geocodeRes.ok) {
-        const geocodeData = await geocodeRes.json()
-        if (geocodeData.lat && geocodeData.lng) {
-          lat = geocodeData.lat
-          lng = geocodeData.lng
+    // Use lat/lng from address autocomplete, or fall back to geocoding if not available
+    let lat: number | null = locationForm.lat
+    let lng: number | null = locationForm.lng
+    if (!lat || !lng) {
+      try {
+        const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(locationForm.address)}`)
+        if (geocodeRes.ok) {
+          const geocodeData = await geocodeRes.json()
+          if (geocodeData.lat && geocodeData.lng) {
+            lat = geocodeData.lat
+            lng = geocodeData.lng
+          }
         }
+      } catch (e) {
+        console.error('[v0] Failed to geocode location address:', e)
       }
-    } catch (e) {
-      console.error('[v0] Failed to geocode location address:', e)
     }
 
     const supabase = createClient()
@@ -462,6 +467,8 @@ export function AdminBusinesses() {
         name: locationForm.name,
         address: locationForm.address,
         billing_email: locationForm.billing_email || detailBusiness.billing_email,
+        lat,
+        lng,
       })
 
     if (error) {
@@ -473,7 +480,7 @@ export function AdminBusinesses() {
     mutate('all-businesses')
     // Refresh rate cards since a new one is auto-seeded by the database trigger
     await refreshRateCards()
-    setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '' })
+    setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '', lat: null, lng: null })
     setShowAddLocationSheet(false)
     toast.success('Location added successfully')
   }
@@ -978,9 +985,17 @@ export function AdminBusinesses() {
               </div>
               <div className="space-y-2">
                 <Label className="text-foreground">Address *</Label>
-                <Input
+                <AddressAutocomplete
                   value={locationForm.address}
-                  onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
+                  onChange={(value) => setLocationForm({ ...locationForm, address: value })}
+                  onSelect={(result: AddressResult) => {
+                    setLocationForm({
+                      ...locationForm,
+                      address: result.address,
+                      lat: result.lat ?? null,
+                      lng: result.lng ?? null,
+                    })
+                  }}
                   placeholder="123 Main St, Calgary, AB"
                   className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                 />
