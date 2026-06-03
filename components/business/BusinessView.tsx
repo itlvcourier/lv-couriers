@@ -37,23 +37,19 @@ export function BusinessView() {
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border safe-area-top">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shrink-0">
-                <Building2 className="w-5 h-5 text-primary-foreground" />
+        <div className="px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="flex items-center justify-between gap-2 max-w-7xl mx-auto">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shrink-0">
+                <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
               </div>
-              <div className="min-w-0">
-                <h1 className="font-semibold text-foreground">DOMS</h1>
-                <p className="text-xs text-muted-foreground truncate">Business Portal</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
               <LocationSwitcher />
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <BusinessNotificationCenter />
-              <Avatar className="w-9 h-9">
-                <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                  {business?.name ? getInitials(business.name) : 'B'}
+              <Avatar className="w-8 h-8 sm:w-9 sm:h-9">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs sm:text-sm">
+                  {currentUser?.name ? getInitials(currentUser.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
             </div>
