@@ -65,7 +65,7 @@ export function DriverSettings() {
   // Check if driver pay is enabled
   const { data: settings } = useSWR('system-settings', getSystemSettings)
   const showEarnings = settings?.driver_pay_enabled ?? false
-  
+
   // Fetch driver ratings from the ratings summary table
   const { data: ratingsSummary } = useSWR(
     driverId ? `driver-ratings-${driverId}` : null,
