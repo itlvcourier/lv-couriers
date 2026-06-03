@@ -81,7 +81,7 @@ export function DriverSettings() {
   const totalDeliveries = completedDeliveries.length
   
   // Calculate estimated earnings (based on completed deliveries with fixed rate)
-  const baseRate = 8 // Base rate per delivery in dollars
+  const baseRate = 8 // Base rate per delivery (in dollars)
   const rushBonus = 5 // Extra bonus for rush/urgent deliveries
   const totalEarnings = completedDeliveries.reduce((sum, d) => {
     return sum + baseRate + (d.isUrgent ? rushBonus : 0)
