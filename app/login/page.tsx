@@ -160,6 +160,28 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Footer Links */}
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-4 text-xs">
+            <Link 
+              href="/privacy" 
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Privacy Policy
+            </Link>
+            <span className="text-muted-foreground/50">|</span>
+            <Link 
+              href="/terms" 
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Terms of Service
+            </Link>
+          </div>
+          <p className="text-xs text-muted-foreground/70">
+            &copy; {new Date().getFullYear()} LV Courier. All rights reserved.
+          </p>
+        </div>
       </div>
     </div>
   )
