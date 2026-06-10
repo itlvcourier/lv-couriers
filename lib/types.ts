@@ -1,5 +1,24 @@
 // DOMS - Delivery Operations Management System Types
 
+// ===== CROSS-DOCK OPERATING MODEL (Phase 0 foundations) =====
+// Canonical types are defined alongside their data-access modules to avoid
+// circular imports; re-exported here so consumers can import from one place.
+export type {
+  FeatureSettings,
+  AddressValidationLevel,
+  DriverPayModel,
+  OperatingMode,
+} from './feature-settings'
+export type { Zone, ZoneAssignment } from './zones'
+export type {
+  CustodyEvent,
+  CustodyEventType,
+  ActorType,
+  ScanMethod,
+  LegStatus,
+  HolderKind,
+} from './custody'
+
 export type DeliveryStatus =
   | 'posted'
   | 'claimed'
@@ -218,6 +237,16 @@ export interface Delivery {
   // Admin assignment tracking
   assignedAt?: string | null
   assignedBy?: string | null
+  // ===== Cross-dock foundations (Phase 0) =====
+  pickupZoneId?: string | null
+  dropoffZoneId?: string | null
+  currentHolder?: string | null
+  holderDriverId?: string | null
+  legStatus?: import('./custody').LegStatus | null
+  routingMode?: 'direct' | 'cross_dock' | null
+  scanToken?: string | null
+  pickupPay?: number | null
+  deliveryPay?: number | null
   // Relations (for client-side convenience)
   flags: DeliveryFlag[]
   verifications: PickupVerification[]

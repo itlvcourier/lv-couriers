@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { AdminUserManagement } from './AdminUserManagement'
 import { DriverPaySettings } from './DriverPaySettings'
+import { FeatureFlagsSettings } from './FeatureFlagsSettings'
 import {
   Dialog,
   DialogContent,
@@ -291,6 +292,9 @@ export function AdminSettings() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Operations & Feature Flags (cross-dock operating model) */}
+      <FeatureFlagsSettings />
+
       {/* Dispatch Mode Section */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>

@@ -3,6 +3,8 @@
  * Maps DB snake_case rows to the app's camelCase types in lib/types.ts.
  */
 import { createClient } from '@/lib/supabase/client'
+import { getFeatureSettings } from '@/lib/feature-settings'
+import { assignZonesForDelivery } from '@/lib/custody'
 import type {
   Delivery,
   Driver,
@@ -514,6 +516,28 @@ export async function createDeliveryInDb(input: {
       })),
     )
     if (mErr) throw mErr
+  }
+
+  // Cross-dock foundations (Phase 0): when zones are enabled, resolve pickup/
+  // dropoff zones, auto-assign the zone driver, decide direct vs cross-dock,
+  // and mint a scan token. Fully flag-gated and best-effort: a failure here
+  // must never block delivery creation (legacy behavior stays intact).
+  try {
+    const settings = await getFeatureSettings()
+    if (settings.zones_enabled) {
+      await assignZonesForDelivery({
+        deliveryId: newId,
+        pickupLat: input.pickupLat ?? null,
+        pickupLng: input.pickupLng ?? null,
+        pickupPostal: input.pickupPostalCode ?? null,
+        dropoffLat: input.dropoffLat ?? null,
+        dropoffLng: input.dropoffLng ?? null,
+        dropoffPostal: input.dropoffPostalCode ?? null,
+        autoAssignDriver: settings.auto_assign_driver,
+      })
+    }
+  } catch (e) {
+    console.log('[v0] zone assignment skipped:', (e as Error).message)
   }
 
   const { data: full } = await supabase
