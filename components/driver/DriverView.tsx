@@ -11,6 +11,7 @@ import { DriverHistory } from './DriverHistory'
 import { DriverSettings } from './DriverSettings'
 import { DriverEarnings } from './DriverEarnings'
 import { DriverScanScreen } from './DriverScanScreen'
+import { DriverTransfersScreen } from './DriverTransfersScreen'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { useScanSync } from '@/lib/hooks/useScanSync'
 import { 
@@ -20,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine } from 'lucide-react'
+import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine, ArrowLeftRight } from 'lucide-react'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
@@ -31,6 +32,8 @@ export function DriverView() {
   const consolidationEnabled = useFeatureFlag('consolidation_enabled')
   const scanningRequired = useFeatureFlag('barcode_scanning_required')
   const showScan = Boolean(zonesEnabled || consolidationEnabled || scanningRequired)
+  const transfersEnabled = useFeatureFlag('driver_transfers_enabled')
+  const showTransfers = Boolean(transfersEnabled)
   const { pending: pendingScans } = useScanSync()
 
   // Get driver's available and active job counts
@@ -72,6 +75,7 @@ export function DriverView() {
     ? [
         { id: 'active', label: 'My Jobs', icon: Package, badge: activeJobs.length > 0 ? activeJobs.length : undefined },
         ...(showScan ? [{ id: 'scan', label: 'Scan', icon: ScanLine, badge: pendingScans > 0 ? pendingScans : undefined }] : []),
+        ...(showTransfers ? [{ id: 'transfers', label: 'Transfers', icon: ArrowLeftRight }] : []),
         ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -80,6 +84,7 @@ export function DriverView() {
         { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
         { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
         ...(showScan ? [{ id: 'scan', label: 'Scan', icon: ScanLine, badge: pendingScans > 0 ? pendingScans : undefined }] : []),
+        ...(showTransfers ? [{ id: 'transfers', label: 'Transfers', icon: ArrowLeftRight }] : []),
         ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -99,6 +104,11 @@ export function DriverView() {
 
   // If the scan tab is hidden but selected, fall back to a safe tab.
   if (!showScan && activeTab === 'scan') {
+    setActiveTab(isDispatchMode ? 'active' : 'available')
+  }
+
+  // If the transfers tab is hidden but selected, fall back to a safe tab.
+  if (!showTransfers && activeTab === 'transfers') {
     setActiveTab(isDispatchMode ? 'active' : 'available')
   }
 
@@ -150,6 +160,9 @@ export function DriverView() {
         )}
         {activeTab === 'scan' && showScan && (
           <DriverScanScreen />
+        )}
+        {activeTab === 'transfers' && showTransfers && (
+          <DriverTransfersScreen />
         )}
         {activeTab === 'earnings' && (
           <DriverEarnings />

@@ -10,6 +10,7 @@ import { AdminBusinesses } from './AdminBusinesses'
 import { AdminOrders } from './AdminOrders'
 import { AdminZones } from './AdminZones'
 import { AdminSort } from './AdminSort'
+import { AdminTransfers } from './AdminTransfers'
 import { AdminRateCards } from './AdminRateCards'
 import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
@@ -42,9 +43,10 @@ import {
   Inbox,
   Map as MapIcon,
   Boxes,
+  ArrowLeftRight,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
 const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -55,6 +57,7 @@ const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] 
   { id: 'orders', label: 'Orders', icon: Package },
   { id: 'zones', label: 'Zones', icon: MapIcon },
   { id: 'sort', label: 'Hub Sort', icon: Boxes },
+  { id: 'transfers', label: 'Transfers', icon: ArrowLeftRight },
   { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'communications', label: 'Communications', icon: MessageSquare },
@@ -70,16 +73,22 @@ export function AdminView() {
   const { logout, currentUser } = useApp()
   const zonesEnabled = useFeatureFlag('zones_enabled')
   const consolidationEnabled = useFeatureFlag('consolidation_enabled')
+  const transfersEnabled = useFeatureFlag('driver_transfers_enabled')
 
   // Hide flag-gated pages when their feature is off.
   const navItems = baseNavItems.filter((item) => {
     if (item.id === 'zones') return zonesEnabled
     if (item.id === 'sort') return consolidationEnabled
+    if (item.id === 'transfers') return transfersEnabled
     return true
   })
 
   // If a flag-gated page is open but its flag turns off, fall back to dashboard.
-  if ((!zonesEnabled && activePage === 'zones') || (!consolidationEnabled && activePage === 'sort')) {
+  if (
+    (!zonesEnabled && activePage === 'zones') ||
+    (!consolidationEnabled && activePage === 'sort') ||
+    (!transfersEnabled && activePage === 'transfers')
+  ) {
     setActivePage('dashboard')
   }
 
@@ -126,6 +135,7 @@ export function AdminView() {
       case 'orders': return <AdminOrders />
       case 'zones': return <AdminZones />
       case 'sort': return <AdminSort />
+      case 'transfers': return <AdminTransfers />
       case 'rate_cards': return <AdminRateCards />
       case 'invoices': return <AdminInvoices />
       case 'communications': return <AdminCommunications />
