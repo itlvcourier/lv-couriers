@@ -9,6 +9,7 @@ import { AdminDrivers } from './AdminDrivers'
 import { AdminBusinesses } from './AdminBusinesses'
 import { AdminOrders } from './AdminOrders'
 import { AdminZones } from './AdminZones'
+import { AdminSort } from './AdminSort'
 import { AdminRateCards } from './AdminRateCards'
 import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
@@ -40,9 +41,10 @@ import {
   ScrollText,
   Inbox,
   Map as MapIcon,
+  Boxes,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
 const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -52,6 +54,7 @@ const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] 
   { id: 'businesses', label: 'Businesses', icon: Building2 },
   { id: 'orders', label: 'Orders', icon: Package },
   { id: 'zones', label: 'Zones', icon: MapIcon },
+  { id: 'sort', label: 'Hub Sort', icon: Boxes },
   { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'communications', label: 'Communications', icon: MessageSquare },
@@ -66,12 +69,17 @@ export function AdminView() {
   const [pendingRequests, setPendingRequests] = useState(0)
   const { logout, currentUser } = useApp()
   const zonesEnabled = useFeatureFlag('zones_enabled')
+  const consolidationEnabled = useFeatureFlag('consolidation_enabled')
 
-  // Hide the Zones page when the feature flag is off.
-  const navItems = baseNavItems.filter((item) => item.id !== 'zones' || zonesEnabled)
+  // Hide flag-gated pages when their feature is off.
+  const navItems = baseNavItems.filter((item) => {
+    if (item.id === 'zones') return zonesEnabled
+    if (item.id === 'sort') return consolidationEnabled
+    return true
+  })
 
-  // If the zones page is open but the flag turns off, fall back to dashboard.
-  if (!zonesEnabled && activePage === 'zones') {
+  // If a flag-gated page is open but its flag turns off, fall back to dashboard.
+  if ((!zonesEnabled && activePage === 'zones') || (!consolidationEnabled && activePage === 'sort')) {
     setActivePage('dashboard')
   }
 
@@ -117,6 +125,7 @@ export function AdminView() {
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />
       case 'zones': return <AdminZones />
+      case 'sort': return <AdminSort />
       case 'rate_cards': return <AdminRateCards />
       case 'invoices': return <AdminInvoices />
       case 'communications': return <AdminCommunications />
