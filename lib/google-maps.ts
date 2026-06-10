@@ -85,6 +85,122 @@ export async function geocodeAddress(
   }
 }
 
+export type GeocodeConfidence = 'complete' | 'inferred' | 'unconfirmed' | 'manual'
+
+export interface AddressValidationResult {
+  confidence: GeocodeConfidence
+  formattedAddress: string
+  lat: number | null
+  lng: number | null
+  postalCode: string | null
+  /** Human-readable issues, e.g. missing unit / unconfirmed components. */
+  issues: string[]
+  /** True when Google could not confirm the address to premise level. */
+  hasUnconfirmedComponents: boolean
+}
+
+/**
+ * Validate an address with the Google Address Validation API and map Google's
+ * verdict into our four-level confidence scale:
+ *  - complete    → premise-level, fully confirmed
+ *  - inferred     → confirmed but Google inferred/added components
+ *  - unconfirmed  → unconfirmed components or missing premise
+ *  - manual       → API unavailable or hard failure (caller pins manually)
+ */
+export async function validateAddress(
+  address: string,
+): Promise<AddressValidationResult> {
+  const fallback: AddressValidationResult = {
+    confidence: 'manual',
+    formattedAddress: address,
+    lat: null,
+    lng: null,
+    postalCode: null,
+    issues: ['Address validation unavailable — confirm location manually.'],
+    hasUnconfirmedComponents: true,
+  }
+  if (!address || address.trim().length < 3) return fallback
+  if (!API_KEY) {
+    console.error('[v0] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not configured')
+    return fallback
+  }
+
+  const biasedAddress = /calgary|edmonton|alberta|ab\b|canada/i.test(address)
+    ? address
+    : `${address}, Calgary, AB, Canada`
+
+  try {
+    const response = await fetch(
+      `https://addressvalidation.googleapis.com/v1:validateAddress?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: { regionCode: 'CA', addressLines: [biasedAddress] },
+        }),
+      },
+    )
+    const data = await response.json()
+    const result = data?.result
+    if (!result) {
+      console.warn('[v0] validateAddress: no result', data?.error?.message)
+      return fallback
+    }
+
+    const verdict = result.verdict ?? {}
+    const geocode = result.geocode ?? {}
+    const location = geocode.location ?? {}
+    const components: Array<{ confirmationLevel?: string; componentType?: string }> =
+      result.address?.addressComponents ?? []
+
+    const issues: string[] = []
+    const unconfirmed = components.filter(
+      (c) =>
+        c.confirmationLevel &&
+        c.confirmationLevel !== 'CONFIRMED' &&
+        c.confirmationLevel !== 'CONFIRMATION_LEVEL_UNSPECIFIED',
+    )
+    for (const c of unconfirmed) {
+      issues.push(`Unconfirmed: ${c.componentType ?? 'component'}`)
+    }
+    if (verdict.hasUnconfirmedComponents) issues.push('Address has unconfirmed components.')
+    if (verdict.hasInferredComponents) issues.push('Some components were inferred by Google.')
+    if (result.address?.missingComponentTypes?.length) {
+      issues.push(`Missing: ${result.address.missingComponentTypes.join(', ')}`)
+    }
+
+    let confidence: GeocodeConfidence
+    const granularity = verdict.validationGranularity ?? verdict.geocodeGranularity
+    if (verdict.addressComplete && !verdict.hasUnconfirmedComponents && !verdict.hasInferredComponents) {
+      confidence = 'complete'
+    } else if (
+      (granularity === 'PREMISE' || granularity === 'SUB_PREMISE' || granularity === 'ROUTE') &&
+      !verdict.hasUnconfirmedComponents
+    ) {
+      confidence = 'inferred'
+    } else {
+      confidence = 'unconfirmed'
+    }
+
+    const postalComponent = components.find((c) => c.componentType === 'postal_code') as
+      | { componentName?: { text?: string } }
+      | undefined
+
+    return {
+      confidence,
+      formattedAddress: result.address?.formattedAddress ?? biasedAddress,
+      lat: typeof location.latitude === 'number' ? location.latitude : null,
+      lng: typeof location.longitude === 'number' ? location.longitude : null,
+      postalCode: postalComponent?.componentName?.text ?? null,
+      issues,
+      hasUnconfirmedComponents: Boolean(verdict.hasUnconfirmedComponents),
+    }
+  } catch (error) {
+    console.error('[v0] validateAddress error:', error)
+    return fallback
+  }
+}
+
 /**
  * Reverse geocode coordinates to a human-readable address.
  * Useful for showing "Driver is on 9th Ave SW".
