@@ -94,6 +94,14 @@ export interface DbDelivery {
   cancellation_reason: string | null
   retry_count: number
   trip_order: number | null
+  // Cross-dock foundations (Phase 0/2)
+  scan_token?: string | null
+  leg_status?: string | null
+  pickup_zone_id?: string | null
+  dropoff_zone_id?: string | null
+  current_holder?: string | null
+  holder_driver_id?: string | null
+  routing_mode?: string | null
   created_at: string
   updated_at: string
   // Joined relations

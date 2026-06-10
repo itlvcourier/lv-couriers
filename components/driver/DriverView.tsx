@@ -10,6 +10,9 @@ import { ActiveDelivery } from './ActiveDelivery'
 import { DriverHistory } from './DriverHistory'
 import { DriverSettings } from './DriverSettings'
 import { DriverEarnings } from './DriverEarnings'
+import { DriverScanScreen } from './DriverScanScreen'
+import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
+import { useScanSync } from '@/lib/hooks/useScanSync'
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -17,12 +20,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign } from 'lucide-react'
+import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine } from 'lucide-react'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
   const router = useRouter()
   const { currentUser, logout, deliveries, settings } = useApp()
+  // Show the Scan tab when the operation uses zones/cross-dock or requires scanning.
+  const zonesEnabled = useFeatureFlag('zones_enabled')
+  const consolidationEnabled = useFeatureFlag('consolidation_enabled')
+  const scanningRequired = useFeatureFlag('barcode_scanning_required')
+  const showScan = Boolean(zonesEnabled || consolidationEnabled || scanningRequired)
+  const { pending: pendingScans } = useScanSync()
 
   // Get driver's available and active job counts
   const driverId = currentUser?.driverId || ''
@@ -62,6 +71,7 @@ export function DriverView() {
   const baseNavItems = isDispatchMode
     ? [
         { id: 'active', label: 'My Jobs', icon: Package, badge: activeJobs.length > 0 ? activeJobs.length : undefined },
+        ...(showScan ? [{ id: 'scan', label: 'Scan', icon: ScanLine, badge: pendingScans > 0 ? pendingScans : undefined }] : []),
         ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -69,6 +79,7 @@ export function DriverView() {
     : [
         { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
         { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
+        ...(showScan ? [{ id: 'scan', label: 'Scan', icon: ScanLine, badge: pendingScans > 0 ? pendingScans : undefined }] : []),
         ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -84,6 +95,11 @@ export function DriverView() {
   // If earnings is disabled and user is on 'earnings' tab, redirect to 'history'
   if (!showEarnings && activeTab === 'earnings') {
     setActiveTab('history')
+  }
+
+  // If the scan tab is hidden but selected, fall back to a safe tab.
+  if (!showScan && activeTab === 'scan') {
+    setActiveTab(isDispatchMode ? 'active' : 'available')
   }
 
   return (
@@ -131,6 +147,9 @@ export function DriverView() {
         )}
         {activeTab === 'active' && (
           <ActiveDelivery />
+        )}
+        {activeTab === 'scan' && showScan && (
+          <DriverScanScreen />
         )}
         {activeTab === 'earnings' && (
           <DriverEarnings />

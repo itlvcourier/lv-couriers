@@ -217,6 +217,16 @@ export function mapDeliveryRow(row: Row): Delivery {
     // Admin assignment tracking
     assignedAt: (row.assigned_at as string | null) ?? null,
     assignedBy: (row.assigned_by as string | null) ?? null,
+    // Cross-dock foundations (Phase 0)
+    pickupZoneId: (row.pickup_zone_id as string | null) ?? null,
+    dropoffZoneId: (row.dropoff_zone_id as string | null) ?? null,
+    currentHolder: (row.current_holder as string | null) ?? null,
+    holderDriverId: (row.holder_driver_id as string | null) ?? null,
+    legStatus: (row.leg_status as Delivery['legStatus']) ?? null,
+    routingMode: (row.routing_mode as Delivery['routingMode']) ?? null,
+    scanToken: (row.scan_token as string | null) ?? null,
+    pickupPay: (row.pickup_pay as number | null) ?? null,
+    deliveryPay: (row.delivery_pay as number | null) ?? null,
     flags: [],
     verifications: [],
     statusHistory: [],
