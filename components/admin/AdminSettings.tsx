@@ -14,6 +14,7 @@ import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { AdminUserManagement } from './AdminUserManagement'
 import { DriverPaySettings } from './DriverPaySettings'
 import { FeatureFlagsSettings } from './FeatureFlagsSettings'
+import { CutoffManager } from './CutoffManager'
 import {
   Dialog,
   DialogContent,
@@ -294,6 +295,9 @@ export function AdminSettings() {
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Operations & Feature Flags (cross-dock operating model) */}
       <FeatureFlagsSettings />
+
+      {/* Per-business daily cutoffs */}
+      <CutoffManager />
 
       {/* Dispatch Mode Section */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">

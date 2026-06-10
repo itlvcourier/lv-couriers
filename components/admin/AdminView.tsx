@@ -15,6 +15,8 @@ import { AdminCommunications } from './AdminCommunications'
 import { AdminDriverReports } from './AdminDriverReports'
 import { AdminAuditLog } from './AdminAuditLog'
 import { DispatchBoard } from './DispatchBoard'
+import { ApprovalQueue } from './ApprovalQueue'
+import { getPendingCount } from '@/lib/dispatch-requests'
 import { NotificationCenter } from './NotificationCenter'
 import { cn } from '@/lib/utils'
 import { 
@@ -34,13 +36,15 @@ import {
   BarChart3,
   Radio,
   ScrollText,
+  Inbox,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
 const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'dispatch', label: 'Dispatch', icon: Radio },
+  { id: 'requests', label: 'Requests', icon: Inbox },
   { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'businesses', label: 'Businesses', icon: Building2 },
   { id: 'orders', label: 'Orders', icon: Package },
@@ -55,7 +59,25 @@ const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
 export function AdminView() {
   const [activePage, setActivePage] = useState<AdminPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [pendingRequests, setPendingRequests] = useState(0)
   const { logout, currentUser } = useApp()
+
+  useEffect(() => {
+    let active = true
+    const poll = () => {
+      getPendingCount()
+        .then((n) => {
+          if (active) setPendingRequests(n)
+        })
+        .catch(() => {})
+    }
+    poll()
+    const id = setInterval(poll, 30_000)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [activePage])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -77,6 +99,7 @@ export function AdminView() {
     switch (activePage) {
       case 'dashboard': return <AdminDashboard />
       case 'dispatch': return <DispatchBoard />
+      case 'requests': return <ApprovalQueue />
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />
@@ -143,6 +166,11 @@ export function AdminView() {
             >
               <item.icon className="w-5 h-5" />
               {item.label}
+              {item.id === 'requests' && pendingRequests > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold">
+                  {pendingRequests}
+                </span>
+              )}
             </Button>
           ))}
         </nav>
