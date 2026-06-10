@@ -407,6 +407,7 @@ export function AdminOrders() {
                     OOT
                   </Badge>
                 )}
+                <OrderLabelPrint rows={[selectedDelivery]} mode="thermal" size="sm" label="Print label" />
               </div>
 
               {/* Business & Driver */}
