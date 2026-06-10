@@ -22,20 +22,26 @@ RETURNS TABLE (
 $$;
 
 -- Set (or clear) a zone polygon from a GeoJSON geometry string.
+-- Writes a single Polygon to match the geometry(Polygon,4326) column type.
 CREATE OR REPLACE FUNCTION upsert_zone_geom(p_zone_id uuid, p_geojson text)
 RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+  g geometry;
 BEGIN
   IF p_geojson IS NULL OR length(btrim(p_geojson)) = 0 THEN
     UPDATE zones SET geom = NULL WHERE id = p_zone_id;
-  ELSE
-    UPDATE zones
-       SET geom = ST_Multi(ST_CollectionExtract(
-                    ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(p_geojson), 4326)), 3))
-       WHERE id = p_zone_id;
-    UPDATE zones
-       SET geom = ST_GeometryN(geom, 1)
-       WHERE id = p_zone_id AND GeometryType(geom) = 'MULTIPOLYGON' AND ST_NumGeometries(geom) = 1;
+    RETURN;
   END IF;
+
+  g := ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(p_geojson), 4326));
+
+  IF GeometryType(g) = 'MULTIPOLYGON' THEN
+    g := ST_GeometryN(g, 1);
+  ELSIF GeometryType(g) NOT IN ('POLYGON') THEN
+    g := ST_GeometryN(ST_CollectionExtract(g, 3), 1);
+  END IF;
+
+  UPDATE zones SET geom = g WHERE id = p_zone_id;
 END; $$;
 
 -- Live active-parcel counts per zone (dropoff zone, non-terminal statuses).
