@@ -8,6 +8,7 @@ import { AdminDashboard } from './AdminDashboard'
 import { AdminDrivers } from './AdminDrivers'
 import { AdminBusinesses } from './AdminBusinesses'
 import { AdminOrders } from './AdminOrders'
+import { AdminZones } from './AdminZones'
 import { AdminRateCards } from './AdminRateCards'
 import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
@@ -17,6 +18,7 @@ import { AdminAuditLog } from './AdminAuditLog'
 import { DispatchBoard } from './DispatchBoard'
 import { ApprovalQueue } from './ApprovalQueue'
 import { getPendingCount } from '@/lib/dispatch-requests'
+import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { NotificationCenter } from './NotificationCenter'
 import { cn } from '@/lib/utils'
 import { 
@@ -37,17 +39,19 @@ import {
   Radio,
   ScrollText,
   Inbox,
+  Map as MapIcon,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
-const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
+const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'dispatch', label: 'Dispatch', icon: Radio },
   { id: 'requests', label: 'Requests', icon: Inbox },
   { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'businesses', label: 'Businesses', icon: Building2 },
   { id: 'orders', label: 'Orders', icon: Package },
+  { id: 'zones', label: 'Zones', icon: MapIcon },
   { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'communications', label: 'Communications', icon: MessageSquare },
@@ -61,6 +65,15 @@ export function AdminView() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingRequests, setPendingRequests] = useState(0)
   const { logout, currentUser } = useApp()
+  const zonesEnabled = useFeatureFlag('zones_enabled')
+
+  // Hide the Zones page when the feature flag is off.
+  const navItems = baseNavItems.filter((item) => item.id !== 'zones' || zonesEnabled)
+
+  // If the zones page is open but the flag turns off, fall back to dashboard.
+  if (!zonesEnabled && activePage === 'zones') {
+    setActivePage('dashboard')
+  }
 
   useEffect(() => {
     let active = true
@@ -103,6 +116,7 @@ export function AdminView() {
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />
+      case 'zones': return <AdminZones />
       case 'rate_cards': return <AdminRateCards />
       case 'invoices': return <AdminInvoices />
       case 'communications': return <AdminCommunications />

@@ -202,3 +202,103 @@ export async function assignDriverToZone(input: {
   )
   if (error) throw error
 }
+
+/** Remove a driver assignment for a zone on a given date. */
+export async function unassignDriverFromZone(
+  zoneId: string,
+  date?: string,
+): Promise<void> {
+  const supabase = createClient()
+  const day = date ?? new Date().toISOString().slice(0, 10)
+  const { error } = await supabase
+    .from('zone_assignments')
+    .delete()
+    .eq('zone_id', zoneId)
+    .eq('effective_date', day)
+  if (error) throw error
+}
+
+// ============================================================================
+// Visual zone manager (Phase 3): GeoJSON polygons + live parcel counts.
+// Backed by the SQL RPCs zones_geojson(), upsert_zone_geom(), and
+// zone_parcel_counts(). Polygons round-trip through GeoJSON because PostGIS
+// geometry columns are not directly writable via PostgREST.
+// ============================================================================
+
+/** GeoJSON Polygon geometry: { type:'Polygon', coordinates:[[ [lng,lat], ... ]] } */
+export type GeoJSONPolygon = {
+  type: 'Polygon'
+  coordinates: number[][][]
+}
+
+export interface ZoneWithGeo extends Zone {
+  /** Parsed GeoJSON polygon (null when the zone is FSA-only). */
+  polygon: GeoJSONPolygon | null
+}
+
+type ZoneGeoRow = {
+  id: string
+  name: string
+  color: string
+  fsa_codes: string[] | null
+  priority: number
+  is_active: boolean
+  created_at: string
+  geojson: string | null
+}
+
+/** List all zones (active + inactive) with geometry parsed as GeoJSON. */
+export async function getZonesWithGeo(): Promise<ZoneWithGeo[]> {
+  const supabase = createClient()
+  if (!supabase) return []
+  const { data, error } = await supabase.rpc('zones_geojson')
+  if (error) throw error
+  return (data as ZoneGeoRow[]).map((r) => {
+    let polygon: GeoJSONPolygon | null = null
+    if (r.geojson) {
+      try {
+        const parsed = JSON.parse(r.geojson) as GeoJSONPolygon
+        if (parsed && parsed.type === 'Polygon') polygon = parsed
+      } catch {
+        polygon = null
+      }
+    }
+    return {
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      fsaCodes: r.fsa_codes ?? [],
+      geom: polygon,
+      priority: r.priority,
+      isActive: r.is_active,
+      createdAt: r.created_at,
+      polygon,
+    }
+  })
+}
+
+/** Set (or clear) a zone's polygon from a GeoJSON geometry. Pass null to clear. */
+export async function setZonePolygon(
+  zoneId: string,
+  polygon: GeoJSONPolygon | null,
+): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase.rpc('upsert_zone_geom', {
+    p_zone_id: zoneId,
+    p_geojson: polygon ? JSON.stringify(polygon) : null,
+  })
+  if (error) throw error
+}
+
+/** Live active-parcel counts keyed by zone id (dropoff zone, non-terminal). */
+export async function getZoneParcelCounts(): Promise<Record<string, number>> {
+  const supabase = createClient()
+  if (!supabase) return {}
+  const { data, error } = await supabase.rpc('zone_parcel_counts')
+  if (error) throw error
+  const out: Record<string, number> = {}
+  for (const row of (data as Array<{ zone_id: string; parcel_count: number }>)) {
+    out[row.zone_id] = Number(row.parcel_count) || 0
+  }
+  return out
+}
