@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { decodePolyline, type LatLng } from '@/lib/google-maps'
+import { loadGoogleMaps } from '@/lib/google-maps-loader'
 
 export interface TrackingMapProps {
   /** Driver's current location */
@@ -45,39 +46,20 @@ export function GoogleTrackingMap({
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load Google Maps script
+  // Load Google Maps via the shared loader (single script tag with all
+  // libraries) so this map never conflicts with the zone drawing map.
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    if (!apiKey) {
-      setError('Google Maps API key not configured')
-      return
+    let cancelled = false
+    loadGoogleMaps()
+      .then(() => {
+        if (!cancelled) setIsLoaded(true)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message || 'Failed to load Google Maps')
+      })
+    return () => {
+      cancelled = true
     }
-
-    if (window.google?.maps) {
-      setIsLoaded(true)
-      return
-    }
-
-    const existingScript = document.querySelector(
-      'script[src*="maps.googleapis.com/maps/api/js"]',
-    )
-    if (existingScript) {
-      const checkLoaded = setInterval(() => {
-        if (window.google?.maps) {
-          setIsLoaded(true)
-          clearInterval(checkLoaded)
-        }
-      }, 100)
-      return () => clearInterval(checkLoaded)
-    }
-
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => setIsLoaded(true)
-    script.onerror = () => setError('Failed to load Google Maps')
-    document.head.appendChild(script)
   }, [])
 
   // Initialize map

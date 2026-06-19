@@ -16,6 +16,10 @@ export interface DbBusiness {
   contact_phone: string | null
   invoice_format: 'combined' | 'separate' | 'combined_breakdown'
   invite_status: 'pending' | 'active' | 'deactivated'
+  // Per-store timeout overrides (minutes). NULL = inherit the system default.
+  rush_sla_mins: number | null
+  intown_timeout_mins: number | null
+  out_of_town_timeout_mins: number | null
   created_at: string
   updated_at: string
 }
@@ -94,6 +98,14 @@ export interface DbDelivery {
   cancellation_reason: string | null
   retry_count: number
   trip_order: number | null
+  // Cross-dock foundations (Phase 0/2)
+  scan_token?: string | null
+  leg_status?: string | null
+  pickup_zone_id?: string | null
+  dropoff_zone_id?: string | null
+  current_holder?: string | null
+  holder_driver_id?: string | null
+  routing_mode?: string | null
   created_at: string
   updated_at: string
   // Joined relations
@@ -247,7 +259,7 @@ export async function getBusinessDeliveries(businessId: string) {
     .from('deliveries')
     .select(`
       *,
-      driver:drivers(*),
+      driver:drivers!deliveries_driver_id_fkey(*),
       location:business_locations(*),
       manifest_items(*)
     `)
@@ -264,7 +276,7 @@ export async function getLocationDeliveries(locationId: string) {
     .from('deliveries')
     .select(`
       *,
-      driver:drivers(*),
+      driver:drivers!deliveries_driver_id_fkey(*),
       business:businesses(*),
       manifest_items(*)
     `)
@@ -283,7 +295,7 @@ export async function getAllDeliveries(status?: DeliveryStatus) {
       *,
       business:businesses(*),
       location:business_locations(*),
-      driver:drivers(*),
+      driver:drivers!deliveries_driver_id_fkey(*),
       manifest_items(*)
     `)
     .order('created_at', { ascending: false })
@@ -305,7 +317,7 @@ export async function getDelivery(deliveryId: string) {
       *,
       business:businesses(*),
       location:business_locations(*),
-      driver:drivers(*),
+      driver:drivers!deliveries_driver_id_fkey(*),
       manifest_items(*),
       delivery_flags(*)
     `)
@@ -323,7 +335,7 @@ export async function getDeliveryByTrackingCode(code: string) {
     .select(`
       *,
       business:businesses(name),
-      driver:drivers(name, phone)
+      driver:drivers!deliveries_driver_id_fkey(name, phone)
     `)
     .eq('tracking_code', code)
     .gt('tracking_expires_at', new Date().toISOString())
@@ -347,7 +359,7 @@ export async function claimDelivery(deliveryId: string, driverId: string) {
     .select(`
       *,
       business:businesses(*),
-      driver:drivers(*)
+      driver:drivers!deliveries_driver_id_fkey(*)
     `)
     .single()
 

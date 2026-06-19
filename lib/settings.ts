@@ -67,6 +67,50 @@ export async function updateSystemSettings(
   return { success: true }
 }
 
+export interface LegEarnings {
+  pickup: { jobs: number; total: number }
+  delivery: { jobs: number; total: number }
+  full: { jobs: number; total: number }
+  total: number
+}
+
+/**
+ * Authoritative per-leg earnings for a driver over a date range, read from the
+ * driver_leg_earnings ledger (§4). Unlike the delivery-derived estimate this
+ * includes pickup-only legs the driver no longer holds after a hub handoff.
+ */
+export async function getDriverLegEarnings(
+  driverId: string,
+  from: Date,
+  to: Date,
+): Promise<LegEarnings> {
+  const empty: LegEarnings = {
+    pickup: { jobs: 0, total: 0 },
+    delivery: { jobs: 0, total: 0 },
+    full: { jobs: 0, total: 0 },
+    total: 0,
+  }
+  const supabase = createClient()
+  if (!supabase || !driverId) return empty
+
+  const { data, error } = await supabase.rpc('driver_earnings_summary', {
+    p_driver_id: driverId,
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  })
+  if (error || !data) return empty
+
+  const result = { ...empty }
+  for (const row of data as Array<{ leg: 'pickup' | 'delivery' | 'full'; jobs: number; total: number }>) {
+    const amt = Number(row.total) || 0
+    if (row.leg in result) {
+      result[row.leg] = { jobs: Number(row.jobs) || 0, total: amt }
+    }
+    result.total += amt
+  }
+  return result
+}
+
 // Calculate driver earnings for a delivery
 export function calculateDriverPay(
   settings: SystemSettings,

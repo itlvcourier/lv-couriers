@@ -18,6 +18,8 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { PickupVerification } from './PickupVerification'
 import { DeliveryCompletion } from './DeliveryCompletion'
+import { UpdateAddressSheet } from './UpdateAddressSheet'
+import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { toast } from 'sonner'
 import { 
   Package, 
@@ -420,9 +422,12 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   const [showVerification, setShowVerification] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
   const [showFailSheet, setShowFailSheet] = useState(false)
+  const [showUpdateAddress, setShowUpdateAddress] = useState(false)
   const [failReason, setFailReason] = useState<FailReason | ''>('')
   const [failNotes, setFailNotes] = useState('')
-  const { advanceStatus, failDelivery, retryDelivery, escalateDelivery } = useApp()
+  const { advanceStatus, failDelivery, retryDelivery, escalateDelivery, currentUser } = useApp()
+  const addressValidationLevel = useFeatureFlag('address_validation_level')
+  const canUpdateAddress = addressValidationLevel !== false && addressValidationLevel !== 'off'
 
   // Navigation helpers
   const openInGoogleMaps = (address: string) => {
@@ -700,6 +705,18 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
               </DropdownMenu>
             </div>
 
+            {canUpdateAddress && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowUpdateAddress(true)}
+                className="h-8 px-2 -ml-2 text-xs text-[var(--accent-blue)] gap-1.5"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                Wrong address? Update it
+              </Button>
+            )}
+
             {(delivery.recipientName || delivery.recipientPhone || delivery.buzzCode) && (
               <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)] border border-[var(--border-color)]">
                 <div className="w-9 h-9 rounded-full bg-[var(--accent-green)]/15 text-[var(--accent-green)] flex items-center justify-center shrink-0">
@@ -778,6 +795,15 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
           onClose={() => setShowCompletion(false)}
         />
       )}
+
+      {/* Update drop-off address */}
+      <UpdateAddressSheet
+        deliveryId={delivery.id}
+        currentAddress={delivery.dropoffAddress}
+        driverId={currentUser?.driverId ?? null}
+        open={showUpdateAddress}
+        onOpenChange={setShowUpdateAddress}
+      />
 
       {/* Fail delivery sheet */}
       <Sheet

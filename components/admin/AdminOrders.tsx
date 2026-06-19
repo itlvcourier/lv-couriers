@@ -29,6 +29,7 @@ import {
 import { format } from 'date-fns'
 import { getAllDeliveries, type DbDelivery } from '@/lib/db'
 import type { DeliveryStatus } from '@/lib/types'
+import { OrderLabelPrint } from './OrderLabelPrint'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Separator } from '@/components/ui/separator'
@@ -238,6 +239,12 @@ export function AdminOrders() {
           </span>
           {selectedIds.size > 0 && (
             <div className="flex gap-2 ml-auto">
+              <OrderLabelPrint
+                rows={filteredDeliveries.filter((d: DbDelivery) => selectedIds.has(d.id))}
+                defaultSize="halfA4"
+                size="sm"
+                label="Print labels"
+              />
               <Button size="sm" variant="outline" onClick={handleExportCSV}>
                 <Download className="w-4 h-4 mr-1" />
                 Export Selected
@@ -380,8 +387,8 @@ export function AdminOrders() {
           
           {selectedDelivery && (
             <div className="mt-6 space-y-6">
-              {/* Status Badge */}
-              <div className="flex items-center gap-2">
+              {/* Status Badge + label */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline" className={`${getStatusColor(selectedDelivery.status)}`}>
                   {formatStatus(selectedDelivery.status)}
                 </Badge>
@@ -400,6 +407,7 @@ export function AdminOrders() {
                     OOT
                   </Badge>
                 )}
+                <OrderLabelPrint rows={[selectedDelivery]} defaultSize="halfA4" size="sm" label="Print label" />
               </div>
 
               {/* Business & Driver */}

@@ -6,11 +6,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * SMS adapter wrapping Twilio.
  *
  * - Server-only. Never import from a Client Component.
- * - Honors SMS_TEST_RECIPIENT: when set, every outbound SMS is redirected
- *   to that single phone number. The original recipient is prepended to the
- *   message body so we know who it would have gone to. This lets us test
- *   broadcast flows on a Twilio trial account where only verified numbers
- *   can receive messages.
+ * - Test redirect is OPT-IN. Set SMS_TEST_MODE=true AND SMS_TEST_RECIPIENT to
+ *   redirect every outbound SMS to that single phone number (the original
+ *   recipient is prepended to the body). Without SMS_TEST_MODE enabled, every
+ *   message goes to its real per-profile recipient. This prevents a leftover
+ *   SMS_TEST_RECIPIENT from silently hijacking production sends.
  * - Records every send (success OR failure) in public.sms_log so the admin
  *   SMS Logs view stays the source of truth.
  */
@@ -172,8 +172,16 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
     }
   }
 
+  // Test redirect is OPT-IN. It only activates when SMS_TEST_MODE is explicitly
+  // truthy AND a test recipient is configured. Previously the mere presence of
+  // SMS_TEST_RECIPIENT redirected EVERY message to that one number, so all
+  // profiles received SMS at the same number. Now real sends always go to the
+  // intended per-profile number unless test mode is deliberately enabled.
+  const testModeEnabled = /^(1|true|yes|on)$/i.test(
+    (process.env.SMS_TEST_MODE ?? '').trim(),
+  )
   const testRecipient = process.env.SMS_TEST_RECIPIENT?.trim()
-  const redirect = !!testRecipient && testRecipient !== intendedTo
+  const redirect = testModeEnabled && !!testRecipient && testRecipient !== intendedTo
   const finalTo = redirect ? normalize(testRecipient!) : intendedTo
   const finalBody = redirect
     ? `[TEST -> ${intendedTo}] ${input.body}`

@@ -3,6 +3,8 @@
  * Maps DB snake_case rows to the app's camelCase types in lib/types.ts.
  */
 import { createClient } from '@/lib/supabase/client'
+import { getFeatureSettings } from '@/lib/feature-settings'
+import { assignZonesForDelivery } from '@/lib/custody'
 import type {
   Delivery,
   Driver,
@@ -199,6 +201,9 @@ export function mapDeliveryRow(row: Row): Delivery {
     duration: durationMins != null ? `${durationMins}m` : null,
     pickupPhotoUrl: (row.pickup_photo_url as string | null) ?? null,
     proofPhotoUrl: (row.proof_photo_url as string | null) ?? null,
+    proofPhotoUrls: Array.isArray(row.proof_photo_urls)
+      ? (row.proof_photo_urls as string[])
+      : (row.proof_photo_url ? [row.proof_photo_url as string] : []),
     signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
     requireSignature: !!(row.require_signature as boolean | null),
@@ -215,6 +220,17 @@ export function mapDeliveryRow(row: Row): Delivery {
     // Admin assignment tracking
     assignedAt: (row.assigned_at as string | null) ?? null,
     assignedBy: (row.assigned_by as string | null) ?? null,
+    // Cross-dock foundations (Phase 0)
+    pickupZoneId: (row.pickup_zone_id as string | null) ?? null,
+    dropoffZoneId: (row.dropoff_zone_id as string | null) ?? null,
+    currentHolder: (row.current_holder as string | null) ?? null,
+    holderDriverId: (row.holder_driver_id as string | null) ?? null,
+    legStatus: (row.leg_status as Delivery['legStatus']) ?? null,
+    routingMode: (row.routing_mode as Delivery['routingMode']) ?? null,
+    scanToken: (row.scan_token as string | null) ?? null,
+    pickupPay: (row.pickup_pay as number | null) ?? null,
+    deliveryPay: (row.delivery_pay as number | null) ?? null,
+    labelPrintedAt: (row.label_printed_at as string | null) ?? null,
     flags: [],
     verifications: [],
     statusHistory: [],
@@ -257,6 +273,7 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsEarningsSummary: !!row.sms_earnings_summary,
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
+    minDeliveryPhotos: row.min_delivery_photos != null ? Number(row.min_delivery_photos) : 3,
     // Invoice template settings
     invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
     invoiceCompanyAddress: (row.invoice_company_address as string) || '',
@@ -411,7 +428,9 @@ export async function loadDeliveries(profile: {
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
-    .select('*, business:businesses(name), driver:drivers(name), manifest_items(*)')
+    // `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
+    // name the relationship explicitly or PostgREST errors as ambiguous.
+    .select('*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)')
     .order('created_at', { ascending: false })
     .limit(500)
   if (profile.role === 'business' && profile.businessId) {
@@ -516,9 +535,31 @@ export async function createDeliveryInDb(input: {
     if (mErr) throw mErr
   }
 
+  // Cross-dock foundations (Phase 0): when zones are enabled, resolve pickup/
+  // dropoff zones, auto-assign the zone driver, decide direct vs cross-dock,
+  // and mint a scan token. Fully flag-gated and best-effort: a failure here
+  // must never block delivery creation (legacy behavior stays intact).
+  try {
+    const settings = await getFeatureSettings()
+    if (settings.zones_enabled) {
+      await assignZonesForDelivery({
+        deliveryId: newId,
+        pickupLat: input.pickupLat ?? null,
+        pickupLng: input.pickupLng ?? null,
+        pickupPostal: input.pickupPostalCode ?? null,
+        dropoffLat: input.dropoffLat ?? null,
+        dropoffLng: input.dropoffLng ?? null,
+        dropoffPostal: input.dropoffPostalCode ?? null,
+        autoAssignDriver: settings.auto_assign_driver,
+      })
+    }
+  } catch (e) {
+    console.log('[v0] zone assignment skipped:', (e as Error).message)
+  }
+
   const { data: full } = await supabase
     .from('deliveries')
-    .select('*, business:businesses(name), driver:drivers(name), manifest_items(*)')
+    .select('*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)')
     .eq('id', newId)
     .single()
   return mapDeliveryRow((full || delivery) as Row)
@@ -627,6 +668,7 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
+  if (partial.minDeliveryPhotos != null) p.min_delivery_photos = partial.minDeliveryPhotos
   // Invoice template settings
   if (partial.invoiceCompanyName != null) p.invoice_company_name = partial.invoiceCompanyName
   if (partial.invoiceCompanyAddress != null) p.invoice_company_address = partial.invoiceCompanyAddress

@@ -113,6 +113,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   smsEarningsSummary: false,
   // Dispatch mode – defaults to self-claim (current behavior)
   allowDriverSelfClaim: true,
+  // Minimum proof-of-delivery photos required at drop-off
+  minDeliveryPhotos: 3,
   // Invoice template settings
   invoiceCompanyName: '',
   invoiceCompanyAddress: '',
@@ -169,14 +171,14 @@ interface AppContextType {
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (
     deliveryId: string,
-    photoUrl: string,
+    photoUrls: string[],
     recipientNote: string | null,
     signatureUrl?: string | null,
   ) => void
   failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => void
   flagDelivery: (deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => void
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
-  postDelivery: (data: Partial<Delivery>) => void
+  postDelivery: (data: Partial<Delivery>) => Promise<Delivery | null>
   reassignDriver: (deliveryId: string, newDriverId: string) => void
   cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
   // Admin dispatch assignment (bypasses driver limits, records who assigned)
@@ -283,6 +285,9 @@ interface AppContextType {
   updateDriverCapacity: (driverId: string, maxJobs: number | null) => void
   getDriverTrip: (driverId: string) => Trip | null
   
+  // Data
+  refreshData: () => Promise<void>
+
   // Helpers
   getDriverActiveJobs: (driverId: string) => number
   getDriverMaxJobs: (driverId: string) => number
@@ -365,6 +370,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // -------------------------------------------------------------------------
+  // Lightweight refresh of the shared, DB-backed entities (deliveries,
+  // drivers, businesses, invoices). Unlike hydrateFromDb this does NOT reset
+  // in-memory-only state (notifications, SMS log, etc.), so it's safe to run
+  // on an interval. This is what makes a business-created delivery show up in
+  // an already-open driver session, and keeps every role's data fresh.
+  // -------------------------------------------------------------------------
+  const refreshData = useCallback(async () => {
+    if (!currentUser) return
+    const profile = {
+      role: currentUser.role,
+      businessId: currentUser.businessId || null,
+      driverId: currentUser.driverId || null,
+    }
+    try {
+      const [b, d, dl, inv, s] = await Promise.all([
+        loadAllBusinesses().catch(() => null),
+        loadAllDrivers().catch(() => null),
+        loadDeliveries(profile).catch(() => null),
+        loadInvoices(profile).catch(() => null),
+        loadSettings().catch(() => null),
+      ])
+      if (b) setBusinesses(b)
+      if (d) setDrivers(d)
+      if (s) setSettings(s)
+      if (dl) {
+        const byBizId = new Map((b || businesses).map((biz) => [biz.id, biz.name]))
+        setDeliveries(
+          dl.map((x) => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })),
+        )
+      }
+      if (inv) setInvoices(inv)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[db] refresh failed', err)
+    }
+  }, [currentUser, businesses])
+
   // Build an app-level user object from a Supabase auth user. All role +
   // linkage info lives in raw_user_meta_data (set when the account was
   // created), so we can resolve everything without hitting a RLS-protected
@@ -416,6 +459,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })()
     return () => { cancelled = true }
   }, [hydrateFromDb, mockUserFromAuthUser])
+
+  // Keep the shared data fresh across sessions/devices. Polls every 15s while
+  // logged in, and refreshes immediately when the tab regains focus so a
+  // driver who switches back to the app sees newly posted jobs right away.
+  useEffect(() => {
+    if (!currentUser || isHydrating) return
+    const interval = setInterval(() => { void refreshData() }, 15000)
+    const onFocus = () => { void refreshData() }
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshData() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [currentUser, isHydrating, refreshData])
 
   // Auth functions — real Supabase Auth.
   const login = useCallback(async (email: string, password: string) => {
@@ -693,7 +753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const completeDelivery = useCallback((
     deliveryId: string,
-    photoUrl: string,
+    photoUrls: string[],
     recipientNote: string | null,
     signatureUrl?: string | null,
   ) => {
@@ -701,12 +761,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date()
     const pickedUpAt = delivery?.pickedUpAt ? new Date(delivery.pickedUpAt) : null
     const durationMins = pickedUpAt ? Math.round((now.getTime() - pickedUpAt.getTime()) / 60000) : null
+    // First photo remains the primary proof; the full set is stored as an array.
+    const primaryPhoto = photoUrls[0] ?? null
     persist(
       updateDeliveryFields(deliveryId, {
         status: 'delivered',
         delivered_at: now.toISOString(),
         duration_mins: durationMins,
-        proof_photo_url: photoUrl,
+        proof_photo_url: primaryPhoto,
+        proof_photo_urls: photoUrls,
         signature_url: signatureUrl ?? null,
         recipient_note: recipientNote,
       }),
@@ -752,7 +815,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           status: 'delivered' as DeliveryStatus,
           deliveredAt,
           duration: `${duration} min`,
-          proofPhotoUrl: photoUrl,
+          proofPhotoUrl: photoUrls[0] ?? null,
+          proofPhotoUrls: photoUrls,
           recipientNote,
           statusHistory: [
             ...d.statusHistory,
@@ -898,18 +962,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const postDelivery = useCallback((data: Partial<Delivery>) => {
+  const postDelivery = useCallback(async (data: Partial<Delivery>): Promise<Delivery | null> => {
     // Write to DB first so the app has a real UUID + the row survives refresh.
-    // We do it async but don't block — once created, we refresh the row into state.
+    // We await the create so callers (e.g. the order form) can immediately print
+    // a label for the saved row, but the SMS/geocode side effects stay async.
     const businessId = data.businessId || ''
     const locationId = data.locationId || ''
     if (!businessId || !locationId) {
       // eslint-disable-next-line no-console
       console.error('[db] postDelivery missing businessId/locationId')
-      return
+      return null
     }
-    persist(
-      createDeliveryInDb({
+    try {
+      const saved = await createDeliveryInDb({
         businessId,
         locationId,
         pickupAddress: data.pickupAddress || '',
@@ -937,38 +1002,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
           quantity: m.postedQty,
           notes: m.notes || undefined,
         })),
-      }).then(saved => {
-        // Attach businessName from our local state for display convenience.
-        setDeliveries(prev => {
-          // Dedupe: if somehow this ID was already added locally, replace it.
-          const withoutDupe = prev.filter(d => d.id !== saved.id)
-          const bName = businesses.find(b => b.id === saved.businessId)?.name || ''
-          return [{ ...saved, businessName: bName }, ...withoutDupe]
-        })
-        // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
-        void fetch('/api/sms/job-alert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId: saved.id }),
-        }).catch(err => console.error('[v0] job-alert SMS failed', err))
+      })
 
-        // Fire-and-forget: confirm order to business + send tracking to recipient
-        void fetch('/api/sms/order-confirmed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId: saved.id }),
-        }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
+      // Attach businessName from our local state for display convenience.
+      const bName = businesses.find(b => b.id === saved.businessId)?.name || ''
+      const enriched = { ...saved, businessName: bName }
+      setDeliveries(prev => {
+        // Dedupe: if somehow this ID was already added locally, replace it.
+        const withoutDupe = prev.filter(d => d.id !== saved.id)
+        return [enriched, ...withoutDupe]
+      })
 
-        // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
-        // show map pins. This runs async and updates the row via realtime.
-        void fetch('/api/delivery/geocode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId: saved.id }),
-        }).catch(err => console.error('[v0] geocode failed', err))
-      }),
-      'postDelivery',
-    )
+      // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
+      void fetch('/api/sms/job-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: saved.id }),
+      }).catch(err => console.error('[v0] job-alert SMS failed', err))
+
+      // Fire-and-forget: confirm order to business + send tracking to recipient
+      void fetch('/api/sms/order-confirmed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: saved.id }),
+      }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
+
+      // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
+      // show map pins. This runs async and updates the row via realtime.
+      void fetch('/api/delivery/geocode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: saved.id }),
+      }).catch(err => console.error('[v0] geocode failed', err))
+
+      return enriched
+    } catch (err) {
+      console.error('[db] postDelivery failed', err)
+      return null
+    }
   }, [businesses])
 
   const reassignDriver = useCallback((deliveryId: string, newDriverId: string) => {
@@ -2861,6 +2932,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         dismissTimeout,
         updateDriverCapacity,
         getDriverTrip,
+        refreshData,
         getDriverActiveJobs,
         getDriverMaxJobs,
         canDriverClaimJob,

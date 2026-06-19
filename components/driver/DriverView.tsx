@@ -10,6 +10,10 @@ import { ActiveDelivery } from './ActiveDelivery'
 import { DriverHistory } from './DriverHistory'
 import { DriverSettings } from './DriverSettings'
 import { DriverEarnings } from './DriverEarnings'
+import { DriverScanScreen } from './DriverScanScreen'
+import { DriverTransfersScreen } from './DriverTransfersScreen'
+import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
+import { useScanSync } from '@/lib/hooks/useScanSync'
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -17,12 +21,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign } from 'lucide-react'
+import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine, ArrowLeftRight, RefreshCw } from 'lucide-react'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
+  const [refreshing, setRefreshing] = useState(false)
   const router = useRouter()
-  const { currentUser, logout, deliveries, settings } = useApp()
+  const { currentUser, logout, deliveries, settings, refreshData } = useApp()
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refreshData()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+  // Show the Scan tab when the operation uses zones/cross-dock or requires scanning.
+  const zonesEnabled = useFeatureFlag('zones_enabled')
+  const consolidationEnabled = useFeatureFlag('consolidation_enabled')
+  const scanningRequired = useFeatureFlag('barcode_scanning_required')
+  const showScan = Boolean(zonesEnabled || consolidationEnabled || scanningRequired)
+  const transfersEnabled = useFeatureFlag('driver_transfers_enabled')
+  const showTransfers = Boolean(transfersEnabled)
+  const { pending: pendingScans } = useScanSync()
 
   // Get driver's available and active job counts
   const driverId = currentUser?.driverId || ''
@@ -62,6 +84,8 @@ export function DriverView() {
   const baseNavItems = isDispatchMode
     ? [
         { id: 'active', label: 'My Jobs', icon: Package, badge: activeJobs.length > 0 ? activeJobs.length : undefined },
+        ...(showScan ? [{ id: 'scan', label: 'Scan', icon: ScanLine, badge: pendingScans > 0 ? pendingScans : undefined }] : []),
+        ...(showTransfers ? [{ id: 'transfers', label: 'Transfers', icon: ArrowLeftRight }] : []),
         ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -69,6 +93,8 @@ export function DriverView() {
     : [
         { id: 'available', label: 'Available', icon: FolderOpen, badge: availableJobs.length },
         { id: 'active', label: 'Active', icon: Package, badge: activeJobs.length > 1 ? activeJobs.length : undefined },
+        ...(showScan ? [{ id: 'scan', label: 'Scan', icon: ScanLine, badge: pendingScans > 0 ? pendingScans : undefined }] : []),
+        ...(showTransfers ? [{ id: 'transfers', label: 'Transfers', icon: ArrowLeftRight }] : []),
         ...(showEarnings ? [{ id: 'earnings', label: 'Earnings', icon: DollarSign }] : []),
         { id: 'history', label: 'History', icon: Clock },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -86,6 +112,16 @@ export function DriverView() {
     setActiveTab('history')
   }
 
+  // If the scan tab is hidden but selected, fall back to a safe tab.
+  if (!showScan && activeTab === 'scan') {
+    setActiveTab(isDispatchMode ? 'active' : 'available')
+  }
+
+  // If the transfers tab is hidden but selected, fall back to a safe tab.
+  if (!showTransfers && activeTab === 'transfers') {
+    setActiveTab(isDispatchMode ? 'active' : 'available')
+  }
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col overflow-x-hidden">
       {/* Header */}
@@ -94,7 +130,17 @@ export function DriverView() {
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
           </div>
-          
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-label="Refresh data"
+              className="w-9 h-9 rounded-full flex items-center justify-center tap-target text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 tap-target">
@@ -121,6 +167,7 @@ export function DriverView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </header>
 
@@ -131,6 +178,12 @@ export function DriverView() {
         )}
         {activeTab === 'active' && (
           <ActiveDelivery />
+        )}
+        {activeTab === 'scan' && showScan && (
+          <DriverScanScreen />
+        )}
+        {activeTab === 'transfers' && showTransfers && (
+          <DriverTransfersScreen />
         )}
         {activeTab === 'earnings' && (
           <DriverEarnings />

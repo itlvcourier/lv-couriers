@@ -15,7 +15,7 @@ export async function GET(
         `
         *,
         businesses(name, address, phone),
-        drivers(name, phone, rating),
+        drivers!deliveries_driver_id_fkey(name, phone, rating),
         status_history(*),
         activity_events(*)
       `

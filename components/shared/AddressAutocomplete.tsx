@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { MapPin, Loader2 } from 'lucide-react'
+import { loadGoogleMaps } from '@/lib/google-maps-loader'
 
 export interface AddressComponents {
   streetNumber?: string
@@ -35,37 +36,48 @@ interface AddressAutocompleteProps {
 }
 
 /**
- * Parse Google Places address_components into a structured object
+ * Parse the new Places API `AddressComponent[]` into a structured object.
+ * The new API exposes `longText`/`shortText`/`types` (vs the legacy
+ * `long_name`/`short_name`/`types`).
  */
 function parseAddressComponents(
-  components: google.maps.GeocoderAddressComponent[]
+  components: google.maps.places.AddressComponent[],
 ): AddressComponents {
   const result: AddressComponents = {}
-  
+
   for (const component of components) {
     const types = component.types
-    
     if (types.includes('street_number')) {
-      result.streetNumber = component.long_name
+      result.streetNumber = component.longText ?? undefined
     } else if (types.includes('route')) {
-      result.streetName = component.long_name
+      result.streetName = component.longText ?? undefined
     } else if (types.includes('locality')) {
-      result.city = component.long_name
+      result.city = component.longText ?? undefined
     } else if (types.includes('administrative_area_level_1')) {
-      result.province = component.short_name
+      result.province = component.shortText ?? undefined
     } else if (types.includes('postal_code')) {
-      result.postalCode = component.long_name
+      result.postalCode = component.longText ?? undefined
     } else if (types.includes('country')) {
-      result.country = component.short_name
+      result.country = component.shortText ?? undefined
     }
   }
-  
+
   return result
 }
 
+interface Suggestion {
+  placeId: string
+  text: string
+}
+
 /**
- * Google Places Autocomplete component for address input.
- * Provides type-ahead suggestions as the user types.
+ * Google Places address autocomplete.
+ *
+ * Uses the modern `AutocompleteSuggestion.fetchAutocompleteSuggestions` API
+ * instead of the legacy `google.maps.places.Autocomplete` widget, which is no
+ * longer available to Google Maps customers created after March 1, 2025. We
+ * render our own dropdown so the styled input + icon are preserved, and use a
+ * session token so autocomplete + details are billed as one session.
  */
 export function AddressAutocomplete({
   value,
@@ -78,135 +90,242 @@ export function AddressAutocomplete({
   name,
   required,
 }: AddressAutocompleteProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isSelectingPlace, setIsSelectingPlace] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
 
-  // Load Google Maps script
+  // Session token for billing; regenerated after each completed selection.
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guards against stale async responses overwriting newer ones.
+  const requestSeqRef = useRef(0)
+
+  // Load Google Maps via the shared loader (single script tag, all libraries).
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    if (!apiKey) {
-      console.error('[v0] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not configured')
-      return
-    }
-
-    // Check if already loaded
-    if (window.google?.maps?.places) {
-      setIsLoaded(true)
-      return
-    }
-
-    // Check if script is already being loaded
-    const existingScript = document.querySelector(
-      'script[src*="maps.googleapis.com/maps/api/js"]',
-    )
-    if (existingScript) {
-      existingScript.addEventListener('load', () => setIsLoaded(true))
-      return
-    }
-
-    // Load the script
+    let cancelled = false
     setIsLoading(true)
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      setIsLoaded(true)
-      setIsLoading(false)
+    loadGoogleMaps()
+      .then(() => {
+        if (cancelled) return
+        // The shared loader resolves only after the Places library is present,
+        // so `google.maps.places.AutocompleteSuggestion` is ready to use.
+        if (!google.maps.places?.AutocompleteSuggestion) {
+          console.error('[v0] Places AutocompleteSuggestion API unavailable')
+          setIsLoading(false)
+          return
+        }
+        setIsLoaded(true)
+        setIsLoading(false)
+      })
+      .catch((err: Error) => {
+        if (cancelled) return
+        console.error('[v0] Failed to load Google Maps:', err.message)
+        setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-    script.onerror = () => {
-      console.error('[v0] Failed to load Google Maps script')
-      setIsLoading(false)
-    }
-    document.head.appendChild(script)
   }, [])
 
-  // Initialize autocomplete when script is loaded
-  useEffect(() => {
-    if (!isLoaded || !inputRef.current || autocompleteRef.current) return
+  const newSessionToken = useCallback(() => {
+    sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken()
+  }, [])
 
-    const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
-      componentRestrictions: { country: 'ca' }, // Restrict to Canada
-      fields: ['formatted_address', 'place_id', 'geometry', 'address_components'],
-      types: ['address'],
-    })
-
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace()
-      if (!place.formatted_address) return
-
-      // Parse address components
-      const components = place.address_components 
-        ? parseAddressComponents(place.address_components)
-        : undefined
-
-      const result: AddressResult = {
-        address: place.formatted_address,
-        placeId: place.place_id || '',
-        lat: place.geometry?.location?.lat(),
-        lng: place.geometry?.location?.lng(),
-        components,
+  // Fetch predictions for the current input (debounced by the caller).
+  const fetchSuggestions = useCallback(
+    async (input: string) => {
+      if (!isLoaded || input.trim().length < 3) {
+        setSuggestions([])
+        setOpen(false)
+        return
       }
+      if (!sessionTokenRef.current) newSessionToken()
 
-      // Mark that we're selecting a place (to prevent form submission)
-      setIsSelectingPlace(true)
-      
-      onChange(result.address)
-      onSelect?.(result)
-      
-      // Reset the flag after a short delay
-      setTimeout(() => setIsSelectingPlace(false), 100)
-    })
+      const seq = ++requestSeqRef.current
+      try {
+        const { suggestions: results } =
+          await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+            input,
+            sessionToken: sessionTokenRef.current ?? undefined,
+            includedRegionCodes: ['ca'], // Restrict to Canada
+          })
 
-    autocompleteRef.current = autocomplete
-  }, [isLoaded, onChange, onSelect])
+        // Ignore if a newer request has since fired.
+        if (seq !== requestSeqRef.current) return
 
-  // Handle manual input changes
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onChange(e.target.value)
+        const mapped: Suggestion[] = results
+          .map((s) => s.placePrediction)
+          .filter((p): p is google.maps.places.PlacePrediction => !!p)
+          .map((p) => ({ placeId: p.placeId, text: p.text.text }))
+
+        setSuggestions(mapped)
+        setOpen(mapped.length > 0)
+        setActiveIndex(-1)
+      } catch (err) {
+        console.error('[v0] Autocomplete fetch failed:', err)
+        setSuggestions([])
+        setOpen(false)
+      }
     },
-    [onChange],
+    [isLoaded, newSessionToken],
   )
 
-  // Prevent form submission when Enter is pressed while suggestions are showing
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      // Check if the autocomplete dropdown is open (pac-container is visible)
-      const pacContainer = document.querySelector('.pac-container')
-      const isDropdownVisible = pacContainer && 
-        getComputedStyle(pacContainer).display !== 'none' &&
-        pacContainer.querySelectorAll('.pac-item').length > 0
-      
-      if (isDropdownVisible || isSelectingPlace) {
-        e.preventDefault()
-        e.stopPropagation()
+  // Resolve a selected prediction into full place details.
+  const selectSuggestion = useCallback(
+    async (suggestion: Suggestion) => {
+      setOpen(false)
+      setSuggestions([])
+      onChange(suggestion.text)
+
+      try {
+        const place = new google.maps.places.Place({
+          id: suggestion.placeId,
+          requestedLanguage: 'en',
+        })
+        await place.fetchFields({
+          fields: ['formattedAddress', 'location', 'addressComponents'],
+        })
+
+        const result: AddressResult = {
+          address: place.formattedAddress ?? suggestion.text,
+          placeId: suggestion.placeId,
+          lat: place.location?.lat(),
+          lng: place.location?.lng(),
+          components: place.addressComponents
+            ? parseAddressComponents(place.addressComponents)
+            : undefined,
+        }
+
+        onChange(result.address)
+        onSelect?.(result)
+      } catch (err) {
+        console.error('[v0] Place details fetch failed:', err)
+        // Fall back to the prediction text we already set.
+        onSelect?.({ address: suggestion.text, placeId: suggestion.placeId })
+      } finally {
+        // The session concluded with fetchFields; start a fresh one.
+        newSessionToken()
+      }
+    },
+    [onChange, onSelect, newSessionToken],
+  )
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const next = e.target.value
+      onChange(next)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => void fetchSuggestions(next), 250)
+    },
+    [onChange, fetchSuggestions],
+  )
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!open || suggestions.length === 0) {
+        // Still prevent Enter from submitting the form while typing an address.
+        if (e.key === 'Enter' && open) e.preventDefault()
+        return
+      }
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setActiveIndex((i) => (i + 1) % suggestions.length)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+          break
+        case 'Enter':
+          e.preventDefault()
+          e.stopPropagation()
+          if (activeIndex >= 0 && activeIndex < suggestions.length) {
+            void selectSuggestion(suggestions[activeIndex])
+          }
+          break
+        case 'Escape':
+          setOpen(false)
+          break
+      }
+    },
+    [open, suggestions, activeIndex, selectSuggestion],
+  )
+
+  // Close the dropdown when clicking outside.
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
       }
     }
-  }, [isSelectingPlace])
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  // Cleanup debounce on unmount.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   return (
-    <div className="relative">
-      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+    <div className="relative" ref={containerRef}>
+      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
       <Input
-        ref={inputRef}
         id={id}
         name={name}
         type="text"
         value={value}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
+        onFocus={() => {
+          if (suggestions.length > 0) setOpen(true)
+        }}
         placeholder={placeholder}
         disabled={disabled || isLoading}
         required={required}
         className={cn('pl-9 text-sm truncate', className)}
         autoComplete="off"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
       />
       {isLoading && (
         <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+      )}
+      {open && suggestions.length > 0 && (
+        <ul
+          role="listbox"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover py-1 shadow-lg"
+        >
+          {suggestions.map((s, i) => (
+            <li key={s.placeId} role="option" aria-selected={i === activeIndex}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  // mousedown (not click) so it fires before input blur.
+                  e.preventDefault()
+                  void selectSuggestion(s)
+                }}
+                onMouseEnter={() => setActiveIndex(i)}
+                className={cn(
+                  'flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors',
+                  i === activeIndex
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-popover-foreground hover:bg-accent/50',
+                )}
+              >
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{s.text}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )

@@ -36,6 +36,18 @@ import {
   Loader2,
 } from 'lucide-react'
 import type { ManifestItem, Delivery, SavedContact } from '@/lib/types'
+import { getFeatureSettings } from '@/lib/feature-settings'
+import { checkBusinessCutoff, getRequestExpiryMinutes } from '@/lib/cutoffs'
+import { createDispatchRequest } from '@/lib/dispatch-requests'
+import { getZones } from '@/lib/zones'
+import {
+  buildLabelData,
+  printLabels,
+  markLabelsPrinted,
+  LABEL_SIZE_OPTIONS,
+  type LabelSize,
+} from '@/lib/labels'
+import { Printer } from 'lucide-react'
 
 interface CreateOrderFormProps {
   onSuccess?: () => void
@@ -60,6 +72,16 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const [duplicateDelivery, setDuplicateDelivery] = useState<Delivery | null>(null)
   const [pendingManifest, setPendingManifest] = useState<ManifestItem[]>([])
   const [fromSavedContactId, setFromSavedContactId] = useState<string | null>(null)
+  // Late-order (past daily cutoff) confirmation
+  const [lateInfo, setLateInfo] = useState<{
+    manifest: ManifestItem[]
+    cutoffTime: string | null
+    nowLocal: string | null
+  } | null>(null)
+  const [lateReason, setLateReason] = useState('')
+  // After a successful post, prompt the business to print the QR label.
+  const [justPosted, setJustPosted] = useState<Delivery | null>(null)
+  const [printingLabel, setPrintingLabel] = useState(false)
 
   const business = businesses.find(b => b.id === currentUser?.businessId)
   const userIsOwner = isOwner()
@@ -295,9 +317,90 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         return
       }
 
-      await postNewDelivery(manifest)
+      await proceedAfterCutoffCheck(manifest)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Gate posting on the business's daily cutoff. If cutoff enforcement is on and
+  // we're past the cutoff, route the order into the approval queue as a late
+  // request instead of posting immediately (when late requests are enabled).
+  const proceedAfterCutoffCheck = async (manifest: ManifestItem[]) => {
+    let settings
+    try {
+      settings = await getFeatureSettings()
+    } catch {
+      // If settings can't be read, fail open and post normally.
+      await postNewDelivery(manifest)
+      return
+    }
+
+    if (!settings.cutoff_enabled || !businessId) {
+      await postNewDelivery(manifest)
+      return
+    }
+
+    try {
+      const evalResult = await checkBusinessCutoff(businessId)
+      if (evalResult.hasCutoff && evalResult.isPastCutoff) {
+        if (settings.late_requests_enabled) {
+          // Open confirmation; actual request is created on confirm.
+          setLateInfo({ manifest, cutoffTime: evalResult.cutoffTime, nowLocal: evalResult.nowLocal })
+          setIsSubmitting(false)
+          return
+        }
+        // Late requests disabled → hard block.
+        throw new Error(
+          `Orders are closed for today (cutoff was ${evalResult.cutoffTime}). Please contact dispatch.`,
+        )
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('Orders are closed')) throw err
+      // Any cutoff lookup failure → fail open and post.
+    }
+
+    await postNewDelivery(manifest)
+  }
+
+  // Submit a late-order request to the approval queue instead of posting now.
+  const submitLateRequest = async () => {
+    if (!lateInfo) return
+    setIsSubmitting(true)
+    try {
+      maybeSaveContact()
+      // §3 Feasibility-based expiry: a late order is only actionable for a short
+      // grace window after the pickup cutoff, not a flat 2 hours.
+      const expiresInMinutes = await getRequestExpiryMinutes(businessId)
+      await createDispatchRequest({
+        type: 'late_order',
+        businessId,
+        requestedBy: currentUser?.id ?? null,
+        requestedByRole: 'business',
+        reason: lateReason.trim() || null,
+        expiresInMinutes,
+        payload: {
+          cutoffTime: lateInfo.cutoffTime,
+          postedLocal: lateInfo.nowLocal,
+          recipientName: form.recipientName.trim() || null,
+          dropoffAddress: form.dropoffAddress,
+          pickupAddress: form.pickupAddress,
+          isRush: form.isRush,
+          isOutOfTown: form.isOutOfTown,
+          smallPackages: form.smallPackages,
+          bigPackages: form.bigPackages,
+          packageDescription: form.packageDescription || null,
+        },
+      })
+      setLateInfo(null)
+      setLateReason('')
+      resetForm()
+      toast.success('Late request submitted for approval')
+      onSuccess?.()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit late request')
     } finally {
       setIsSubmitting(false)
     }
@@ -325,7 +428,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const postNewDelivery = async (manifest: ManifestItem[]) => {
     maybeSaveContact()
 
-    postDelivery({
+    const saved = await postDelivery({
       businessId,
       locationId: currentUser?.locationId || '',
       businessName: business?.name || '',
@@ -352,6 +455,44 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
     resetForm()
     toast.success('Delivery posted successfully!')
+
+    // Prompt the business to print the QR label right away. We keep the form
+    // open behind the dialog; onSuccess fires once they print or skip.
+    if (saved?.scanToken) {
+      setJustPosted(saved)
+    } else {
+      onSuccess?.()
+    }
+  }
+
+  // Print the freshly posted delivery's label in the chosen size, then close.
+  const handlePrintJustPosted = async (size: LabelSize) => {
+    if (!justPosted) return
+    setPrintingLabel(true)
+    try {
+      let zone: { name: string; color: string } | null = null
+      if (justPosted.dropoffZoneId) {
+        try {
+          const zones = await getZones(true)
+          const z = zones.find((zz) => zz.id === justPosted.dropoffZoneId)
+          if (z) zone = { name: z.name, color: z.color }
+        } catch {
+          // Non-fatal: print without a zone color block.
+        }
+      }
+      await printLabels([buildLabelData(justPosted, zone)], size)
+      void markLabelsPrinted([justPosted.id])
+      setJustPosted(null)
+      onSuccess?.()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to print label')
+    } finally {
+      setPrintingLabel(false)
+    }
+  }
+
+  const skipPrint = () => {
+    setJustPosted(null)
     onSuccess?.()
   }
 
@@ -371,7 +512,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const handleKeepSeparate = async () => {
     setShowDuplicateModal(false)
     setDuplicateDelivery(null)
-    await postNewDelivery(pendingManifest)
+    await proceedAfterCutoffCheck(pendingManifest)
     setPendingManifest([])
   }
 
@@ -855,6 +996,111 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Late Order (past cutoff) Modal */}
+      <Dialog
+        open={!!lateInfo}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLateInfo(null)
+            setLateReason('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-orange-500" />
+              Past today&apos;s cutoff
+            </DialogTitle>
+            <DialogDescription>
+              {lateInfo?.cutoffTime
+                ? `Your cutoff for same-day delivery was ${lateInfo.cutoffTime}${lateInfo.nowLocal ? ` (it's now ${lateInfo.nowLocal})` : ''}.`
+                : 'This order is past your daily cutoff.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You can still submit this as a <span className="font-medium text-foreground">late request</span>. Dispatch will
+              review and approve it before it&apos;s dispatched.
+            </p>
+
+            <div className="space-y-2">
+              <Label htmlFor="lateReason" className="text-sm">
+                Reason (optional)
+              </Label>
+              <Textarea
+                id="lateReason"
+                value={lateReason}
+                onChange={(e) => setLateReason(e.target.value)}
+                placeholder="e.g. Customer needs it tonight"
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Button onClick={submitLateRequest} disabled={isSubmitting} className="w-full h-11">
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {isSubmitting ? 'Submitting…' : 'Submit late request'}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full h-11"
+                onClick={() => {
+                  setLateInfo(null)
+                  setLateReason('')
+                }}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print-label prompt shown immediately after a successful post. */}
+      <Dialog open={!!justPosted} onOpenChange={(open) => { if (!open) skipPrint() }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-[var(--accent-orange)]" />
+              Print delivery label
+            </DialogTitle>
+            <DialogDescription>
+              Your delivery was posted. Choose a label size to print the QR label, or skip.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {LABEL_SIZE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={printingLabel}
+                onClick={() => handlePrintJustPosted(opt.value)}
+                className="w-full text-left rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-3 hover:bg-[var(--border-color)]/30 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">{opt.label}</span>
+                  {printingLabel ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4 opacity-70" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{opt.hint}</p>
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={skipPrint} disabled={printingLabel}>
+              Skip for now
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

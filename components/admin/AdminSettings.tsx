@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { AdminUserManagement } from './AdminUserManagement'
 import { DriverPaySettings } from './DriverPaySettings'
+import { FeatureFlagsSettings } from './FeatureFlagsSettings'
+import { CutoffManager } from './CutoffManager'
 import {
   Dialog,
   DialogContent,
@@ -30,7 +32,6 @@ import {
   LogOut,
   Clock,
   Users,
-  Zap,
   X,
   Save,
   Smartphone,
@@ -42,6 +43,7 @@ import {
   Building2,
   CreditCard,
   DollarSign,
+  Camera,
 } from 'lucide-react'
 
 export function AdminSettings() {
@@ -76,6 +78,8 @@ export function AdminSettings() {
     smsEarningsSummary: settings.smsEarningsSummary,
     // Dispatch mode
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
+    // Proof of delivery
+    minDeliveryPhotos: settings.minDeliveryPhotos,
     // Invoice template settings
     invoiceCompanyName: settings.invoiceCompanyName,
     invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -131,6 +135,7 @@ export function AdminSettings() {
       smsShiftReminder: settings.smsShiftReminder,
       smsEarningsSummary: settings.smsEarningsSummary,
       allowDriverSelfClaim: settings.allowDriverSelfClaim,
+      minDeliveryPhotos: settings.minDeliveryPhotos,
       // Invoice template settings
       invoiceCompanyName: settings.invoiceCompanyName,
       invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -284,6 +289,11 @@ export function AdminSettings() {
     })
     toast.success('Capacity settings saved')
   }
+
+  const handleSaveProofPhotos = () => {
+    updateSettings({ minDeliveryPhotos: localSettings.minDeliveryPhotos })
+    toast.success('Proof of delivery settings saved')
+  }
   
   const clearOverride = (driverId: string) => {
     setDriverOverrides(prev => ({ ...prev, [driverId]: '' }))
@@ -291,6 +301,12 @@ export function AdminSettings() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Operations & Feature Flags (cross-dock operating model) */}
+      <FeatureFlagsSettings />
+
+      {/* Per-business daily cutoffs */}
+      <CutoffManager />
+
       {/* Dispatch Mode Section */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -468,55 +484,82 @@ export function AdminSettings() {
         </CardContent>
       </Card>
 
-      {/* Rush SLA & Timeouts */}
+      {/* Proof of Delivery Section */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Zap className="w-5 h-5" />
-            Rush SLA & Timeouts
+            <Camera className="w-5 h-5" />
+            Proof of Delivery
           </CardTitle>
-          <CardDescription>Configure time-based alerts and SLA requirements</CardDescription>
+          <CardDescription>
+            Set how many photos a driver must capture before they can complete a drop-off
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Rush SLA (mins)</Label>
-              <Input
-                type="number"
-                min="15"
-                max="120"
-                value={localSettings.rushSlaMins}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, rushSlaMins: parseInt(e.target.value) || 45 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-              <p className="text-xs text-muted-foreground">Pickup must occur within this time</p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-foreground">In-Town Timeout (mins)</Label>
-              <Input
-                type="number"
-                min="30"
-                max="300"
-                value={localSettings.intownTimeoutMins}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, intownTimeoutMins: parseInt(e.target.value) || 120 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-              <p className="text-xs text-muted-foreground">Alert after no update</p>
-            </div>
-          </div>
           <div className="space-y-2">
-            <Label className="text-foreground">Out of Town Timeout (mins)</Label>
-            <Input
-              type="number"
-              min="60"
-              max="480"
-              value={localSettings.outOfTownTimeoutMins}
-              onChange={(e) => setLocalSettings(prev => ({ ...prev, outOfTownTimeoutMins: parseInt(e.target.value) || 240 }))}
-              className="w-1/2 bg-[var(--bg-card-2)] border-[var(--border-color)]"
-            />
+            <Label className="text-foreground">Minimum drop-off photos</Label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      minDeliveryPhotos: Math.max(1, (prev.minDeliveryPhotos ?? 3) - 1),
+                    }))
+                  }
+                  aria-label="Decrease minimum photos"
+                >
+                  −
+                </Button>
+                <Input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={localSettings.minDeliveryPhotos ?? 3}
+                  onChange={(e) =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      minDeliveryPhotos: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)),
+                    }))
+                  }
+                  className="w-20 text-center bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      minDeliveryPhotos: Math.min(10, (prev.minDeliveryPhotos ?? 3) + 1),
+                    }))
+                  }
+                  aria-label="Increase minimum photos"
+                >
+                  +
+                </Button>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                Drivers must take at least this many photos at drop-off (1–10)
+              </span>
+            </div>
           </div>
+
+          <Button
+            onClick={handleSaveProofPhotos}
+            className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Proof Settings
+          </Button>
         </CardContent>
       </Card>
+
 
       {/* Invoice Settings */}
       <Card id="invoice-settings" className="bg-[var(--bg-card)] border-[var(--border-color)]">

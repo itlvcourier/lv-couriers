@@ -8,6 +8,9 @@ import { AdminDashboard } from './AdminDashboard'
 import { AdminDrivers } from './AdminDrivers'
 import { AdminBusinesses } from './AdminBusinesses'
 import { AdminOrders } from './AdminOrders'
+import { AdminZones } from './AdminZones'
+import { AdminSort } from './AdminSort'
+import { AdminTransfers } from './AdminTransfers'
 import { AdminRateCards } from './AdminRateCards'
 import { AdminInvoices } from './AdminInvoices'
 import { AdminSettings } from './AdminSettings'
@@ -15,6 +18,9 @@ import { AdminCommunications } from './AdminCommunications'
 import { AdminDriverReports } from './AdminDriverReports'
 import { AdminAuditLog } from './AdminAuditLog'
 import { DispatchBoard } from './DispatchBoard'
+import { ApprovalQueue } from './ApprovalQueue'
+import { getPendingCount } from '@/lib/dispatch-requests'
+import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { NotificationCenter } from './NotificationCenter'
 import { cn } from '@/lib/utils'
 import { 
@@ -34,16 +40,24 @@ import {
   BarChart3,
   Radio,
   ScrollText,
+  Inbox,
+  Map as MapIcon,
+  Boxes,
+  ArrowLeftRight,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'drivers' | 'businesses' | 'orders' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
-const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
+const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'dispatch', label: 'Dispatch', icon: Radio },
+  { id: 'requests', label: 'Requests', icon: Inbox },
   { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'businesses', label: 'Businesses', icon: Building2 },
   { id: 'orders', label: 'Orders', icon: Package },
+  { id: 'zones', label: 'Zones', icon: MapIcon },
+  { id: 'sort', label: 'Hub Sort', icon: Boxes },
+  { id: 'transfers', label: 'Transfers', icon: ArrowLeftRight },
   { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'communications', label: 'Communications', icon: MessageSquare },
@@ -55,7 +69,45 @@ const navItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
 export function AdminView() {
   const [activePage, setActivePage] = useState<AdminPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [pendingRequests, setPendingRequests] = useState(0)
   const { logout, currentUser } = useApp()
+  const zonesEnabled = useFeatureFlag('zones_enabled')
+  const consolidationEnabled = useFeatureFlag('consolidation_enabled')
+  const transfersEnabled = useFeatureFlag('driver_transfers_enabled')
+
+  // Hide flag-gated pages when their feature is off.
+  const navItems = baseNavItems.filter((item) => {
+    if (item.id === 'zones') return zonesEnabled
+    if (item.id === 'sort') return consolidationEnabled
+    if (item.id === 'transfers') return transfersEnabled
+    return true
+  })
+
+  // If a flag-gated page is open but its flag turns off, fall back to dashboard.
+  if (
+    (!zonesEnabled && activePage === 'zones') ||
+    (!consolidationEnabled && activePage === 'sort') ||
+    (!transfersEnabled && activePage === 'transfers')
+  ) {
+    setActivePage('dashboard')
+  }
+
+  useEffect(() => {
+    let active = true
+    const poll = () => {
+      getPendingCount()
+        .then((n) => {
+          if (active) setPendingRequests(n)
+        })
+        .catch(() => {})
+    }
+    poll()
+    const id = setInterval(poll, 30_000)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [activePage])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -77,9 +129,13 @@ export function AdminView() {
     switch (activePage) {
       case 'dashboard': return <AdminDashboard />
       case 'dispatch': return <DispatchBoard />
+      case 'requests': return <ApprovalQueue />
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />
+      case 'zones': return <AdminZones />
+      case 'sort': return <AdminSort />
+      case 'transfers': return <AdminTransfers />
       case 'rate_cards': return <AdminRateCards />
       case 'invoices': return <AdminInvoices />
       case 'communications': return <AdminCommunications />
@@ -143,6 +199,11 @@ export function AdminView() {
             >
               <item.icon className="w-5 h-5" />
               {item.label}
+              {item.id === 'requests' && pendingRequests > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold">
+                  {pendingRequests}
+                </span>
+              )}
             </Button>
           ))}
         </nav>

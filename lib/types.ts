@@ -1,5 +1,24 @@
 // DOMS - Delivery Operations Management System Types
 
+// ===== CROSS-DOCK OPERATING MODEL (Phase 0 foundations) =====
+// Canonical types are defined alongside their data-access modules to avoid
+// circular imports; re-exported here so consumers can import from one place.
+export type {
+  FeatureSettings,
+  AddressValidationLevel,
+  DriverPayModel,
+  OperatingMode,
+} from './feature-settings'
+export type { Zone, ZoneAssignment } from './zones'
+export type {
+  CustodyEvent,
+  CustodyEventType,
+  ActorType,
+  ScanMethod,
+  LegStatus,
+  HolderKind,
+} from './custody'
+
 export type DeliveryStatus =
   | 'posted'
   | 'claimed'
@@ -198,6 +217,8 @@ export interface Delivery {
   duration: string | null // Formatted for display
   pickupPhotoUrl: string | null
   proofPhotoUrl: string | null
+  // All proof-of-delivery photos captured at drop-off (first one mirrors proofPhotoUrl).
+  proofPhotoUrls: string[]
   signatureUrl: string | null
   recipientNote: string | null
   // Capture requirements set by the business at order creation time.
@@ -218,6 +239,18 @@ export interface Delivery {
   // Admin assignment tracking
   assignedAt?: string | null
   assignedBy?: string | null
+  // ===== Cross-dock foundations (Phase 0) =====
+  pickupZoneId?: string | null
+  dropoffZoneId?: string | null
+  currentHolder?: string | null
+  holderDriverId?: string | null
+  legStatus?: import('./custody').LegStatus | null
+  routingMode?: 'direct' | 'cross_dock' | null
+  scanToken?: string | null
+  pickupPay?: number | null
+  deliveryPay?: number | null
+  /** When the shipping label was last printed (null = never printed). */
+  labelPrintedAt?: string | null
   // Relations (for client-side convenience)
   flags: DeliveryFlag[]
   verifications: PickupVerification[]
@@ -275,6 +308,8 @@ export interface SystemSettings {
   smsEarningsSummary: boolean
   // Dispatch mode
   allowDriverSelfClaim: boolean
+  // Minimum number of proof-of-delivery photos a driver must capture at drop-off
+  minDeliveryPhotos: number
   // Invoice template settings
   invoiceCompanyName: string
   invoiceCompanyAddress: string
