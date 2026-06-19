@@ -37,7 +37,7 @@ import {
 } from 'lucide-react'
 import type { ManifestItem, Delivery, SavedContact } from '@/lib/types'
 import { getFeatureSettings } from '@/lib/feature-settings'
-import { checkBusinessCutoff } from '@/lib/cutoffs'
+import { checkBusinessCutoff, getRequestExpiryMinutes } from '@/lib/cutoffs'
 import { createDispatchRequest } from '@/lib/dispatch-requests'
 
 interface CreateOrderFormProps {
@@ -359,13 +359,16 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
     setIsSubmitting(true)
     try {
       maybeSaveContact()
+      // §3 Feasibility-based expiry: a late order is only actionable for a short
+      // grace window after the pickup cutoff, not a flat 2 hours.
+      const expiresInMinutes = await getRequestExpiryMinutes(businessId)
       await createDispatchRequest({
         type: 'late_order',
         businessId,
         requestedBy: currentUser?.id ?? null,
         requestedByRole: 'business',
         reason: lateReason.trim() || null,
-        expiresInMinutes: 120,
+        expiresInMinutes,
         payload: {
           cutoffTime: lateInfo.cutoffTime,
           postedLocal: lateInfo.nowLocal,

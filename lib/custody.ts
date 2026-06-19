@@ -1,8 +1,9 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { ORG_ID } from '@/lib/feature-settings'
+import { ORG_ID, getFeatureSettings } from '@/lib/feature-settings'
 import { resolveZoneForPoint, getZoneDriver } from '@/lib/zones'
+import { getSystemSettings, calculateDriverPay } from '@/lib/settings'
 
 // ============================================================================
 // Chain of custody (append-only ledger) + delivery leg-status derivation.
@@ -149,13 +150,30 @@ export async function recordCustodyEvent(
   const supabase = createClient()
   if (!supabase) throw new Error('Supabase client unavailable')
 
-  // Current holder becomes the new event's from_holder.
+  // Current holder becomes the new event's from_holder. We grab the pay/zone
+  // fields in the same round-trip so the hub-sort snapshot and per-leg pay
+  // logic below don't each need their own query.
   const { data: deliveryRow } = await supabase
     .from('deliveries')
-    .select('current_holder')
+    .select(
+      'current_holder, dropoff_zone_id, sorted_for_driver_id, pickup_driver_id, holder_driver_id, driver_id, pickup_pay, delivery_pay, is_rush, is_urgent, distance_km',
+    )
     .eq('id', input.deliveryId)
     .maybeSingle()
-  const fromHolder = (deliveryRow as { current_holder: string | null } | null)?.current_holder ?? null
+  const dRow = deliveryRow as {
+    current_holder: string | null
+    dropoff_zone_id: string | null
+    sorted_for_driver_id: string | null
+    pickup_driver_id: string | null
+    holder_driver_id: string | null
+    driver_id: string | null
+    pickup_pay: number | null
+    delivery_pay: number | null
+    is_rush: boolean | null
+    is_urgent: boolean | null
+    distance_km: number | null
+  } | null
+  const fromHolder = dRow?.current_holder ?? null
 
   const { data, error } = await supabase
     .from('custody_events')
@@ -207,29 +225,31 @@ export async function recordCustodyEvent(
   const nextLeg = legStatusForEvent(input.eventType)
   if (nextLeg) patch.leg_status = nextLeg
 
+  // §4 Per-leg pay: permanently remember the PICKUP driver the first time a
+  // parcel is picked up. holder_driver_id/driver_id get reassigned through the
+  // hub and transfers, so without this the pickup driver would be lost.
+  const pickupDriverId =
+    dRow?.pickup_driver_id ??
+    (input.eventType === 'pickup' && input.actorType === 'driver' ? input.actorId ?? null : null)
+  if (input.eventType === 'pickup' && !dRow?.pickup_driver_id && input.actorType === 'driver' && input.actorId) {
+    patch.pickup_driver_id = input.actorId
+  }
+
   // §6 Hub sort: when a parcel is sorted in at the hub, snapshot the driver it
   // was sorted FOR (today's dropoff-zone driver). Locking this in at sort time
   // means a later zone reassignment can't retroactively rewrite who the parcel
   // was staged for. Only snapshot once.
-  if (input.eventType === 'hub_in') {
-    const { data: row } = await supabase
-      .from('deliveries')
-      .select('dropoff_zone_id, sorted_for_driver_id')
-      .eq('id', input.deliveryId)
-      .maybeSingle()
-    const r = row as { dropoff_zone_id: string | null; sorted_for_driver_id: string | null } | null
-    if (r && !r.sorted_for_driver_id && r.dropoff_zone_id) {
-      const destDriverId = await getZoneDriver(r.dropoff_zone_id).catch(() => null)
-      if (destDriverId) {
-        const { data: drv } = await supabase
-          .from('drivers')
-          .select('name')
-          .eq('id', destDriverId)
-          .maybeSingle()
-        patch.sorted_for_driver_id = destDriverId
-        patch.sorted_for_driver_name = (drv as { name: string } | null)?.name ?? null
-        patch.sorted_at = new Date().toISOString()
-      }
+  if (input.eventType === 'hub_in' && dRow && !dRow.sorted_for_driver_id && dRow.dropoff_zone_id) {
+    const destDriverId = await getZoneDriver(dRow.dropoff_zone_id).catch(() => null)
+    if (destDriverId) {
+      const { data: drv } = await supabase
+        .from('drivers')
+        .select('name')
+        .eq('id', destDriverId)
+        .maybeSingle()
+      patch.sorted_for_driver_id = destDriverId
+      patch.sorted_for_driver_name = (drv as { name: string } | null)?.name ?? null
+      patch.sorted_at = new Date().toISOString()
     }
   }
 
@@ -237,7 +257,85 @@ export async function recordCustodyEvent(
     await supabase.from('deliveries').update(patch).eq('id', input.deliveryId)
   }
 
+  // §4 Record the leg's earnings once the leg is complete. Idempotent: the
+  // ledger has a unique (delivery_id, leg) index and the RPC is ON CONFLICT
+  // DO NOTHING, so replays/duplicate scans never double-pay.
+  if (input.eventType === 'pickup' || input.eventType === 'delivered') {
+    await recordLegPay(supabase, input, dRow, pickupDriverId).catch((err) => {
+      // Pay accounting must never break the custody scan itself.
+      // eslint-disable-next-line no-console
+      console.error('[pay] leg earning failed', err)
+    })
+  }
+
   return mapEvent(data as CustodyRow)
+}
+
+type DeliveryPayFields = {
+  holder_driver_id: string | null
+  driver_id: string | null
+  pickup_pay: number | null
+  delivery_pay: number | null
+  is_rush: boolean | null
+  is_urgent: boolean | null
+  distance_km: number | null
+} | null
+
+/**
+ * Credit the driver who completed a leg. Honors feature_settings.driver_pay_model:
+ *  - 'per_order': the delivering driver is paid the whole order on `delivered`.
+ *  - 'per_leg':   the pickup driver is paid the pickup leg on `pickup`, and the
+ *                 delivering driver the delivery leg on `delivered`. Explicit
+ *                 per-delivery pickup_pay/delivery_pay override the computed split.
+ */
+async function recordLegPay(
+  supabase: NonNullable<ReturnType<typeof createClient>>,
+  input: RecordCustodyInput,
+  dRow: DeliveryPayFields,
+  pickupDriverId: string | null,
+): Promise<void> {
+  const [features, settings] = await Promise.all([getFeatureSettings(), getSystemSettings()])
+  if (!settings.driver_pay_enabled) return
+
+  const total = calculateDriverPay(settings, {
+    is_rush: dRow?.is_rush ?? false,
+    is_urgent: dRow?.is_urgent ?? false,
+    distance_km: dRow?.distance_km ?? 0,
+  })
+
+  const credit = (driverId: string | null, leg: 'pickup' | 'delivery' | 'full', amount: number) => {
+    if (!driverId || amount <= 0) return Promise.resolve()
+    return supabase
+      .rpc('record_driver_leg_earning', {
+        p_delivery_id: input.deliveryId,
+        p_driver_id: driverId,
+        p_leg: leg,
+        p_amount: Math.round(amount * 100) / 100,
+        p_pay_model: features.driver_pay_model,
+      })
+      .then(() => undefined)
+  }
+
+  const deliveringDriver =
+    (input.actorType === 'driver' ? input.actorId : null) ?? dRow?.holder_driver_id ?? dRow?.driver_id ?? null
+
+  if (features.driver_pay_model === 'per_order') {
+    // Whole order paid to the delivering driver, once, at delivery.
+    if (input.eventType === 'delivered') await credit(deliveringDriver, 'full', total)
+    return
+  }
+
+  // per_leg: split the total. Explicit per-delivery amounts win; otherwise the
+  // base rate covers the pickup leg and the remainder (bonuses + distance) the
+  // delivery leg.
+  const pickupPay = dRow?.pickup_pay ?? Math.min(total, Math.round(settings.driver_base_rate * 100) / 100)
+  const deliveryPay = dRow?.delivery_pay ?? Math.max(0, Math.round((total - pickupPay) * 100) / 100)
+
+  if (input.eventType === 'pickup') {
+    await credit(pickupDriverId, 'pickup', pickupPay)
+  } else {
+    await credit(deliveringDriver, 'delivery', deliveryPay)
+  }
 }
 
 // ============================================================================

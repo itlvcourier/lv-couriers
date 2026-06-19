@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { useApp } from '@/lib/context'
 import { getDriverDeliveries, type DbDelivery } from '@/lib/db'
-import { getSystemSettings, calculateDriverPay, type SystemSettings } from '@/lib/settings'
+import { getSystemSettings, calculateDriverPay, getDriverLegEarnings } from '@/lib/settings'
+import { getFeatureSettings } from '@/lib/feature-settings'
 import { 
   DollarSign, 
   TrendingUp, 
@@ -16,6 +17,8 @@ import {
   Clock,
   Zap,
   Ban,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, isWithinInterval } from 'date-fns'
 
@@ -34,6 +37,20 @@ export function DriverEarnings() {
     driverId ? `driver-earnings-${driverId}` : null,
     () => getDriverDeliveries(driverId),
     { refreshInterval: 60000 }
+  )
+
+  // Active pay model (per_order vs per_leg) drives whether we show the leg split.
+  const { data: features } = useSWR('feature-settings-pay', getFeatureSettings)
+  const payModel = features?.driver_pay_model ?? 'per_order'
+
+  // Authoritative per-leg earnings for the current month (§4 ledger).
+  const { data: legEarnings } = useSWR(
+    driverId && payModel === 'per_leg' ? `driver-leg-earnings-${driverId}` : null,
+    () => {
+      const now = new Date()
+      return getDriverLegEarnings(driverId, startOfMonth(now), endOfMonth(now))
+    },
+    { refreshInterval: 60000 },
   )
 
   const isLoading = settingsLoading || deliveriesLoading
@@ -217,6 +234,46 @@ export function DriverEarnings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Per-leg breakdown (only meaningful when the company pays per leg) */}
+      {payModel === 'per_leg' && legEarnings && (
+        <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">This Month by Leg</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ArrowUpRight className="w-4 h-4 text-blue-500" />
+                <span className="text-sm">Pickup legs</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {legEarnings.pickup.jobs}
+                </Badge>
+              </div>
+              <span className="font-semibold">${legEarnings.pickup.total.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ArrowDownLeft className="w-4 h-4 text-green-500" />
+                <span className="text-sm">Delivery legs</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {legEarnings.delivery.jobs}
+                </Badge>
+              </div>
+              <span className="font-semibold">${legEarnings.delivery.total.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--border-color)]">
+              <span className="text-sm font-medium">Leg pay total</span>
+              <span className="font-semibold text-green-500">
+                ${legEarnings.total.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Pickup-only jobs are included here even after you hand them off at the hub.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">

@@ -17,6 +17,7 @@ import {
   type AddressChangeSource,
 } from '@/lib/address-intelligence'
 import { createDispatchRequest } from '@/lib/dispatch-requests'
+import { ADDRESS_CHANGE_EXPIRY_MIN } from '@/lib/cutoffs'
 import type { GeocodeConfidence } from '@/lib/google-maps'
 import { toast } from 'sonner'
 import { MapPin, Loader2, ShieldCheck, AlertTriangle, Camera, Check } from 'lucide-react'
@@ -152,7 +153,9 @@ export function UpdateAddressSheet({
           requestedByRole: 'driver',
           reason: note || `Address change (${source})`,
           payload,
-          expiresInMinutes: 120,
+          // §3 Tight feasibility window: the correction must reach the driver
+          // before they attempt the wrong address, not sit approvable for hours.
+          expiresInMinutes: ADDRESS_CHANGE_EXPIRY_MIN,
         })
         toast.success('Address change sent for approval')
       } else {

@@ -228,3 +228,65 @@ export async function checkBusinessCutoff(
   const cutoffs = await getBusinessCutoffs(businessId)
   return evaluateCutoff(cutoffs, at)
 }
+
+// ---------------------------------------------------------------------------
+// Feasibility-based approval expiry (§3)
+// ---------------------------------------------------------------------------
+
+/** Whole minutes from `at` until today's effective cutoff (negative if past). */
+export function minutesUntilCutoff(
+  cutoffs: BusinessCutoff[],
+  at: Date = new Date(),
+): number | null {
+  const eff = resolveEffectiveCutoff(cutoffs, at)
+  if (!eff) return null
+  const tz = eff.timezone || "America/Edmonton"
+  const [nh, nm] = getLocalHHMM(at, tz).split(":").map(Number)
+  const [ch, cm] = eff.cutoffTime.split(":").map(Number)
+  return ch * 60 + cm - (nh * 60 + nm)
+}
+
+/** Grace window (minutes) for a request submitted AFTER the pickup cutoff. */
+export const POST_CUTOFF_GRACE_MIN = 30
+/** Default expiry when the business has no cutoff configured. */
+export const NO_CUTOFF_DEFAULT_MIN = 60
+/**
+ * Expiry for an in-flight delivery-leg address change. This is a correction
+ * that must reach the driver before they attempt the (wrong) address, so it
+ * gets a tight window rather than the pickup-cutoff boundary.
+ */
+export const ADDRESS_CHANGE_EXPIRY_MIN = 45
+
+/**
+ * Operational-feasibility expiry for an approval request, tied to the next
+ * pickup cutoff rather than a flat timer (§3). A late-order/address-change is
+ * only actionable while the pickup run can still absorb it:
+ *   - before today's cutoff  -> expire AT the cutoff (run commits then),
+ *   - already past cutoff     -> short grace window for a dispatcher feasibility call,
+ *   - no cutoff configured    -> a sane default.
+ */
+export function computeRequestExpiryMinutes(
+  cutoffs: BusinessCutoff[],
+  at: Date = new Date(),
+): number {
+  const m = minutesUntilCutoff(cutoffs, at)
+  if (m === null) return NO_CUTOFF_DEFAULT_MIN
+  // Keep at least a 5-minute window so a request right at the cutoff is still
+  // briefly actionable instead of expiring instantly.
+  if (m > 0) return Math.max(5, m)
+  return POST_CUTOFF_GRACE_MIN
+}
+
+/** Fetch cutoffs + compute feasibility expiry for one business in a single call. */
+export async function getRequestExpiryMinutes(
+  businessId: string | null | undefined,
+  at: Date = new Date(),
+): Promise<number> {
+  if (!businessId) return NO_CUTOFF_DEFAULT_MIN
+  try {
+    const cutoffs = await getBusinessCutoffs(businessId)
+    return computeRequestExpiryMinutes(cutoffs, at)
+  } catch {
+    return NO_CUTOFF_DEFAULT_MIN
+  }
+}
