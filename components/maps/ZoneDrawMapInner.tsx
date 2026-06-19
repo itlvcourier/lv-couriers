@@ -223,6 +223,10 @@ export default function ZoneDrawMapInner({
     } else {
       // Fresh draw: enable the DrawingManager in polygon mode.
       teardown()
+      if (!google.maps.drawing?.DrawingManager) {
+        setError('Drawing tools failed to load. Please reload the page.')
+        return
+      }
       const mgr = new google.maps.drawing.DrawingManager({
         drawingMode: google.maps.drawing.OverlayType.POLYGON,
         drawingControl: false,
