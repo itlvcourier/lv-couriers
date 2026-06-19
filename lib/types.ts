@@ -217,6 +217,8 @@ export interface Delivery {
   duration: string | null // Formatted for display
   pickupPhotoUrl: string | null
   proofPhotoUrl: string | null
+  // All proof-of-delivery photos captured at drop-off (first one mirrors proofPhotoUrl).
+  proofPhotoUrls: string[]
   signatureUrl: string | null
   recipientNote: string | null
   // Capture requirements set by the business at order creation time.
@@ -306,6 +308,8 @@ export interface SystemSettings {
   smsEarningsSummary: boolean
   // Dispatch mode
   allowDriverSelfClaim: boolean
+  // Minimum number of proof-of-delivery photos a driver must capture at drop-off
+  minDeliveryPhotos: number
   // Invoice template settings
   invoiceCompanyName: string
   invoiceCompanyAddress: string
