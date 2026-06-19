@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { MapPin, Loader2 } from 'lucide-react'
+import { loadGoogleMaps } from '@/lib/google-maps-loader'
 
 export interface AddressComponents {
   streetNumber?: string
@@ -84,44 +85,27 @@ export function AddressAutocomplete({
   const [isLoading, setIsLoading] = useState(false)
   const [isSelectingPlace, setIsSelectingPlace] = useState(false)
 
-  // Load Google Maps script
+  // Load Google Maps via the shared loader so the whole app uses a single
+  // script tag with all libraries (places, drawing, geometry, marker). Each
+  // component injecting its own `libraries=places` tag previously collided with
+  // the zone map's async loader and broke the drawing tools.
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    if (!apiKey) {
-      console.error('[v0] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not configured')
-      return
-    }
-
-    // Check if already loaded
-    if (window.google?.maps?.places) {
-      setIsLoaded(true)
-      return
-    }
-
-    // Check if script is already being loaded
-    const existingScript = document.querySelector(
-      'script[src*="maps.googleapis.com/maps/api/js"]',
-    )
-    if (existingScript) {
-      existingScript.addEventListener('load', () => setIsLoaded(true))
-      return
-    }
-
-    // Load the script
+    let cancelled = false
     setIsLoading(true)
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      setIsLoaded(true)
-      setIsLoading(false)
+    loadGoogleMaps()
+      .then(() => {
+        if (cancelled) return
+        setIsLoaded(true)
+        setIsLoading(false)
+      })
+      .catch((err: Error) => {
+        if (cancelled) return
+        console.error('[v0] Failed to load Google Maps:', err.message)
+        setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-    script.onerror = () => {
-      console.error('[v0] Failed to load Google Maps script')
-      setIsLoading(false)
-    }
-    document.head.appendChild(script)
   }, [])
 
   // Initialize autocomplete when script is loaded
