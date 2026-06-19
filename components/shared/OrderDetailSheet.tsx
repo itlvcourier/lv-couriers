@@ -48,6 +48,7 @@ export interface OrderLike {
   cancellationReason?: string | null
   // Proof of delivery
   proofPhotoUrl?: string | null
+  proofPhotoUrls?: string[] | null
   pickupPhotoUrl?: string | null
   signatureUrl?: string | null
   recipientNote?: string | null
@@ -280,25 +281,45 @@ export function OrderDetailSheet({
                   </div>
                 )}
                 
-                {/* Delivery Photo */}
-                {order.proofPhotoUrl && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ImageIcon className="w-3 h-3" />
-                      Delivery Photo
-                    </p>
-                    <div className="relative rounded-lg overflow-hidden border border-border bg-black flex items-center justify-center">
-                      <img 
-                        src={order.proofPhotoUrl} 
-                        alt="Delivery proof" 
-                        className="w-full h-40 object-contain"
-                      />
-                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
-                        Delivered
+                {/* Delivery Photos (one or many) */}
+                {(() => {
+                  // Prefer the full array; fall back to the single legacy field.
+                  const photos =
+                    order.proofPhotoUrls && order.proofPhotoUrls.length > 0
+                      ? order.proofPhotoUrls
+                      : order.proofPhotoUrl
+                        ? [order.proofPhotoUrl]
+                        : []
+                  if (photos.length === 0) return null
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3" />
+                        {photos.length > 1 ? `Delivery Photos (${photos.length})` : 'Delivery Photo'}
+                      </p>
+                      <div className={photos.length > 1 ? 'grid grid-cols-2 gap-2' : ''}>
+                        {photos.map((url, i) => (
+                          <div
+                            key={i}
+                            className="relative rounded-lg overflow-hidden border border-border bg-black flex items-center justify-center"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url || '/placeholder.svg'}
+                              alt={`Delivery proof ${i + 1}`}
+                              className="w-full h-40 object-contain"
+                            />
+                            {i === 0 && (
+                              <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
+                                Delivered
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
                 
                 {/* Signature */}
                 {order.signatureUrl && (

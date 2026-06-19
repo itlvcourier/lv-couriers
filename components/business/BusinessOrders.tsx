@@ -111,6 +111,7 @@ export function BusinessOrders() {
       cancellationReason: d.cancellationReason || null,
       dropoffContact: d.recipientPhone || undefined,
       proofPhotoUrl: d.proofPhotoUrl || null,
+      proofPhotoUrls: d.proofPhotoUrls || null,
       pickupPhotoUrl: d.pickupPhotoUrl || null,
       signatureUrl: d.signatureUrl || null,
       recipientNote: d.recipientNote || null,

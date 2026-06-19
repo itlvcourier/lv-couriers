@@ -44,6 +44,7 @@ import {
   Building2,
   CreditCard,
   DollarSign,
+  Camera,
 } from 'lucide-react'
 
 export function AdminSettings() {
@@ -78,6 +79,8 @@ export function AdminSettings() {
     smsEarningsSummary: settings.smsEarningsSummary,
     // Dispatch mode
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
+    // Proof of delivery
+    minDeliveryPhotos: settings.minDeliveryPhotos,
     // Invoice template settings
     invoiceCompanyName: settings.invoiceCompanyName,
     invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -133,6 +136,7 @@ export function AdminSettings() {
       smsShiftReminder: settings.smsShiftReminder,
       smsEarningsSummary: settings.smsEarningsSummary,
       allowDriverSelfClaim: settings.allowDriverSelfClaim,
+      minDeliveryPhotos: settings.minDeliveryPhotos,
       // Invoice template settings
       invoiceCompanyName: settings.invoiceCompanyName,
       invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -285,6 +289,11 @@ export function AdminSettings() {
       }
     })
     toast.success('Capacity settings saved')
+  }
+
+  const handleSaveProofPhotos = () => {
+    updateSettings({ minDeliveryPhotos: localSettings.minDeliveryPhotos })
+    toast.success('Proof of delivery settings saved')
   }
   
   const clearOverride = (driverId: string) => {
@@ -473,6 +482,82 @@ export function AdminSettings() {
           <p className="text-xs text-muted-foreground">
             Changes apply to future claims only. Drivers currently over the new limit keep existing jobs.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Proof of Delivery Section */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Camera className="w-5 h-5" />
+            Proof of Delivery
+          </CardTitle>
+          <CardDescription>
+            Set how many photos a driver must capture before they can complete a drop-off
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-foreground">Minimum drop-off photos</Label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      minDeliveryPhotos: Math.max(1, (prev.minDeliveryPhotos ?? 3) - 1),
+                    }))
+                  }
+                  aria-label="Decrease minimum photos"
+                >
+                  −
+                </Button>
+                <Input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={localSettings.minDeliveryPhotos ?? 3}
+                  onChange={(e) =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      minDeliveryPhotos: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)),
+                    }))
+                  }
+                  className="w-20 text-center bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      minDeliveryPhotos: Math.min(10, (prev.minDeliveryPhotos ?? 3) + 1),
+                    }))
+                  }
+                  aria-label="Increase minimum photos"
+                >
+                  +
+                </Button>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                Drivers must take at least this many photos at drop-off (1–10)
+              </span>
+            </div>
+          </div>
+
+          <Button
+            onClick={handleSaveProofPhotos}
+            className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Proof Settings
+          </Button>
         </CardContent>
       </Card>
 

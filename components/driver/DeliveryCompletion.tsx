@@ -17,11 +17,17 @@ interface DeliveryCompletionProps {
 }
 
 export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProps) {
-  const { completeDelivery } = useApp()
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const { completeDelivery, settings } = useApp()
+  // Multiple proof photos. The admin-configured minimum (default 3) gates
+  // completion; drivers may add more than the minimum.
+  const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
   const [recipientNote, setRecipientNote] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+
+  const minPhotos = Math.max(1, settings.minDeliveryPhotos ?? 3)
+  const photoCount = photoUrls.length
+  const hasEnoughPhotos = photoCount >= minPhotos
 
   // The business set this flag at order creation; we only require a signature
   // when they explicitly asked for one.
@@ -57,15 +63,20 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
     setIsUploading(true)
     const pathname = await uploadProofPhoto(imageDataUrl, 'delivery')
     if (pathname) {
-      setPhotoUrl(imageDataUrl) // Store locally for preview
-      toast.success('Delivery photo captured and saved')
+      // Store the local data URL for preview; the array order is the capture order.
+      setPhotoUrls((prev) => [...prev, imageDataUrl])
+      toast.success('Photo captured and saved')
     }
     setIsUploading(false)
   }
 
+  const removePhoto = (index: number) => {
+    setPhotoUrls((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const handleComplete = async () => {
-    if (!photoUrl) {
-      toast.error('Please take a proof of delivery photo')
+    if (!hasEnoughPhotos) {
+      toast.error(`Please take at least ${minPhotos} proof of delivery photos`)
       return
     }
     if (requiresSignature && !signatureDataUrl) {
@@ -77,13 +88,12 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
 
     try {
       // Upload signature if exists
-      let signaturePath: string | null = null
       if (signatureDataUrl) {
-        signaturePath = await uploadProofPhoto(signatureDataUrl, 'signature')
+        await uploadProofPhoto(signatureDataUrl, 'signature')
       }
 
-      // Complete the delivery with the photo URLs
-      completeDelivery(delivery.id, photoUrl, recipientNote || null, signatureDataUrl)
+      // Complete the delivery with the full set of proof photos.
+      completeDelivery(delivery.id, photoUrls, recipientNote || null, signatureDataUrl)
       toast.success('Delivery completed!')
       onClose()
     } catch (error) {
@@ -108,53 +118,79 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
           </div>
           <p className="text-sm text-muted-foreground">
             {requiresSignature
-              ? 'Capture a proof photo and recipient signature to complete'
-              : 'Take a proof of delivery photo to complete'}
+              ? `Capture at least ${minPhotos} proof photos and a recipient signature to complete`
+              : `Take at least ${minPhotos} proof of delivery photos to complete`}
           </p>
         </SheetHeader>
 
         <div className="space-y-6">
-          {/* Photo capture - REQUIRED */}
+          {/* Photo capture - REQUIRED (minimum configurable by admin) */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <label className="text-sm font-medium text-foreground">
-                Proof of Delivery Photo
-              </label>
-              <span className="text-xs text-red-500 font-medium">Required</span>
-            </div>
-            
-            {photoUrl ? (
-              <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center">
-                <img
-                  src={photoUrl}
-                  alt="Proof of delivery"
-                  className="w-full h-48 object-contain"
-                />
-                <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--accent-green)]/90 text-white text-xs font-medium">
-                  <CheckCircle className="w-3 h-3" />
-                  Photo captured
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setPhotoUrl(null)}
-                  className="absolute bottom-3 right-3"
-                >
-                  Retake Photo
-                </Button>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-foreground">
+                  Proof of Delivery Photos
+                </label>
+                <span className="text-xs text-red-500 font-medium">Required</span>
               </div>
-            ) : (
-              <CameraCapture
-                onCapture={handlePhotoCapture}
-                label="Take Proof Photo"
-                required
-              />
+              <span
+                className={`text-xs font-semibold tabular-nums ${
+                  hasEnoughPhotos ? 'text-[var(--accent-green)]' : 'text-amber-500'
+                }`}
+              >
+                {photoCount}/{minPhotos}
+              </span>
+            </div>
+
+            {/* Captured photo thumbnails */}
+            {photoCount > 0 && (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {photoUrls.map((url, index) => (
+                  <div
+                    key={index}
+                    className="relative rounded-xl overflow-hidden bg-black aspect-square"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url || '/placeholder.svg'}
+                      alt={`Proof of delivery ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-medium">
+                      {index + 1}
+                    </span>
+                    <button
+                      onClick={() => removePhoto(index)}
+                      className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white tap-target"
+                      aria-label={`Remove photo ${index + 1}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-            
-            {!photoUrl && (
+
+            {/* Capture control: keep showing until at least the minimum, then
+                allow adding extras. */}
+            <CameraCapture
+              onCapture={handlePhotoCapture}
+              label={photoCount === 0 ? 'Take Proof Photo' : 'Add Another Photo'}
+              required={photoCount === 0}
+            />
+
+            {!hasEnoughPhotos && (
               <div className="mt-2 flex items-center gap-2 text-xs text-amber-500">
                 <AlertCircle className="w-3 h-3" />
-                Photo is required to complete delivery
+                {`Take ${minPhotos - photoCount} more ${
+                  minPhotos - photoCount === 1 ? 'photo' : 'photos'
+                } to complete (minimum ${minPhotos})`}
+              </div>
+            )}
+            {hasEnoughPhotos && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-[var(--accent-green)]">
+                <CheckCircle className="w-3 h-3" />
+                Minimum photos captured — you can add more if needed
               </div>
             )}
           </div>
@@ -169,16 +205,16 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
                 </label>
                 <span className="text-xs text-red-500 font-medium">Required</span>
               </div>
-              
+
               <SignaturePad onChange={setSignatureDataUrl} />
-              
+
               {signatureDataUrl && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-[var(--accent-green)]">
                   <CheckCircle className="w-3 h-3" />
                   Signature captured
                 </div>
               )}
-              
+
               {!signatureDataUrl && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-amber-500">
                   <AlertCircle className="w-3 h-3" />
@@ -205,7 +241,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
           {/* Complete button */}
           <Button
             onClick={handleComplete}
-            disabled={!photoUrl || (requiresSignature && !signatureDataUrl) || isUploading}
+            disabled={!hasEnoughPhotos || (requiresSignature && !signatureDataUrl) || isUploading}
             className="w-full h-12 rounded-xl tap-target bg-[var(--accent-green)] hover:bg-[var(--accent-green)]/90 text-white font-medium disabled:opacity-50"
           >
             {isUploading ? (

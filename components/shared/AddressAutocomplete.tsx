@@ -131,7 +131,11 @@ export function AddressAutocomplete({
     const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: { country: 'ca' }, // Restrict to Canada
       fields: ['formatted_address', 'place_id', 'geometry', 'address_components'],
-      types: ['address'],
+      // 'geocode' (vs 'address') lets postal-code-first queries return
+      // predictions. With 'address' Google only matches once a street number is
+      // present, so typing a postal code returned nothing. 'geocode' surfaces
+      // postal codes, intersections, and full street addresses.
+      types: ['geocode'],
     })
 
     autocomplete.addListener('place_changed', () => {

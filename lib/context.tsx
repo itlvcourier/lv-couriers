@@ -113,6 +113,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   smsEarningsSummary: false,
   // Dispatch mode – defaults to self-claim (current behavior)
   allowDriverSelfClaim: true,
+  // Minimum proof-of-delivery photos required at drop-off
+  minDeliveryPhotos: 3,
   // Invoice template settings
   invoiceCompanyName: '',
   invoiceCompanyAddress: '',
@@ -169,7 +171,7 @@ interface AppContextType {
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (
     deliveryId: string,
-    photoUrl: string,
+    photoUrls: string[],
     recipientNote: string | null,
     signatureUrl?: string | null,
   ) => void
@@ -751,7 +753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const completeDelivery = useCallback((
     deliveryId: string,
-    photoUrl: string,
+    photoUrls: string[],
     recipientNote: string | null,
     signatureUrl?: string | null,
   ) => {
@@ -759,12 +761,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date()
     const pickedUpAt = delivery?.pickedUpAt ? new Date(delivery.pickedUpAt) : null
     const durationMins = pickedUpAt ? Math.round((now.getTime() - pickedUpAt.getTime()) / 60000) : null
+    // First photo remains the primary proof; the full set is stored as an array.
+    const primaryPhoto = photoUrls[0] ?? null
     persist(
       updateDeliveryFields(deliveryId, {
         status: 'delivered',
         delivered_at: now.toISOString(),
         duration_mins: durationMins,
-        proof_photo_url: photoUrl,
+        proof_photo_url: primaryPhoto,
+        proof_photo_urls: photoUrls,
         signature_url: signatureUrl ?? null,
         recipient_note: recipientNote,
       }),
@@ -810,7 +815,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           status: 'delivered' as DeliveryStatus,
           deliveredAt,
           duration: `${duration} min`,
-          proofPhotoUrl: photoUrl,
+          proofPhotoUrl: photoUrls[0] ?? null,
+          proofPhotoUrls: photoUrls,
           recipientNote,
           statusHistory: [
             ...d.statusHistory,

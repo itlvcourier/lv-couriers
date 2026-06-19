@@ -201,6 +201,9 @@ export function mapDeliveryRow(row: Row): Delivery {
     duration: durationMins != null ? `${durationMins}m` : null,
     pickupPhotoUrl: (row.pickup_photo_url as string | null) ?? null,
     proofPhotoUrl: (row.proof_photo_url as string | null) ?? null,
+    proofPhotoUrls: Array.isArray(row.proof_photo_urls)
+      ? (row.proof_photo_urls as string[])
+      : (row.proof_photo_url ? [row.proof_photo_url as string] : []),
     signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
     requireSignature: !!(row.require_signature as boolean | null),
@@ -270,6 +273,7 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsEarningsSummary: !!row.sms_earnings_summary,
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
+    minDeliveryPhotos: row.min_delivery_photos != null ? Number(row.min_delivery_photos) : 3,
     // Invoice template settings
     invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
     invoiceCompanyAddress: (row.invoice_company_address as string) || '',
@@ -664,6 +668,7 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
+  if (partial.minDeliveryPhotos != null) p.min_delivery_photos = partial.minDeliveryPhotos
   // Invoice template settings
   if (partial.invoiceCompanyName != null) p.invoice_company_name = partial.invoiceCompanyName
   if (partial.invoiceCompanyAddress != null) p.invoice_company_address = partial.invoiceCompanyAddress
