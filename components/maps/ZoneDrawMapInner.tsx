@@ -92,22 +92,30 @@ export default function ZoneDrawMapInner({
         })
         mapRef.current = map
 
+        // The legacy Places Autocomplete widget is unavailable to Google Maps
+        // customers created after March 1, 2025 and can throw on construction.
+        // Wrap it so a failure in this optional search box never blocks the map
+        // (and its drawing tools) from rendering.
         if (searchEl.current) {
-          const ac = new google.maps.places.Autocomplete(searchEl.current, {
-            fields: ['geometry'],
-            componentRestrictions: { country: 'ca' },
-          })
-          ac.bindTo('bounds', map)
-          ac.addListener('place_changed', () => {
-            const place = ac.getPlace()
-            if (!place.geometry) return
-            if (place.geometry.viewport) {
-              map.fitBounds(place.geometry.viewport)
-            } else if (place.geometry.location) {
-              map.setCenter(place.geometry.location)
-              map.setZoom(14)
-            }
-          })
+          try {
+            const ac = new google.maps.places.Autocomplete(searchEl.current, {
+              fields: ['geometry'],
+              componentRestrictions: { country: 'ca' },
+            })
+            ac.bindTo('bounds', map)
+            ac.addListener('place_changed', () => {
+              const place = ac.getPlace()
+              if (!place.geometry) return
+              if (place.geometry.viewport) {
+                map.fitBounds(place.geometry.viewport)
+              } else if (place.geometry.location) {
+                map.setCenter(place.geometry.location)
+                map.setZoom(14)
+              }
+            })
+          } catch (err) {
+            console.warn('[v0] Zone search box unavailable (legacy Autocomplete):', err)
+          }
         }
 
         setReady(true)

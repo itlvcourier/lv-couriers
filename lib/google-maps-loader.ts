@@ -5,32 +5,38 @@
 //
 // Components used to each inject their own <script> tag (some with only the
 // `places` library), which meant the Drawing library wasn't guaranteed to be
-// available. This centralizes loading: it injects the script once with all the
-// libraries we use, and resolves a single shared promise. When the script is
-// already present (loaded by another component) it falls back to
-// `importLibrary` so the requested library is pulled in regardless.
+// available and multiple mismatched scripts collided. This centralizes loading
+// into a single <script> tag that requests EVERY library we use, and resolves
+// one shared promise.
+//
+// We deliberately use the classic loader (libraries in the URL, no
+// `loading=async`). At `onload` the classic loader populates the entire
+// namespace synchronously — `google.maps.places.AutocompleteSuggestion`,
+// `google.maps.drawing.DrawingManager`, etc. — without needing `importLibrary`,
+// which is only reliably available under the async bootstrap pattern.
 // ============================================================================
 
 const LIBRARIES = ['places', 'drawing', 'geometry', 'marker'] as const
 
 let loadPromise: Promise<typeof google> | null = null
 
-/**
- * Ensure every library we depend on is actually present on `google.maps`.
- *
- * Other components (AddressAutocomplete, GoogleTrackingMap) inject their own
- * Maps script with only `libraries=places`. If one of those loads first,
- * `window.google.maps` exists but WITHOUT `drawing`/`geometry`/`marker`, which
- * previously crashed the zone manager on `google.maps.drawing.DrawingManager`.
- * `importLibrary` is available on any loaded Maps JS API and idempotently pulls
- * in a missing library, so we await it for each one we need.
- */
-async function ensureLibraries(): Promise<typeof google> {
-  const g = window.google
-  if (g?.maps?.importLibrary) {
-    await Promise.all(LIBRARIES.map((lib) => g.maps.importLibrary(lib)))
+// Resolves once the libraries we depend on are actually present on the
+// namespace. Polls briefly to cover any edge where onload fires a tick early.
+function whenReady(resolve: (g: typeof google) => void, reject: (e: Error) => void) {
+  const started = Date.now()
+  const check = () => {
+    const m = window.google?.maps
+    if (m?.places?.AutocompleteSuggestion && m?.drawing && m?.geometry) {
+      resolve(window.google)
+      return
+    }
+    if (Date.now() - started > 10000) {
+      reject(new Error('Google Maps libraries did not initialize in time'))
+      return
+    }
+    setTimeout(check, 50)
   }
-  return window.google
+  check()
 }
 
 export function loadGoogleMaps(): Promise<typeof google> {
@@ -46,33 +52,18 @@ export function loadGoogleMaps(): Promise<typeof google> {
       return
     }
 
-    const finish = () => ensureLibraries().then(resolve, reject)
-
-    // Already available? Still make sure our libraries are loaded.
-    if (window.google?.maps) {
-      void finish()
-      return
-    }
-
-    // A script may already be loading (injected by another component).
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src*="maps.googleapis.com/maps/api/js"]',
-    )
-    if (existing) {
-      const poll = setInterval(() => {
-        if (window.google?.maps) {
-          clearInterval(poll)
-          void finish()
-        }
-      }, 100)
+    // Already available (or a script is in flight from a prior call/component)?
+    // Either way, just wait for the namespace to be ready.
+    if (window.google?.maps || document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
+      whenReady(resolve, reject)
       return
     }
 
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&loading=async`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&v=weekly`
     script.async = true
     script.defer = true
-    script.onload = () => void finish()
+    script.onload = () => whenReady(resolve, reject)
     script.onerror = () => reject(new Error('Failed to load Google Maps'))
     document.head.appendChild(script)
   })
