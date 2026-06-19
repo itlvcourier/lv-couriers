@@ -310,21 +310,23 @@ const SIZE_CSS: Record<LabelSize, string> = {
     .qr { width: 1.7in; height: 1.7in; }
   `,
   // Half of an A4 page (A5 landscape-ish): two labels stack per A4 sheet.
+  // Height is kept under the true 148.5mm half so the bottom footer never
+  // lands in the printer's non-printable margin (which clips content).
   halfA4: `
     @page { size: A4; margin: 0; }
-    .label { width: 210mm; height: 148.5mm; page-break-after: always; padding: 12mm 16mm; gap: 0.14in; }
-    .qr { width: 2.2in; height: 2.2in; }
-    .brand .biz { font-size: 20pt; }
+    .label { width: 210mm; height: 140mm; page-break-after: always; padding: 9mm 16mm 7mm; gap: 0.1in; }
+    .qr { width: 1.9in; height: 1.9in; }
+    .brand .biz { font-size: 19pt; }
     .brand .ship { font-size: 10pt; }
-    .zone-name { font-size: 20pt; }
-    .driver { font-size: 18pt; }
-    .token { font-size: 30pt; }
-    .order { font-size: 13pt; }
-    .recipient { font-size: 26pt; }
-    .address { font-size: 17pt; }
-    .postal { font-size: 15pt; }
-    .details .row { font-size: 11pt; }
-    .legal { font-size: 8pt; }
+    .zone-name { font-size: 19pt; }
+    .driver { font-size: 17pt; }
+    .token { font-size: 27pt; }
+    .order { font-size: 12pt; }
+    .recipient { font-size: 24pt; }
+    .address { font-size: 16pt; }
+    .postal { font-size: 14pt; }
+    .details .row { font-size: 10.5pt; }
+    .legal { font-size: 7.5pt; }
   `,
 }
 

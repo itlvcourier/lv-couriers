@@ -39,6 +39,15 @@ import type { ManifestItem, Delivery, SavedContact } from '@/lib/types'
 import { getFeatureSettings } from '@/lib/feature-settings'
 import { checkBusinessCutoff, getRequestExpiryMinutes } from '@/lib/cutoffs'
 import { createDispatchRequest } from '@/lib/dispatch-requests'
+import { getZones } from '@/lib/zones'
+import {
+  buildLabelData,
+  printLabels,
+  markLabelsPrinted,
+  LABEL_SIZE_OPTIONS,
+  type LabelSize,
+} from '@/lib/labels'
+import { Printer } from 'lucide-react'
 
 interface CreateOrderFormProps {
   onSuccess?: () => void
@@ -70,6 +79,9 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
     nowLocal: string | null
   } | null>(null)
   const [lateReason, setLateReason] = useState('')
+  // After a successful post, prompt the business to print the QR label.
+  const [justPosted, setJustPosted] = useState<Delivery | null>(null)
+  const [printingLabel, setPrintingLabel] = useState(false)
 
   const business = businesses.find(b => b.id === currentUser?.businessId)
   const userIsOwner = isOwner()
@@ -416,7 +428,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const postNewDelivery = async (manifest: ManifestItem[]) => {
     maybeSaveContact()
 
-    postDelivery({
+    const saved = await postDelivery({
       businessId,
       locationId: currentUser?.locationId || '',
       businessName: business?.name || '',
@@ -443,6 +455,44 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
     resetForm()
     toast.success('Delivery posted successfully!')
+
+    // Prompt the business to print the QR label right away. We keep the form
+    // open behind the dialog; onSuccess fires once they print or skip.
+    if (saved?.scanToken) {
+      setJustPosted(saved)
+    } else {
+      onSuccess?.()
+    }
+  }
+
+  // Print the freshly posted delivery's label in the chosen size, then close.
+  const handlePrintJustPosted = async (size: LabelSize) => {
+    if (!justPosted) return
+    setPrintingLabel(true)
+    try {
+      let zone: { name: string; color: string } | null = null
+      if (justPosted.dropoffZoneId) {
+        try {
+          const zones = await getZones(true)
+          const z = zones.find((zz) => zz.id === justPosted.dropoffZoneId)
+          if (z) zone = { name: z.name, color: z.color }
+        } catch {
+          // Non-fatal: print without a zone color block.
+        }
+      }
+      await printLabels([buildLabelData(justPosted, zone)], size)
+      void markLabelsPrinted([justPosted.id])
+      setJustPosted(null)
+      onSuccess?.()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to print label')
+    } finally {
+      setPrintingLabel(false)
+    }
+  }
+
+  const skipPrint = () => {
+    setJustPosted(null)
     onSuccess?.()
   }
 
@@ -1009,6 +1059,47 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 Cancel
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print-label prompt shown immediately after a successful post. */}
+      <Dialog open={!!justPosted} onOpenChange={(open) => { if (!open) skipPrint() }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-[var(--accent-orange)]" />
+              Print delivery label
+            </DialogTitle>
+            <DialogDescription>
+              Your delivery was posted. Choose a label size to print the QR label, or skip.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {LABEL_SIZE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={printingLabel}
+                onClick={() => handlePrintJustPosted(opt.value)}
+                className="w-full text-left rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-3 hover:bg-[var(--border-color)]/30 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">{opt.label}</span>
+                  {printingLabel ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4 opacity-70" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{opt.hint}</p>
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={skipPrint} disabled={printingLabel}>
+              Skip for now
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

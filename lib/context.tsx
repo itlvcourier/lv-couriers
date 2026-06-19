@@ -178,7 +178,7 @@ interface AppContextType {
   failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => void
   flagDelivery: (deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => void
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
-  postDelivery: (data: Partial<Delivery>) => void
+  postDelivery: (data: Partial<Delivery>) => Promise<Delivery | null>
   reassignDriver: (deliveryId: string, newDriverId: string) => void
   cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
   // Admin dispatch assignment (bypasses driver limits, records who assigned)
@@ -962,18 +962,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const postDelivery = useCallback((data: Partial<Delivery>) => {
+  const postDelivery = useCallback(async (data: Partial<Delivery>): Promise<Delivery | null> => {
     // Write to DB first so the app has a real UUID + the row survives refresh.
-    // We do it async but don't block — once created, we refresh the row into state.
+    // We await the create so callers (e.g. the order form) can immediately print
+    // a label for the saved row, but the SMS/geocode side effects stay async.
     const businessId = data.businessId || ''
     const locationId = data.locationId || ''
     if (!businessId || !locationId) {
       // eslint-disable-next-line no-console
       console.error('[db] postDelivery missing businessId/locationId')
-      return
+      return null
     }
-    persist(
-      createDeliveryInDb({
+    try {
+      const saved = await createDeliveryInDb({
         businessId,
         locationId,
         pickupAddress: data.pickupAddress || '',
@@ -1001,38 +1002,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
           quantity: m.postedQty,
           notes: m.notes || undefined,
         })),
-      }).then(saved => {
-        // Attach businessName from our local state for display convenience.
-        setDeliveries(prev => {
-          // Dedupe: if somehow this ID was already added locally, replace it.
-          const withoutDupe = prev.filter(d => d.id !== saved.id)
-          const bName = businesses.find(b => b.id === saved.businessId)?.name || ''
-          return [{ ...saved, businessName: bName }, ...withoutDupe]
-        })
-        // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
-        void fetch('/api/sms/job-alert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId: saved.id }),
-        }).catch(err => console.error('[v0] job-alert SMS failed', err))
+      })
 
-        // Fire-and-forget: confirm order to business + send tracking to recipient
-        void fetch('/api/sms/order-confirmed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId: saved.id }),
-        }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
+      // Attach businessName from our local state for display convenience.
+      const bName = businesses.find(b => b.id === saved.businessId)?.name || ''
+      const enriched = { ...saved, businessName: bName }
+      setDeliveries(prev => {
+        // Dedupe: if somehow this ID was already added locally, replace it.
+        const withoutDupe = prev.filter(d => d.id !== saved.id)
+        return [enriched, ...withoutDupe]
+      })
 
-        // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
-        // show map pins. This runs async and updates the row via realtime.
-        void fetch('/api/delivery/geocode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId: saved.id }),
-        }).catch(err => console.error('[v0] geocode failed', err))
-      }),
-      'postDelivery',
-    )
+      // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
+      void fetch('/api/sms/job-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: saved.id }),
+      }).catch(err => console.error('[v0] job-alert SMS failed', err))
+
+      // Fire-and-forget: confirm order to business + send tracking to recipient
+      void fetch('/api/sms/order-confirmed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: saved.id }),
+      }).catch(err => console.error('[v0] order-confirmed SMS failed', err))
+
+      // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
+      // show map pins. This runs async and updates the row via realtime.
+      void fetch('/api/delivery/geocode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: saved.id }),
+      }).catch(err => console.error('[v0] geocode failed', err))
+
+      return enriched
+    } catch (err) {
+      console.error('[db] postDelivery failed', err)
+      return null
+    }
   }, [businesses])
 
   const reassignDriver = useCallback((deliveryId: string, newDriverId: string) => {
