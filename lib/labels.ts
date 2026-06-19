@@ -33,12 +33,42 @@ export interface LabelData {
   scanToken: string
   orderShortId: string
   recipientName: string
+  recipientPhone: string | null
   address: string
+  postalCode: string | null
+  buzzCode: string | null
+  /** Sender pickup location (helps sorters/returns). */
+  pickupAddress: string | null
   zoneName: string | null
   zoneColor: string | null
   driverInitials: string | null
+  driverName: string | null
   businessName: string
+  trackingCode: string | null
   isRush: boolean
+  distanceKm: number | null
+  pieces: number
+  requireSignature: boolean
+  requirePhoto: boolean
+  createdAt: string | null
+}
+
+/** Print formats the business can choose from. */
+export type LabelSize = 'receipt' | 'label4x6' | 'halfA4'
+
+export const LABEL_SIZE_OPTIONS: { value: LabelSize; label: string; hint: string }[] = [
+  { value: 'receipt', label: 'Receipt (80mm)', hint: 'Thermal receipt printers (pharmacy/POS)' },
+  { value: 'label4x6', label: 'Shipping label (4×6")', hint: 'Thermal label / sticker printers' },
+  { value: 'halfA4', label: 'Half A4 sheet', hint: 'Standard office printer, 2 per A4 page' },
+]
+
+/** Mask a phone for privacy on a printed surface: keep last 2 digits only. */
+function maskPhone(phone: string | null | undefined): string | null {
+  if (!phone) return null
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 4) return phone
+  const last = digits.slice(-2)
+  return `(•••) •••-••${last}`
 }
 
 /** Encode a scan token as a QR data URL (PNG). */
@@ -66,16 +96,30 @@ export function buildLabelData(
   delivery: Delivery,
   zone?: { name: string; color: string } | null,
 ): LabelData {
+  const pieces = Array.isArray(delivery.manifest)
+    ? delivery.manifest.reduce((sum, m) => sum + (m.postedQty || 0), 0) || delivery.manifest.length
+    : 0
   return {
     scanToken: delivery.scanToken ?? '',
     orderShortId: delivery.id.slice(0, 8).toUpperCase(),
     recipientName: delivery.recipientName ?? '—',
+    recipientPhone: delivery.recipientPhone ?? null,
     address: delivery.dropoffAddress || delivery.dropoffArea || '—',
+    postalCode: delivery.dropoffPostalCode ?? null,
+    buzzCode: delivery.buzzCode ?? null,
+    pickupAddress: delivery.pickupAddress || delivery.pickupArea || null,
     zoneName: zone?.name ?? null,
     zoneColor: zone?.color ?? null,
     driverInitials: initialsFromName(delivery.driverName),
+    driverName: delivery.driverName ?? null,
     businessName: delivery.businessName || '',
+    trackingCode: delivery.trackingCode ?? null,
     isRush: !!delivery.isRush || !!delivery.isUrgent,
+    distanceKm: delivery.distanceKm ?? null,
+    pieces: pieces || 1,
+    requireSignature: !!delivery.requireSignature,
+    requirePhoto: !!delivery.requirePhoto,
+    createdAt: delivery.createdAt ?? delivery.postedAt ?? null,
   }
 }
 
@@ -88,10 +132,20 @@ export function buildLabelDataFromRow(
     id: string
     scan_token?: string | null
     recipient_name?: string | null
+    recipient_phone?: string | null
     dropoff_address?: string | null
     dropoff_area?: string | null
+    dropoff_postal_code?: string | null
+    buzz_code?: string | null
+    pickup_address?: string | null
+    pickup_area?: string | null
+    tracking_code?: string | null
     is_rush?: boolean | null
     is_urgent?: boolean | null
+    distance_km?: number | null
+    require_signature?: boolean | null
+    require_photo?: boolean | null
+    created_at?: string | null
     business?: { name?: string | null } | null
     driver?: { name?: string | null } | null
   },
@@ -101,12 +155,23 @@ export function buildLabelDataFromRow(
     scanToken: row.scan_token ?? '',
     orderShortId: row.id.slice(0, 8).toUpperCase(),
     recipientName: row.recipient_name ?? '—',
+    recipientPhone: row.recipient_phone ?? null,
     address: row.dropoff_address || row.dropoff_area || '—',
+    postalCode: row.dropoff_postal_code ?? null,
+    buzzCode: row.buzz_code ?? null,
+    pickupAddress: row.pickup_address || row.pickup_area || null,
     zoneName: zone?.name ?? null,
     zoneColor: zone?.color ?? null,
     driverInitials: initialsFromName(row.driver?.name),
+    driverName: row.driver?.name ?? null,
     businessName: row.business?.name ?? '',
+    trackingCode: row.tracking_code ?? null,
     isRush: !!row.is_rush || !!row.is_urgent,
+    distanceKm: row.distance_km ?? null,
+    pieces: 1,
+    requireSignature: !!row.require_signature,
+    requirePhoto: !!row.require_photo,
+    createdAt: row.created_at ?? null,
   }
 }
 
@@ -118,88 +183,173 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** A single label's inner HTML, sharing print CSS classes. */
+function fmtDate(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/**
+ * A single label's inner HTML. The same markup is reused across every size;
+ * the print CSS for each size shows/hides and rescales the right pieces.
+ * Recipient phone is masked for privacy on the printed surface.
+ */
 function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
   const color = d.zoneColor || '#64748b'
   const zoneName = d.zoneName ? escapeHtml(d.zoneName) : 'Unzoned'
+  const maskedPhone = maskPhone(d.recipientPhone)
+  const created = fmtDate(d.createdAt)
+
+  const captureFlags: string[] = []
+  if (d.requireSignature) captureFlags.push('Signature')
+  if (d.requirePhoto) captureFlags.push('Photo')
+
+  const detailRows: string[] = []
+  if (d.buzzCode) detailRows.push(`<div class="row"><span>Buzz/Unit</span><b>${escapeHtml(d.buzzCode)}</b></div>`)
+  if (maskedPhone) detailRows.push(`<div class="row"><span>Contact</span><b>${escapeHtml(maskedPhone)}</b></div>`)
+  if (d.distanceKm != null) detailRows.push(`<div class="row"><span>Distance</span><b>${d.distanceKm.toFixed(1)} km</b></div>`)
+  detailRows.push(`<div class="row"><span>Pieces</span><b>${d.pieces}</b></div>`)
+  if (captureFlags.length) detailRows.push(`<div class="row"><span>On delivery</span><b>${captureFlags.join(' + ')}</b></div>`)
+
   return `
     <div class="label">
-      <div class="label-top">
-        <img class="qr" src="${qrDataUrl}" alt="QR for ${escapeHtml(d.scanToken)}" />
-        <div class="label-meta">
-          <div class="token">${escapeHtml(d.scanToken)}</div>
-          <div class="order">#${escapeHtml(d.orderShortId)}</div>
-          ${d.isRush ? '<div class="rush">RUSH</div>' : ''}
+      <header class="hdr">
+        <div class="brand">
+          <div class="biz">${escapeHtml(d.businessName || 'LV Courier')}</div>
+          <div class="ship">SHIPPING LABEL${created ? ` · ${escapeHtml(created)}` : ''}</div>
         </div>
-      </div>
+        ${d.isRush ? '<div class="rush">RUSH</div>' : ''}
+      </header>
+
       <div class="zone-block" style="background:${color}">
         <span class="zone-name">${zoneName}</span>
-        ${d.driverInitials ? `<span class="driver">${escapeHtml(d.driverInitials)}</span>` : ''}
+        ${d.driverInitials ? `<span class="driver" title="${escapeHtml(d.driverName ?? '')}">${escapeHtml(d.driverInitials)}</span>` : '<span class="driver unassigned">—</span>'}
       </div>
+
+      <div class="label-top">
+        <img class="qr" src="${qrDataUrl}" alt="Scan code ${escapeHtml(d.scanToken)}" />
+        <div class="label-meta">
+          <div class="token-label">SCAN</div>
+          <div class="token">${escapeHtml(d.scanToken)}</div>
+          <div class="order">Order #${escapeHtml(d.orderShortId)}</div>
+          ${d.trackingCode ? `<div class="track">Track: ${escapeHtml(d.trackingCode)}</div>` : ''}
+        </div>
+      </div>
+
       <div class="label-body">
+        <div class="section-label">DELIVER TO</div>
         <div class="recipient">${escapeHtml(d.recipientName)}</div>
         <div class="address">${escapeHtml(d.address)}</div>
-        <div class="biz">${escapeHtml(d.businessName)}</div>
+        ${d.postalCode ? `<div class="postal">${escapeHtml(d.postalCode)}</div>` : ''}
+        <div class="details">${detailRows.join('')}</div>
+        ${d.pickupAddress ? `<div class="from">FROM: ${escapeHtml(d.pickupAddress)}</div>` : ''}
       </div>
+
+      <footer class="legal">
+        Handle per privacy policy. Contains personal delivery info — do not photograph or share.
+        Misdelivered? Return to LV Courier. lvcourier.ca
+      </footer>
     </div>`
 }
 
-const PRINT_CSS = `
+/** Shared label styling; per-size overrides live in SIZE_CSS. */
+const BASE_CSS = `
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 0; color: #0f172a; }
+  body { font-family: -apple-system, system-ui, "Segoe UI", sans-serif; margin: 0; padding: 0; color: #0f172a; }
   .label {
-    border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden;
-    display: flex; flex-direction: column; background: #fff;
-    width: 4in; height: 6in; page-break-after: always; padding: 0.18in;
+    border: 1px solid #cbd5e1; overflow: hidden; background: #fff;
+    display: flex; flex-direction: column; gap: 0.08in; padding: 0.16in;
   }
-  .label-top { display: flex; gap: 0.18in; align-items: flex-start; }
-  .qr { width: 1.7in; height: 1.7in; }
-  .label-meta { display: flex; flex-direction: column; gap: 4px; }
-  .token { font-size: 22pt; font-weight: 800; letter-spacing: 1px; }
-  .order { font-size: 12pt; color: #475569; }
-  .rush { display: inline-block; background: #dc2626; color: #fff; font-weight: 800;
-          padding: 2px 8px; border-radius: 4px; font-size: 11pt; width: max-content; }
-  .zone-block { margin: 0.12in 0; padding: 0.12in 0.16in; border-radius: 6px;
-                color: #fff; display: flex; justify-content: space-between; align-items: center; }
-  .zone-name { font-size: 16pt; font-weight: 800; text-transform: uppercase; }
-  .driver { font-size: 16pt; font-weight: 800; background: rgba(0,0,0,0.25); padding: 2px 10px; border-radius: 4px; }
-  .label-body { display: flex; flex-direction: column; gap: 4px; }
-  .recipient { font-size: 18pt; font-weight: 700; }
-  .address { font-size: 13pt; color: #334155; }
-  .biz { font-size: 11pt; color: #64748b; margin-top: auto; }
-
-  /* Avery-style sheet: 2 columns x 3 rows on Letter */
-  .sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2in; padding: 0.3in; }
-  .sheet .label { width: auto; height: 3.4in; page-break-after: auto; }
-  .sheet .qr { width: 1.2in; height: 1.2in; }
-  .sheet .token { font-size: 16pt; }
-  .sheet .recipient { font-size: 13pt; }
-  .sheet .address { font-size: 10pt; }
-  @page { margin: 0; }
+  .hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 0.06in; }
+  .brand .biz { font-size: 14pt; font-weight: 800; line-height: 1.1; }
+  .brand .ship { font-size: 8pt; letter-spacing: 1.5px; color: #64748b; font-weight: 600; }
+  .rush { background: #dc2626; color: #fff; font-weight: 800; padding: 3px 10px; border-radius: 4px; font-size: 12pt; letter-spacing: 1px; }
+  .zone-block { padding: 0.08in 0.14in; border-radius: 5px; color: #fff;
+                display: flex; justify-content: space-between; align-items: center; }
+  .zone-name { font-size: 15pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+  .driver { font-size: 14pt; font-weight: 800; background: rgba(0,0,0,0.28); padding: 2px 10px; border-radius: 4px; }
+  .driver.unassigned { background: rgba(0,0,0,0.18); }
+  .label-top { display: flex; gap: 0.16in; align-items: center; }
+  .qr { width: 1.5in; height: 1.5in; flex: none; }
+  .label-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .token-label { font-size: 7pt; letter-spacing: 2px; color: #94a3b8; font-weight: 700; }
+  .token { font-size: 20pt; font-weight: 800; letter-spacing: 1px; word-break: break-all; line-height: 1.05; }
+  .order { font-size: 10pt; color: #475569; font-weight: 600; }
+  .track { font-size: 9pt; color: #64748b; }
+  .label-body { display: flex; flex-direction: column; gap: 2px; }
+  .section-label { font-size: 7pt; letter-spacing: 2px; color: #94a3b8; font-weight: 700; }
+  .recipient { font-size: 17pt; font-weight: 800; line-height: 1.1; }
+  .address { font-size: 12pt; color: #1e293b; line-height: 1.25; }
+  .postal { font-size: 11pt; color: #334155; font-weight: 600; }
+  .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 0.16in; margin-top: 0.06in; }
+  .details .row { display: flex; justify-content: space-between; font-size: 9pt; border-bottom: 1px dotted #e2e8f0; padding: 1px 0; }
+  .details .row span { color: #64748b; }
+  .details .row b { color: #0f172a; }
+  .from { font-size: 8.5pt; color: #94a3b8; margin-top: 0.04in; }
+  .legal { font-size: 6.5pt; color: #94a3b8; line-height: 1.3; border-top: 1px solid #e2e8f0; padding-top: 0.05in; margin-top: auto; }
 `
 
-async function buildLabelsHtml(
-  labels: LabelData[],
-  mode: 'thermal' | 'sheet',
-): Promise<string> {
+/** Page geometry + size-specific scaling for each label format. */
+const SIZE_CSS: Record<LabelSize, string> = {
+  // 80mm thermal receipt roll. Narrow + tall, single column, compact type.
+  receipt: `
+    @page { size: 80mm auto; margin: 0; }
+    body { width: 80mm; }
+    .label { width: 80mm; border: none; page-break-after: always; padding: 4mm; }
+    .qr { width: 32mm; height: 32mm; }
+    .token { font-size: 16pt; }
+    .recipient { font-size: 14pt; }
+    .address { font-size: 11pt; }
+    .details { grid-template-columns: 1fr; }
+    .brand .biz { font-size: 12pt; }
+  `,
+  // 4x6 inch thermal shipping label / sticker, one per page.
+  label4x6: `
+    @page { size: 4in 6in; margin: 0; }
+    .label { width: 4in; height: 6in; border: none; page-break-after: always; }
+    .qr { width: 1.7in; height: 1.7in; }
+  `,
+  // Half of an A4 page (A5 landscape-ish): two labels stack per A4 sheet.
+  halfA4: `
+    @page { size: A4; margin: 0; }
+    .label { width: 210mm; height: 148.5mm; page-break-after: always; padding: 12mm 16mm; gap: 0.14in; }
+    .qr { width: 2.2in; height: 2.2in; }
+    .brand .biz { font-size: 20pt; }
+    .brand .ship { font-size: 10pt; }
+    .zone-name { font-size: 20pt; }
+    .driver { font-size: 18pt; }
+    .token { font-size: 30pt; }
+    .order { font-size: 13pt; }
+    .recipient { font-size: 26pt; }
+    .address { font-size: 17pt; }
+    .postal { font-size: 15pt; }
+    .details .row { font-size: 11pt; }
+    .legal { font-size: 8pt; }
+  `,
+}
+
+export async function buildLabelsHtml(labels: LabelData[], size: LabelSize): Promise<string> {
   const withQr = await Promise.all(
     labels.map(async (d) => ({ d, qr: await generateQrDataUrl(d.scanToken) })),
   )
   const body = withQr.map(({ d, qr }) => labelInnerHtml(d, qr)).join('\n')
-  const wrapped = mode === 'sheet' ? `<div class="sheet">${body}</div>` : body
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Labels</title><style>${PRINT_CSS}</style></head><body>${wrapped}</body></html>`
+  const css = `${BASE_CSS}\n${SIZE_CSS[size]}`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Labels</title><style>${css}</style></head><body>${body}</body></html>`
 }
 
 /**
- * Open a print window for one or many labels. `mode='thermal'` = one 4x6 per
- * page; `mode='sheet'` = Avery-style grid for batch printing.
+ * Open a print window for one or many labels in the chosen size:
+ *   - 'receipt'  : 80mm thermal receipt roll (pharmacy/POS printers)
+ *   - 'label4x6' : 4x6" thermal shipping label / sticker
+ *   - 'halfA4'   : half an A4 page, two labels per sheet on an office printer
  */
 export async function printLabels(
   labels: LabelData[],
-  mode: 'thermal' | 'sheet' = 'thermal',
+  size: LabelSize = 'label4x6',
 ): Promise<void> {
   if (labels.length === 0) return
-  const html = await buildLabelsHtml(labels, mode)
+  const html = await buildLabelsHtml(labels, size)
   const win = window.open('', '_blank', 'width=900,height=1000')
   if (!win) {
     throw new Error('Pop-up blocked. Allow pop-ups to print labels.')

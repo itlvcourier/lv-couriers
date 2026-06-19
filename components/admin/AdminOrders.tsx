@@ -241,7 +241,7 @@ export function AdminOrders() {
             <div className="flex gap-2 ml-auto">
               <OrderLabelPrint
                 rows={filteredDeliveries.filter((d: DbDelivery) => selectedIds.has(d.id))}
-                mode="sheet"
+                defaultSize="halfA4"
                 size="sm"
                 label="Print labels"
               />
@@ -407,7 +407,7 @@ export function AdminOrders() {
                     OOT
                   </Badge>
                 )}
-                <OrderLabelPrint rows={[selectedDelivery]} mode="thermal" size="sm" label="Print label" />
+                <OrderLabelPrint rows={[selectedDelivery]} defaultSize="halfA4" size="sm" label="Print label" />
               </div>
 
               {/* Business & Driver */}

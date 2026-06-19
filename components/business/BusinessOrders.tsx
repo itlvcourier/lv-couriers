@@ -386,7 +386,7 @@ export function BusinessOrders() {
                       )}
                       <LabelPrintButton
                         deliveries={[delivery]}
-                        mode="thermal"
+                        defaultSize="halfA4"
                         variant="outline"
                         className="h-7 px-2 text-xs"
                         label={
