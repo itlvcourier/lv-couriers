@@ -113,7 +113,14 @@ export async function createDispatchRequest(
     })
     .select("*")
     .single()
-  if (error) throw error
+  if (error) {
+    // §8 The server-side enforcement trigger rejects gated writes even if a
+    // stale client still shows the action. Surface a readable message.
+    if (error.message?.includes("late_requests_disabled")) {
+      throw new Error("Late order requests are currently turned off.")
+    }
+    throw error
+  }
   return mapRequest(data as DispatchRow)
 }
 

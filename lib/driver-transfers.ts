@@ -135,7 +135,14 @@ export async function initiateTransfer(input: {
     })
     .select('id, transfer_code')
     .single()
-  if (error) throw error
+  if (error) {
+    // §8 Server-side enforcement: a stale client may still show the transfer
+    // action after an admin disables it. Surface a readable message.
+    if (error.message?.includes('driver_transfers_disabled')) {
+      throw new Error('Driver-to-driver transfers are currently turned off.')
+    }
+    throw error
+  }
 
   const items = input.deliveryIds.map((deliveryId) => ({
     org_id: ORG_ID,
