@@ -233,7 +233,6 @@ function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
           <div class="token-label">SCAN</div>
           <div class="token">${escapeHtml(d.scanToken)}</div>
           <div class="order">Order #${escapeHtml(d.orderShortId)}</div>
-          ${d.trackingCode ? `<div class="track">Track: ${escapeHtml(d.trackingCode)}</div>` : ''}
         </div>
       </div>
 
