@@ -87,7 +87,7 @@ export default function TrackingPage() {
            dropoff_lat, dropoff_lng, pickup_lat, pickup_lng, delivered_at,
            picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
            proof_photo_url, signature_url, recipient_note,
-           business:businesses(name), driver:drivers(name, phone)`,
+           business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name, phone)`,
         )
         .eq('id', code)
         .maybeSingle()

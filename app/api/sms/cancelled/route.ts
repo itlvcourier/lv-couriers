@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
   const { data: delivery, error } = await supabase
     .from('deliveries')
-    .select('id, status, recipient_name, recipient_phone, driver_id, drivers(name, phone), businesses(name, phone)')
+    .select('id, status, recipient_name, recipient_phone, driver_id, drivers!deliveries_driver_id_fkey(name, phone), businesses(name, phone)')
     .eq('id', deliveryId)
     .maybeSingle<{
       id: string

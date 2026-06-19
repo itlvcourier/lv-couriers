@@ -424,7 +424,9 @@ export async function loadDeliveries(profile: {
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
-    .select('*, business:businesses(name), driver:drivers(name), manifest_items(*)')
+    // `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
+    // name the relationship explicitly or PostgREST errors as ambiguous.
+    .select('*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)')
     .order('created_at', { ascending: false })
     .limit(500)
   if (profile.role === 'business' && profile.businessId) {
@@ -553,7 +555,7 @@ export async function createDeliveryInDb(input: {
 
   const { data: full } = await supabase
     .from('deliveries')
-    .select('*, business:businesses(name), driver:drivers(name), manifest_items(*)')
+    .select('*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)')
     .eq('id', newId)
     .single()
   return mapDeliveryRow((full || delivery) as Row)

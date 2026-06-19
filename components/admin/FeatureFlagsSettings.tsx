@@ -19,6 +19,7 @@ import {
   detectOperatingMode,
 } from '@/lib/feature-settings'
 import { invalidateFeatureSettings } from '@/lib/hooks/useFeatureFlag'
+import { saveSettingsToDb } from '@/lib/db-extended'
 
 type BoolKey = {
   [K in keyof FeatureSettings]: FeatureSettings[K] extends boolean ? K : never
@@ -121,6 +122,12 @@ export function FeatureFlagsSettings() {
   const handleSave = async () => {
     setSaving(true)
     const result = await updateFeatureSettings(settings)
+    // Direct mode has no zones, so zone-based auto-assign can't place jobs.
+    // Enable driver self-claim so posted pickups still reach drivers as an open
+    // pool (admins can also assign directly from the dispatch board).
+    if (result.success && detectOperatingMode(settings) === 'direct') {
+      await saveSettingsToDb({ allowDriverSelfClaim: true }).catch(() => {})
+    }
     setSaving(false)
     if (result.success) {
       if (result.settings) setSettings(result.settings)
