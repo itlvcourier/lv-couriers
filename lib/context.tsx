@@ -283,6 +283,9 @@ interface AppContextType {
   updateDriverCapacity: (driverId: string, maxJobs: number | null) => void
   getDriverTrip: (driverId: string) => Trip | null
   
+  // Data
+  refreshData: () => Promise<void>
+
   // Helpers
   getDriverActiveJobs: (driverId: string) => number
   getDriverMaxJobs: (driverId: string) => number
@@ -365,6 +368,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // -------------------------------------------------------------------------
+  // Lightweight refresh of the shared, DB-backed entities (deliveries,
+  // drivers, businesses, invoices). Unlike hydrateFromDb this does NOT reset
+  // in-memory-only state (notifications, SMS log, etc.), so it's safe to run
+  // on an interval. This is what makes a business-created delivery show up in
+  // an already-open driver session, and keeps every role's data fresh.
+  // -------------------------------------------------------------------------
+  const refreshData = useCallback(async () => {
+    if (!currentUser) return
+    const profile = {
+      role: currentUser.role,
+      businessId: currentUser.businessId || null,
+      driverId: currentUser.driverId || null,
+    }
+    try {
+      const [b, d, dl, inv, s] = await Promise.all([
+        loadAllBusinesses().catch(() => null),
+        loadAllDrivers().catch(() => null),
+        loadDeliveries(profile).catch(() => null),
+        loadInvoices(profile).catch(() => null),
+        loadSettings().catch(() => null),
+      ])
+      if (b) setBusinesses(b)
+      if (d) setDrivers(d)
+      if (s) setSettings(s)
+      if (dl) {
+        const byBizId = new Map((b || businesses).map((biz) => [biz.id, biz.name]))
+        setDeliveries(
+          dl.map((x) => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })),
+        )
+      }
+      if (inv) setInvoices(inv)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[db] refresh failed', err)
+    }
+  }, [currentUser, businesses])
+
   // Build an app-level user object from a Supabase auth user. All role +
   // linkage info lives in raw_user_meta_data (set when the account was
   // created), so we can resolve everything without hitting a RLS-protected
@@ -416,6 +457,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })()
     return () => { cancelled = true }
   }, [hydrateFromDb, mockUserFromAuthUser])
+
+  // Keep the shared data fresh across sessions/devices. Polls every 15s while
+  // logged in, and refreshes immediately when the tab regains focus so a
+  // driver who switches back to the app sees newly posted jobs right away.
+  useEffect(() => {
+    if (!currentUser || isHydrating) return
+    const interval = setInterval(() => { void refreshData() }, 15000)
+    const onFocus = () => { void refreshData() }
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshData() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [currentUser, isHydrating, refreshData])
 
   // Auth functions — real Supabase Auth.
   const login = useCallback(async (email: string, password: string) => {
@@ -2861,6 +2919,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         dismissTimeout,
         updateDriverCapacity,
         getDriverTrip,
+        refreshData,
         getDriverActiveJobs,
         getDriverMaxJobs,
         canDriverClaimJob,

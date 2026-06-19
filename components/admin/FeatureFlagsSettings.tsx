@@ -18,6 +18,7 @@ import {
   modePresets,
   detectOperatingMode,
 } from '@/lib/feature-settings'
+import { invalidateFeatureSettings } from '@/lib/hooks/useFeatureFlag'
 
 type BoolKey = {
   [K in keyof FeatureSettings]: FeatureSettings[K] extends boolean ? K : never
@@ -124,6 +125,9 @@ export function FeatureFlagsSettings() {
     if (result.success) {
       if (result.settings) setSettings(result.settings)
       setDirty(false)
+      // Push the change to every live consumer (driver/business sessions pick
+      // it up via polling; this updates the admin's own session immediately).
+      invalidateFeatureSettings()
       toast.success('Operations settings saved')
     } else {
       toast.error(result.error || 'Failed to save settings')

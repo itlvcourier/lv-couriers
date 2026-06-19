@@ -21,12 +21,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine, ArrowLeftRight } from 'lucide-react'
+import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine, ArrowLeftRight, RefreshCw } from 'lucide-react'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
+  const [refreshing, setRefreshing] = useState(false)
   const router = useRouter()
-  const { currentUser, logout, deliveries, settings } = useApp()
+  const { currentUser, logout, deliveries, settings, refreshData } = useApp()
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refreshData()
+    } finally {
+      setRefreshing(false)
+    }
+  }
   // Show the Scan tab when the operation uses zones/cross-dock or requires scanning.
   const zonesEnabled = useFeatureFlag('zones_enabled')
   const consolidationEnabled = useFeatureFlag('consolidation_enabled')
@@ -120,7 +130,17 @@ export function DriverView() {
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
           </div>
-          
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-label="Refresh data"
+              className="w-9 h-9 rounded-full flex items-center justify-center tap-target text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 tap-target">
@@ -147,6 +167,7 @@ export function DriverView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </header>
 
