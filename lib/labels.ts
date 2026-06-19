@@ -329,7 +329,7 @@ const SIZE_CSS: Record<LabelSize, string> = {
   `,
 }
 
-export async function buildLabelsHtml(labels: LabelData[], size: LabelSize): Promise<string> {
+async function buildLabelsHtml(labels: LabelData[], size: LabelSize): Promise<string> {
   const withQr = await Promise.all(
     labels.map(async (d) => ({ d, qr: await generateQrDataUrl(d.scanToken) })),
   )
