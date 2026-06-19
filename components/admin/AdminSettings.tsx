@@ -32,7 +32,6 @@ import {
   LogOut,
   Clock,
   Users,
-  Zap,
   X,
   Save,
   Smartphone,
@@ -561,55 +560,6 @@ export function AdminSettings() {
         </CardContent>
       </Card>
 
-      {/* Rush SLA & Timeouts */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Zap className="w-5 h-5" />
-            Rush SLA & Timeouts
-          </CardTitle>
-          <CardDescription>Configure time-based alerts and SLA requirements</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Rush SLA (mins)</Label>
-              <Input
-                type="number"
-                min="15"
-                max="120"
-                value={localSettings.rushSlaMins}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, rushSlaMins: parseInt(e.target.value) || 45 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-              <p className="text-xs text-muted-foreground">Pickup must occur within this time</p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-foreground">In-Town Timeout (mins)</Label>
-              <Input
-                type="number"
-                min="30"
-                max="300"
-                value={localSettings.intownTimeoutMins}
-                onChange={(e) => setLocalSettings(prev => ({ ...prev, intownTimeoutMins: parseInt(e.target.value) || 120 }))}
-                className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
-              />
-              <p className="text-xs text-muted-foreground">Alert after no update</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-foreground">Out of Town Timeout (mins)</Label>
-            <Input
-              type="number"
-              min="60"
-              max="480"
-              value={localSettings.outOfTownTimeoutMins}
-              onChange={(e) => setLocalSettings(prev => ({ ...prev, outOfTownTimeoutMins: parseInt(e.target.value) || 240 }))}
-              className="w-1/2 bg-[var(--bg-card-2)] border-[var(--border-color)]"
-            />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Invoice Settings */}
       <Card id="invoice-settings" className="bg-[var(--bg-card)] border-[var(--border-color)]">

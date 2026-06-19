@@ -16,6 +16,10 @@ export interface DbBusiness {
   contact_phone: string | null
   invoice_format: 'combined' | 'separate' | 'combined_breakdown'
   invite_status: 'pending' | 'active' | 'deactivated'
+  // Per-store timeout overrides (minutes). NULL = inherit the system default.
+  rush_sla_mins: number | null
+  intown_timeout_mins: number | null
+  out_of_town_timeout_mins: number | null
   created_at: string
   updated_at: string
 }

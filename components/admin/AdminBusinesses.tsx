@@ -70,7 +70,7 @@ import { createClient } from '@/lib/supabase/client'
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
-  const { refreshRateCards } = useApp()
+  const { refreshRateCards, settings } = useApp()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DbBusiness['invite_status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -364,6 +364,10 @@ export function AdminBusinesses() {
         contact_name: selectedBusiness.contact_name,
         contact_phone: selectedBusiness.contact_phone,
         invoice_format: selectedBusiness.invoice_format,
+        // Per-store timeout overrides; NULL means "inherit system default".
+        rush_sla_mins: selectedBusiness.rush_sla_mins,
+        intown_timeout_mins: selectedBusiness.intown_timeout_mins,
+        out_of_town_timeout_mins: selectedBusiness.out_of_town_timeout_mins,
       })
       .eq('id', selectedBusiness.id)
     
@@ -379,6 +383,67 @@ export function AdminBusinesses() {
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
+
+  // Per-store SLA & timeout overrides, shown inside the Edit Business sheet.
+  // Empty input = NULL = inherit the system default (shown as placeholder).
+  const renderTimeoutOverrides = () => {
+    if (!selectedBusiness) return null
+    const onNum = (key: 'rush_sla_mins' | 'intown_timeout_mins' | 'out_of_town_timeout_mins') =>
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value.trim()
+        const val = raw === '' ? null : Math.max(1, parseInt(raw, 10) || 0) || null
+        setSelectedBusiness({ ...selectedBusiness, [key]: val })
+      }
+    return (
+      <div className="space-y-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)]/40 p-4">
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-[var(--accent-orange)]" />
+          <p className="text-sm font-medium text-foreground">Store SLA &amp; Timeouts</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Override the system defaults for this store. Leave blank to inherit the global value.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-foreground">Rush SLA (mins)</Label>
+            <Input
+              type="number"
+              min="1"
+              inputMode="numeric"
+              placeholder={`Default ${settings.rushSlaMins}`}
+              value={selectedBusiness.rush_sla_mins ?? ''}
+              onChange={onNum('rush_sla_mins')}
+              className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-foreground">In-Town Timeout (mins)</Label>
+            <Input
+              type="number"
+              min="1"
+              inputMode="numeric"
+              placeholder={`Default ${settings.intownTimeoutMins}`}
+              value={selectedBusiness.intown_timeout_mins ?? ''}
+              onChange={onNum('intown_timeout_mins')}
+              className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-foreground">Out-of-Town Timeout (mins)</Label>
+          <Input
+            type="number"
+            min="1"
+            inputMode="numeric"
+            placeholder={`Default ${settings.outOfTownTimeoutMins}`}
+            value={selectedBusiness.out_of_town_timeout_mins ?? ''}
+            onChange={onNum('out_of_town_timeout_mins')}
+            className="w-1/2 bg-[var(--bg-card-2)] border-[var(--border-color)]"
+          />
+        </div>
+      </div>
+    )
   }
 
   // Handle store request actions
@@ -1359,6 +1424,7 @@ export function AdminBusinesses() {
                     </SelectContent>
                   </Select>
                 </div>
+                {renderTimeoutOverrides()}
                 <Button
                   onClick={handleUpdateBusiness}
                   className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
@@ -1821,6 +1887,7 @@ export function AdminBusinesses() {
                   </SelectContent>
                 </Select>
               </div>
+              {renderTimeoutOverrides()}
               <Button
                 onClick={handleUpdateBusiness}
                 className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
