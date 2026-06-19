@@ -145,8 +145,6 @@ export function AdminZones() {
     setDraftPoints([])
   }
 
-  const undoPoint = () => setDraftPoints((p) => p.slice(0, -1))
-
   const saveDraft = async () => {
     if (!selectedZoneId) return
     const polygon = draftToPolygon(draftPoints)
@@ -273,7 +271,7 @@ export function AdminZones() {
             selectedZoneId={selectedZoneId}
             drawing={drawing}
             draftPoints={draftPoints}
-            onAddPoint={addPoint}
+            onPolygonComplete={handlePolygonComplete}
             onSelectZone={(id) => !drawing && setSelectedZoneId(id)}
           />
 
@@ -282,10 +280,18 @@ export function AdminZones() {
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-full bg-card/95 backdrop-blur border border-border px-3 py-2 shadow-lg">
               <span className="text-sm font-medium pl-1">
                 <MapPin className="inline w-4 h-4 mr-1 text-primary" />
-                Tap map to add points ({draftPoints.length})
+                {draftPoints.length >= 3
+                  ? 'Drag vertices to adjust'
+                  : 'Use the polygon tool to draw the boundary'}
               </span>
-              <Button size="sm" variant="ghost" onClick={undoPoint} disabled={!draftPoints.length}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={clearDraft}
+                disabled={!draftPoints.length}
+              >
                 <Undo2 className="w-4 h-4" />
+                Redraw
               </Button>
               <Button size="sm" onClick={saveDraft} disabled={saving || draftPoints.length < 3} className="gap-1">
                 {saving ? <Spinner className="w-4 h-4" /> : <Save className="w-4 h-4" />}

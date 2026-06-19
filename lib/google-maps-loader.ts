@@ -28,17 +28,7 @@ export function loadGoogleMaps(): Promise<typeof google> {
       return
     }
 
-    const finish = async () => {
-      try {
-        // Modern API: ensure each library is actually present.
-        if (window.google?.maps?.importLibrary) {
-          await Promise.all(LIBRARIES.map((lib) => google.maps.importLibrary(lib)))
-        }
-        resolve(window.google)
-      } catch (err) {
-        reject(err as Error)
-      }
-    }
+    const finish = () => resolve(window.google)
 
     // Already available?
     if (window.google?.maps) {
@@ -52,19 +42,19 @@ export function loadGoogleMaps(): Promise<typeof google> {
     )
     if (existing) {
       const poll = setInterval(() => {
-        if (window.google?.maps) {
+        if (window.google?.maps?.drawing) {
           clearInterval(poll)
-          void finish()
+          finish()
         }
       }, 100)
       return
     }
 
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&loading=async`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}`
     script.async = true
     script.defer = true
-    script.onload = () => void finish()
+    script.onload = () => finish()
     script.onerror = () => reject(new Error('Failed to load Google Maps'))
     document.head.appendChild(script)
   })
