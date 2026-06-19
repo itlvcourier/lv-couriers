@@ -247,6 +247,8 @@ export interface Delivery {
   scanToken?: string | null
   pickupPay?: number | null
   deliveryPay?: number | null
+  /** When the shipping label was last printed (null = never printed). */
+  labelPrintedAt?: string | null
   // Relations (for client-side convenience)
   flags: DeliveryFlag[]
   verifications: PickupVerification[]

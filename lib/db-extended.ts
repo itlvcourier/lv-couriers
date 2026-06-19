@@ -227,6 +227,7 @@ export function mapDeliveryRow(row: Row): Delivery {
     scanToken: (row.scan_token as string | null) ?? null,
     pickupPay: (row.pickup_pay as number | null) ?? null,
     deliveryPay: (row.delivery_pay as number | null) ?? null,
+    labelPrintedAt: (row.label_printed_at as string | null) ?? null,
     flags: [],
     verifications: [],
     statusHistory: [],

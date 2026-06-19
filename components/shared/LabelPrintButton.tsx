@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Printer, Loader2 } from 'lucide-react'
 import { getZones, type Zone } from '@/lib/zones'
-import { buildLabelData, printLabels } from '@/lib/labels'
+import { buildLabelData, printLabels, markLabelsPrinted } from '@/lib/labels'
 import type { Delivery } from '@/lib/types'
 
 // ============================================================================
@@ -20,6 +20,8 @@ interface LabelPrintButtonProps {
   label?: string
   variant?: 'solid' | 'outline'
   className?: string
+  /** Called after a successful print (e.g. to refresh the printed indicator). */
+  onPrinted?: (deliveryIds: string[]) => void
 }
 
 let zoneCache: Zone[] | null = null
@@ -41,6 +43,7 @@ export function LabelPrintButton({
   label,
   variant = 'outline',
   className = '',
+  onPrinted,
 }: LabelPrintButtonProps) {
   const [busy, setBusy] = useState(false)
   const printable = deliveries.filter((d) => d.scanToken)
@@ -59,6 +62,10 @@ export function LabelPrintButton({
       })
       const printMode = mode ?? (data.length > 1 ? 'sheet' : 'thermal')
       await printLabels(data, printMode)
+      // §11: record that these labels were printed (best-effort) and notify.
+      const ids = printable.map((d) => d.id)
+      void markLabelsPrinted(ids)
+      onPrinted?.(ids)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to print labels')
     } finally {

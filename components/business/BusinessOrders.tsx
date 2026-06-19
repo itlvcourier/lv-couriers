@@ -43,6 +43,8 @@ import type { OrderLike } from '@/components/shared/OrderDetailSheet'
 import type { Delivery } from '@/lib/types'
 import { estimateDeliveryPrice } from '@/lib/billing'
 import { editDeliveryDetails } from '@/lib/db'
+import { LabelPrintButton } from '@/components/shared/LabelPrintButton'
+import { CheckCircle2 } from 'lucide-react'
 
 export function BusinessOrders() {
   const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation, activeLocationId } = useApp()
@@ -67,6 +69,12 @@ export function BusinessOrders() {
   
   // Duplicate state
   const [duplicateTarget, setDuplicateTarget] = useState<Delivery | null>(null)
+
+  // §11: optimistic "label printed" tracking so the indicator flips instantly
+  // after printing, without waiting for a full data refresh.
+  const [printedIds, setPrintedIds] = useState<Set<string>>(new Set())
+  const markPrinted = (ids: string[]) =>
+    setPrintedIds((prev) => new Set([...prev, ...ids]))
 
   // Filter by business AND location (if a specific location is selected)
   const businessDeliveries = (deliveries || []).filter(d => {
@@ -360,6 +368,36 @@ export function BusinessOrders() {
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
+                  {/* Label row (§11): print / reprint shipping label */}
+                  {delivery?.scanToken && (
+                    <div
+                      className="flex items-center justify-between gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {delivery.labelPrintedAt || printedIds.has(delivery.id) ? (
+                        <span className="flex items-center gap-1 text-xs text-success">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Label printed
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Label ready
+                        </span>
+                      )}
+                      <LabelPrintButton
+                        deliveries={[delivery]}
+                        mode="thermal"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        label={
+                          delivery.labelPrintedAt || printedIds.has(delivery.id)
+                            ? 'Reprint label'
+                            : 'Print label'
+                        }
+                        onPrinted={markPrinted}
+                      />
+                    </div>
+                  )}
                   {/* Action buttons row */}
                   {(canCancel || (delivery && order.status !== 'posted')) && (
                     <div className="flex items-center gap-2">

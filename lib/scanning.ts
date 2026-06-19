@@ -188,6 +188,26 @@ export function newClientEventId(): string {
   return 'cid-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
+/**
+ * Single-occurrence lifecycle events happen at most once per delivery. We give
+ * them a DETERMINISTIC client_event_id so a double-tap, a re-scan, or an
+ * offline-queue replay collapses to the same row (recordCustodyEvent swallows
+ * the unique-index violation). Repeatable events (transfers, exceptions) keep a
+ * random id so legitimate repeats are preserved.
+ */
+const SINGLE_OCCURRENCE: Partial<Record<CustodyEventType, true>> = {
+  pickup: true,
+  hub_in: true,
+  handoff: true,
+  delivered: true,
+}
+
+export function scanEventId(deliveryId: string, eventType: CustodyEventType): string {
+  return SINGLE_OCCURRENCE[eventType]
+    ? `evt:${deliveryId}:${eventType}`
+    : newClientEventId()
+}
+
 export interface ApplyScanInput {
   context: ScanContext
   scanToken: string
@@ -213,7 +233,7 @@ export async function applyScan(input: ApplyScanInput): Promise<ScanOutcome> {
   const resolved = resolveScanEvent(input.context, delivery)
   if (!resolved.ok) return resolved.outcome
 
-  const clientEventId = newClientEventId()
+  const clientEventId = scanEventId(delivery.id, resolved.eventType)
   const queued: QueuedScan = {
     clientEventId,
     deliveryId: delivery.id,

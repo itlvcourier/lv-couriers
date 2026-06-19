@@ -207,6 +207,32 @@ export async function recordCustodyEvent(
   const nextLeg = legStatusForEvent(input.eventType)
   if (nextLeg) patch.leg_status = nextLeg
 
+  // §6 Hub sort: when a parcel is sorted in at the hub, snapshot the driver it
+  // was sorted FOR (today's dropoff-zone driver). Locking this in at sort time
+  // means a later zone reassignment can't retroactively rewrite who the parcel
+  // was staged for. Only snapshot once.
+  if (input.eventType === 'hub_in') {
+    const { data: row } = await supabase
+      .from('deliveries')
+      .select('dropoff_zone_id, sorted_for_driver_id')
+      .eq('id', input.deliveryId)
+      .maybeSingle()
+    const r = row as { dropoff_zone_id: string | null; sorted_for_driver_id: string | null } | null
+    if (r && !r.sorted_for_driver_id && r.dropoff_zone_id) {
+      const destDriverId = await getZoneDriver(r.dropoff_zone_id).catch(() => null)
+      if (destDriverId) {
+        const { data: drv } = await supabase
+          .from('drivers')
+          .select('name')
+          .eq('id', destDriverId)
+          .maybeSingle()
+        patch.sorted_for_driver_id = destDriverId
+        patch.sorted_for_driver_name = (drv as { name: string } | null)?.name ?? null
+        patch.sorted_at = new Date().toISOString()
+      }
+    }
+  }
+
   if (Object.keys(patch).length > 0) {
     await supabase.from('deliveries').update(patch).eq('id', input.deliveryId)
   }

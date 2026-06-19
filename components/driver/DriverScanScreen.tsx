@@ -1,10 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '@/lib/context'
 import { Scanner } from './Scanner'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import type { ScanContext } from '@/lib/scanning'
+import { recordHubCheckin } from '@/lib/consolidation'
+import { getCurrentPosition } from '@/lib/native/geolocation'
 
 // ============================================================================
 // Driver "Scan" screen. The driver picks what they're doing (pickup run,
@@ -25,6 +27,38 @@ export function DriverScanScreen() {
   const scanningRequired = useFeatureFlag('barcode_scanning_required')
   const driverId = currentUser?.driverId || ''
   const [context, setContext] = useState<ScanContext>('pickup')
+
+  // §6 oversight: while a driver is working at the hub (sorting or accepting),
+  // record/refresh their hub check-in so the admin board shows who is present.
+  useEffect(() => {
+    if (!driverId) return
+    if (context !== 'hub_sort' && context !== 'hub_accept') return
+    let cancelled = false
+    const checkIn = async () => {
+      let lat: number | null = null
+      let lng: number | null = null
+      try {
+        const pos = await getCurrentPosition()
+        lat = pos.lat
+        lng = pos.lng
+      } catch {
+        /* location optional */
+      }
+      if (cancelled) return
+      try {
+        await recordHubCheckin({ driverId, hubName: null, lat, lng })
+      } catch {
+        /* best effort */
+      }
+    }
+    void checkIn()
+    // Refresh presence every 2 min while on a hub tab.
+    const id = setInterval(() => { void checkIn() }, 120_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [context, driverId])
 
   // Candidate parcels for the manual fallback, scoped by context.
   const candidates = useMemo(() => {

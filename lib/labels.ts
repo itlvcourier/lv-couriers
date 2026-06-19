@@ -2,6 +2,21 @@
 
 import QRCode from 'qrcode'
 import type { Delivery } from '@/lib/types'
+import { createClient } from '@/lib/supabase/client'
+
+/**
+ * Stamp deliveries as having had their label printed (§11). Best-effort: a
+ * failure here must not block the print itself.
+ */
+export async function markLabelsPrinted(deliveryIds: string[]): Promise<void> {
+  if (deliveryIds.length === 0) return
+  const supabase = createClient()
+  if (!supabase) return
+  await supabase
+    .from('deliveries')
+    .update({ label_printed_at: new Date().toISOString() })
+    .in('id', deliveryIds)
+}
 
 // ============================================================================
 // Phase 2 — Label generation.

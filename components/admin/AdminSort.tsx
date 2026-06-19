@@ -3,22 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  getActiveRun,
-  openRun,
-  setRunStatus,
-  addParcelToRun,
-  setRunItemStatus,
-  getRunItemStatuses,
   getHubBoardParcels,
   groupIntoBins,
-  reconcileRun,
-  type ConsolidationRun,
+  getActiveHubCheckins,
   type HubBoardParcel,
-  type RunItemStatus,
-  type RunReconciliation,
+  type HubCheckin,
 } from '@/lib/consolidation'
-import { recordCustodyEvent } from '@/lib/custody'
-import { useApp } from '@/lib/context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
@@ -26,12 +16,11 @@ import { Separator } from '@/components/ui/separator'
 import {
   Boxes,
   PackageCheck,
-  CheckCircle2,
-  PlayCircle,
-  Lock,
   Truck,
   AlertTriangle,
   RefreshCw,
+  MapPin,
+  UserCheck,
 } from 'lucide-react'
 
 function initials(name: string | null): string {
@@ -43,32 +32,28 @@ function initials(name: string | null): string {
     .join('')
 }
 
+// Read-only hub oversight (§6). The driver scan is the source of truth: a
+// parcel appears here once a pickup driver scans it INTO the hub, and it
+// leaves once the destination driver scans it OUT (hub accept). Admins
+// monitor — they do not record custody here.
 export function AdminSort() {
-  const { currentUser } = useApp()
-  const [run, setRun] = useState<ConsolidationRun | null>(null)
   const [parcels, setParcels] = useState<HubBoardParcel[]>([])
-  const [itemStatuses, setItemStatuses] = useState<Record<string, RunItemStatus>>({})
-  const [recon, setRecon] = useState<RunReconciliation | null>(null)
+  const [checkins, setCheckins] = useState<HubCheckin[]>([])
   const [loading, setLoading] = useState(true)
-  const [busyId, setBusyId] = useState<string | null>(null)
-  const [working, setWorking] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const refresh = useCallback(async (runId: string | null) => {
-    const [board, statuses, rec] = await Promise.all([
+  const refresh = useCallback(async () => {
+    const [board, present] = await Promise.all([
       getHubBoardParcels(),
-      runId ? getRunItemStatuses(runId) : Promise.resolve({}),
-      runId ? reconcileRun(runId) : Promise.resolve(null),
+      getActiveHubCheckins().catch(() => [] as HubCheckin[]),
     ])
     setParcels(board)
-    setItemStatuses(statuses)
-    setRecon(rec)
+    setCheckins(present)
   }, [])
 
   const loadAll = useCallback(async () => {
     try {
-      const active = await getActiveRun()
-      setRun(active)
-      await refresh(active?.id ?? null)
+      await refresh()
     } catch (err) {
       console.log('[v0] AdminSort load failed:', (err as Error).message)
       toast.error('Failed to load the sort board')
@@ -81,109 +66,30 @@ export function AdminSort() {
     void loadAll()
   }, [loadAll])
 
-  // Live refresh of the board every 15s while a run is active.
+  // Live oversight: poll every 15s.
   useEffect(() => {
-    if (!run) return
     const id = setInterval(() => {
-      refresh(run.id).catch(() => {})
+      refresh().catch(() => {})
     }, 15_000)
     return () => clearInterval(id)
-  }, [run, refresh])
+  }, [refresh])
 
   const bins = useMemo(() => groupIntoBins(parcels), [parcels])
+  const presentDriverIds = useMemo(
+    () => new Set(checkins.map((c) => c.driverId)),
+    [checkins],
+  )
+  const divergedCount = useMemo(
+    () => parcels.filter((p) => p.assignmentDiverged).length,
+    [parcels],
+  )
 
-  async function handleOpenRun() {
-    setWorking(true)
+  async function handleRefresh() {
+    setRefreshing(true)
     try {
-      const r = await openRun({ openedBy: currentUser?.id ?? null })
-      setRun(r)
-      await refresh(r.id)
-      toast.success('Sort wave opened')
-    } catch (err) {
-      console.log('[v0] openRun failed:', (err as Error).message)
-      toast.error('Could not open a sort wave')
+      await refresh()
     } finally {
-      setWorking(false)
-    }
-  }
-
-  async function handleCloseRun() {
-    if (!run) return
-    setWorking(true)
-    try {
-      await setRunStatus(run.id, 'closed')
-      toast.success('Sort wave closed')
-      setRun(null)
-      setRecon(null)
-      setItemStatuses({})
-    } catch (err) {
-      console.log('[v0] closeRun failed:', (err as Error).message)
-      toast.error('Could not close the sort wave')
-    } finally {
-      setWorking(false)
-    }
-  }
-
-  // Mark a parcel sorted into its destination bin (adds to the run if needed).
-  async function handleSort(p: HubBoardParcel) {
-    if (!run) {
-      toast.error('Open a sort wave first')
-      return
-    }
-    setBusyId(p.deliveryId)
-    try {
-      await addParcelToRun({
-        runId: run.id,
-        deliveryId: p.deliveryId,
-        dropoffZoneId: p.dropoffZoneId,
-        bin: p.zoneName,
-      })
-      await setRunItemStatus({ runId: run.id, deliveryId: p.deliveryId, status: 'sorted' })
-      if (run.status === 'open') {
-        await setRunStatus(run.id, 'sorting')
-        setRun({ ...run, status: 'sorting' })
-      }
-      await refresh(run.id)
-    } catch (err) {
-      console.log('[v0] sort failed:', (err as Error).message)
-      toast.error('Could not sort that parcel')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  // Hand a sorted parcel off to the zone's delivery driver: records the handoff
-  // custody event (advances leg to out_for_delivery) and updates run item.
-  async function handleHandoff(p: HubBoardParcel) {
-    if (!run) return
-    setBusyId(p.deliveryId)
-    try {
-      await recordCustodyEvent({
-        deliveryId: p.deliveryId,
-        eventType: 'handoff',
-        actorType: 'admin',
-        actorId: currentUser?.id ?? null,
-        toHolder: p.zoneDriverId ? `driver:${p.zoneDriverId}` : null,
-        scanMethod: 'manual',
-        notes: `Hub handoff to ${p.zoneDriverName ?? 'zone driver'}`,
-        metadata: { runId: run.id, source: 'sort_board' },
-      })
-      await setRunItemStatus({ runId: run.id, deliveryId: p.deliveryId, status: 'handed_off' })
-      await refresh(run.id)
-      toast.success(`Handed off to ${p.zoneDriverName ?? 'driver'}`)
-    } catch (err) {
-      console.log('[v0] handoff failed:', (err as Error).message)
-      toast.error('Could not record the handoff')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function handleHandoffBin(parcels: HubBoardParcel[]) {
-    const sorted = parcels.filter((p) => itemStatuses[p.deliveryId] === 'sorted')
-    for (const p of sorted) {
-      // eslint-disable-next-line no-await-in-loop
-      await handleHandoff(p)
+      setRefreshing(false)
     }
   }
 
@@ -197,7 +103,7 @@ export function AdminSort() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header / run controls */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
@@ -205,53 +111,51 @@ export function AdminSort() {
             Hub Sort
           </h1>
           <p className="text-sm text-muted-foreground">
-            Sort consolidated parcels into destination-zone bins and hand them off to delivery drivers.
+            Live oversight of parcels waiting at the hub. Drivers scan parcels in and out — this board is read-only.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refresh(run?.id ?? null)}
-            aria-label="Refresh board"
-          >
-            <RefreshCw className="size-4" />
-            Refresh
-          </Button>
-          {run ? (
-            <Button variant="destructive" size="sm" onClick={handleCloseRun} disabled={working}>
-              <Lock className="size-4" />
-              Close wave
-            </Button>
-          ) : (
-            <Button size="sm" onClick={handleOpenRun} disabled={working}>
-              <PlayCircle className="size-4" />
-              Open sort wave
-            </Button>
-          )}
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          aria-label="Refresh board"
+        >
+          <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
-      {/* Active run + reconciliation summary */}
-      {run && (
+      {/* Summary stats */}
+      <div className="flex flex-wrap items-center gap-3">
+        <SummaryStat label="At hub" value={parcels.length} tone="text-primary" />
+        <SummaryStat label="Destination bins" value={bins.length} />
+        <SummaryStat label="Drivers present" value={checkins.length} tone="text-green-600" />
+        {divergedCount > 0 && (
+          <SummaryStat label="Reassigned" value={divergedCount} tone="text-amber-600" />
+        )}
+      </div>
+
+      {/* Drivers checked in at the hub */}
+      {checkins.length > 0 && (
         <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="font-medium text-card-foreground">{run.label}</span>
-              <Badge variant={run.status === 'sorting' ? 'default' : 'secondary'} className="capitalize">
-                {run.status}
-              </Badge>
-            </div>
-            {recon && (
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <ReconStat label="Expected" value={recon.expected} />
-                <ReconStat label="Sorted" value={recon.sorted} tone="text-primary" />
-                <ReconStat label="Handed off" value={recon.handedOff} tone="text-green-600" />
-                {recon.exceptions > 0 && (
-                  <ReconStat label="Exceptions" value={recon.exceptions} tone="text-destructive" />
-                )}
-              </div>
-            )}
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-card-foreground">
+            <UserCheck className="size-4 text-green-600" />
+            Drivers at the hub
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {checkins.map((c) => (
+              <span
+                key={c.driverId}
+                className="flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground"
+              >
+                <span className="flex size-5 items-center justify-center rounded-full bg-green-100 text-[10px] font-semibold text-green-700">
+                  {initials(c.driverName)}
+                </span>
+                {c.driverName ?? 'Driver'}
+                {c.hubName ? <span className="text-muted-foreground">· {c.hubName}</span> : null}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -268,9 +172,7 @@ export function AdminSort() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {bins.map((bin) => {
-            const sortedCount = bin.parcels.filter(
-              (p) => itemStatuses[p.deliveryId] === 'sorted',
-            ).length
+            const driverPresent = bin.driverId ? presentDriverIds.has(bin.driverId) : false
             return (
               <div
                 key={bin.zoneId ?? 'unzoned'}
@@ -291,11 +193,21 @@ export function AdminSort() {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {bin.driverName ? (
-                      <span
-                        className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground"
-                        title={bin.driverName}
-                      >
-                        {initials(bin.driverName)}
+                      <span className="flex items-center gap-1.5" title={bin.driverName}>
+                        <span
+                          className={`flex size-6 items-center justify-center rounded-full text-[10px] font-semibold ${
+                            driverPresent
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-muted text-foreground'
+                          }`}
+                        >
+                          {initials(bin.driverName)}
+                        </span>
+                        {driverPresent ? (
+                          <span className="text-green-600">Here</span>
+                        ) : (
+                          <span className="italic">Away</span>
+                        )}
                       </span>
                     ) : (
                       <span className="italic">No driver</span>
@@ -306,87 +218,45 @@ export function AdminSort() {
                 <Separator />
 
                 <ul className="flex flex-1 flex-col divide-y divide-border">
-                  {bin.parcels.map((p) => {
-                    const st = itemStatuses[p.deliveryId]
-                    return (
-                      <li key={p.deliveryId} className="flex items-center gap-3 px-4 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-card-foreground">
-                            {p.recipientName ?? 'Recipient'}
+                  {bin.parcels.map((p) => (
+                    <li key={p.deliveryId} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-card-foreground">
+                          {p.recipientName ?? 'Recipient'}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {p.scanToken ? `${p.scanToken} · ` : ''}
+                          {p.dropoffArea ?? p.dropoffAddress ?? '—'}
+                        </p>
+                        {p.assignmentDiverged && (
+                          <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-600">
+                            <AlertTriangle className="size-3 shrink-0" />
+                            Sorted for {p.sortedForDriverName ?? 'another driver'} — zone since reassigned
                           </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {p.scanToken ? `${p.scanToken} · ` : ''}
-                            {p.dropoffArea ?? p.dropoffAddress ?? '—'}
-                          </p>
-                        </div>
-                        {st === 'handed_off' ? (
-                          <Badge variant="outline" className="gap-1 text-green-600">
-                            <Truck className="size-3" />
-                            Out
-                          </Badge>
-                        ) : st === 'sorted' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busyId === p.deliveryId}
-                            onClick={() => handleHandoff(p)}
-                          >
-                            {busyId === p.deliveryId ? (
-                              <Spinner className="size-3" />
-                            ) : (
-                              <Truck className="size-3" />
-                            )}
-                            Hand off
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            disabled={busyId === p.deliveryId}
-                            onClick={() => handleSort(p)}
-                          >
-                            {busyId === p.deliveryId ? (
-                              <Spinner className="size-3" />
-                            ) : (
-                              <CheckCircle2 className="size-3" />
-                            )}
-                            Sort
-                          </Button>
                         )}
-                      </li>
-                    )
-                  })}
+                      </div>
+                      <Badge variant="outline" className="gap-1 text-muted-foreground">
+                        <MapPin className="size-3" />
+                        Waiting
+                      </Badge>
+                    </li>
+                  ))}
                 </ul>
-
-                {sortedCount > 0 && (
-                  <div className="border-t border-border p-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => handleHandoffBin(bin.parcels)}
-                    >
-                      <Truck className="size-4" />
-                      Hand off {sortedCount} sorted
-                    </Button>
-                  </div>
-                )}
               </div>
             )
           })}
         </div>
       )}
 
-      {!run && bins.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <AlertTriangle className="size-4 shrink-0" />
-          Parcels are waiting at the hub. Open a sort wave to start sorting and tracking reconciliation.
-        </div>
-      )}
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <Truck className="size-4 shrink-0" />
+        Parcels leave this board automatically when the destination driver scans them out of the hub.
+      </div>
     </div>
   )
 }
 
-function ReconStat({
+function SummaryStat({
   label,
   value,
   tone = 'text-foreground',
@@ -396,7 +266,7 @@ function ReconStat({
   tone?: string
 }) {
   return (
-    <div className="flex items-baseline gap-1.5">
+    <div className="flex items-baseline gap-1.5 rounded-lg border border-border bg-card px-3 py-2">
       <span className={`text-lg font-semibold ${tone}`}>{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>

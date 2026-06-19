@@ -231,9 +231,14 @@ export function AdminZones() {
     }
   }
 
-  const addPoint = useCallback((latlng: [number, number]) => {
-    setDraftPoints((p) => [...p, latlng])
+  // The Google Drawing Manager reports the whole boundary at once (and again
+  // on every vertex edit), so we replace the draft wholesale.
+  const handlePolygonComplete = useCallback((points: Array<[number, number]>) => {
+    setDraftPoints(points)
   }, [])
+
+  // Discard the current draft so the user can re-draw from scratch.
+  const clearDraft = () => setDraftPoints([])
 
   if (loading) {
     return (

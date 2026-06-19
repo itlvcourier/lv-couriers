@@ -45,6 +45,20 @@ export interface HubBoardParcel {
   legStatus: string | null
   routingMode: string | null
   updatedAt: string | null
+  /** Destination driver snapshotted at sort time (§6). */
+  sortedForDriverId: string | null
+  sortedForDriverName: string | null
+  /** True when today's live zone driver differs from the snapshot. */
+  assignmentDiverged: boolean
+}
+
+/** A driver currently checked in at the hub. */
+export interface HubCheckin {
+  driverId: string
+  driverName: string | null
+  hubName: string | null
+  checkedInAt: string
+  lastSeenAt: string
 }
 
 /** A destination-zone bin with the parcels sorted into it. */
@@ -238,6 +252,9 @@ type BoardRow = {
   leg_status: string | null
   routing_mode: string | null
   updated_at: string | null
+  sorted_for_driver_id: string | null
+  sorted_for_driver_name: string | null
+  assignment_diverged: boolean | null
 }
 
 function mapBoardRow(r: BoardRow): HubBoardParcel {
@@ -255,7 +272,53 @@ function mapBoardRow(r: BoardRow): HubBoardParcel {
     legStatus: r.leg_status,
     routingMode: r.routing_mode,
     updatedAt: r.updated_at,
+    sortedForDriverId: r.sorted_for_driver_id,
+    sortedForDriverName: r.sorted_for_driver_name,
+    assignmentDiverged: Boolean(r.assignment_diverged),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hub check-ins (§6): which drivers are physically present at the hub.
+// ---------------------------------------------------------------------------
+
+/** Record/refresh the current driver's hub check-in. */
+export async function recordHubCheckin(input: {
+  driverId: string
+  hubName?: string | null
+  lat?: number | null
+  lng?: number | null
+}): Promise<void> {
+  const supabase = createClient()
+  if (!supabase) return
+  const { error } = await supabase.rpc('record_hub_checkin', {
+    p_driver_id: input.driverId,
+    p_hub_name: input.hubName ?? null,
+    p_lat: input.lat ?? null,
+    p_lng: input.lng ?? null,
+  })
+  if (error) throw error
+}
+
+/** Drivers currently checked in at the hub (admin oversight). */
+export async function getActiveHubCheckins(): Promise<HubCheckin[]> {
+  const supabase = createClient()
+  if (!supabase) return []
+  const { data, error } = await supabase.rpc('active_hub_checkins')
+  if (error) throw error
+  return (data as Array<{
+    driver_id: string
+    driver_name: string | null
+    hub_name: string | null
+    checked_in_at: string
+    last_seen_at: string
+  }>).map((r) => ({
+    driverId: r.driver_id,
+    driverName: r.driver_name,
+    hubName: r.hub_name,
+    checkedInAt: r.checked_in_at,
+    lastSeenAt: r.last_seen_at,
+  }))
 }
 
 /** All parcels currently at the hub, mapped to UI shape. */
