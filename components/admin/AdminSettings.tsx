@@ -44,7 +44,18 @@ import {
   CreditCard,
   DollarSign,
   Camera,
+  type LucideIcon,
 } from 'lucide-react'
+
+type SettingsTab = 'operations' | 'drivers' | 'billing' | 'notifications' | 'account'
+
+const SETTINGS_TABS: { value: SettingsTab; label: string; icon: LucideIcon }[] = [
+  { value: 'operations', label: 'Operations', icon: Radio },
+  { value: 'drivers', label: 'Drivers & Pay', icon: Users },
+  { value: 'billing', label: 'Billing', icon: CreditCard },
+  { value: 'notifications', label: 'Notifications', icon: Bell },
+  { value: 'account', label: 'Account', icon: Lock },
+]
 
 export function AdminSettings() {
   const { currentUser, logout, settings, updateSettings, drivers, updateDriverCapacity } = useApp()
@@ -80,6 +91,10 @@ export function AdminSettings() {
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
     // Proof of delivery
     minDeliveryPhotos: settings.minDeliveryPhotos,
+    // Admin dashboard alerts
+    notifyRushJobs: settings.notifyRushJobs,
+    notifyTimeoutWarnings: settings.notifyTimeoutWarnings,
+    notifyFlagAlerts: settings.notifyFlagAlerts,
     // Invoice template settings
     invoiceCompanyName: settings.invoiceCompanyName,
     invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -136,6 +151,9 @@ export function AdminSettings() {
       smsEarningsSummary: settings.smsEarningsSummary,
       allowDriverSelfClaim: settings.allowDriverSelfClaim,
       minDeliveryPhotos: settings.minDeliveryPhotos,
+      notifyRushJobs: settings.notifyRushJobs,
+      notifyTimeoutWarnings: settings.notifyTimeoutWarnings,
+      notifyFlagAlerts: settings.notifyFlagAlerts,
       // Invoice template settings
       invoiceCompanyName: settings.invoiceCompanyName,
       invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -176,6 +194,9 @@ export function AdminSettings() {
   const [twoFaStep, setTwoFaStep] = useState<'intro' | 'verify' | 'done'>('intro')
   const [twoFaCode, setTwoFaCode] = useState('')
   const [twoFaPhone, setTwoFaPhone] = useState('')
+
+  // Active settings tab
+  const [tab, setTab] = useState<SettingsTab>('operations')
 
   const handleChangePassword = async () => {
     if (!pwForm.current || !pwForm.next || !pwForm.confirm) {
@@ -294,6 +315,15 @@ export function AdminSettings() {
     updateSettings({ minDeliveryPhotos: localSettings.minDeliveryPhotos })
     toast.success('Proof of delivery settings saved')
   }
+
+  const handleSaveAlerts = () => {
+    updateSettings({
+      notifyRushJobs: localSettings.notifyRushJobs,
+      notifyTimeoutWarnings: localSettings.notifyTimeoutWarnings,
+      notifyFlagAlerts: localSettings.notifyFlagAlerts,
+    })
+    toast.success('Alert preferences saved')
+  }
   
   const clearOverride = (driverId: string) => {
     setDriverOverrides(prev => ({ ...prev, [driverId]: '' }))
@@ -301,6 +331,33 @@ export function AdminSettings() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Tab navigation */}
+      <div className="flex flex-wrap gap-1 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-1">
+        {SETTINGS_TABS.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.value
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTab(t.value)}
+              aria-pressed={active}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? 'bg-[var(--accent-orange)] text-white'
+                  : 'text-muted-foreground hover:bg-[var(--bg-card-2)] hover:text-foreground'
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">{t.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ============ OPERATIONS TAB ============ */}
+      {tab === 'operations' && (
+        <div className="space-y-6">
       {/* Operations & Feature Flags (cross-dock operating model) */}
       <FeatureFlagsSettings />
 
@@ -559,8 +616,12 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
+        </div>
+      )}
 
-
+      {/* ============ BILLING TAB (invoice settings) ============ */}
+      {tab === 'billing' && (
+        <div className="space-y-6">
       {/* Invoice Settings */}
       <Card id="invoice-settings" className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -737,7 +798,12 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
+        </div>
+      )}
 
+      {/* ============ ACCOUNT TAB (appearance) ============ */}
+      {tab === 'account' && (
+        <div className="space-y-6">
       {/* Appearance */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -751,7 +817,12 @@ export function AdminSettings() {
           <ThemeToggleRow id="admin-dark-mode" />
         </CardContent>
       </Card>
+        </div>
+      )}
 
+      {/* ============ BILLING TAB (invoice template) ============ */}
+      {tab === 'billing' && (
+        <div className="space-y-6">
       {/* Invoice Template Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -962,7 +1033,12 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
+        </div>
+      )}
 
+      {/* ============ NOTIFICATIONS TAB (admin alerts) ============ */}
+      {tab === 'notifications' && (
+        <div className="space-y-6">
       {/* Notifications */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -978,7 +1054,10 @@ export function AdminSettings() {
               <p className="text-sm font-medium text-foreground">Rush Job Alerts</p>
               <p className="text-xs text-muted-foreground">Get notified when rush jobs are posted</p>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={localSettings.notifyRushJobs}
+              onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, notifyRushJobs: c }))}
+            />
           </div>
           <Separator className="bg-[var(--border-color)]" />
           <div className="flex items-center justify-between">
@@ -986,7 +1065,10 @@ export function AdminSettings() {
               <p className="text-sm font-medium text-foreground">Timeout Warnings</p>
               <p className="text-xs text-muted-foreground">Alerts when drivers have no updates</p>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={localSettings.notifyTimeoutWarnings}
+              onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, notifyTimeoutWarnings: c }))}
+            />
           </div>
           <Separator className="bg-[var(--border-color)]" />
           <div className="flex items-center justify-between">
@@ -994,11 +1076,26 @@ export function AdminSettings() {
               <p className="text-sm font-medium text-foreground">Flag Notifications</p>
               <p className="text-xs text-muted-foreground">Alerts when drivers raise flags</p>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={localSettings.notifyFlagAlerts}
+              onCheckedChange={(c) => setLocalSettings(prev => ({ ...prev, notifyFlagAlerts: c }))}
+            />
           </div>
+          <Button
+            onClick={handleSaveAlerts}
+            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Alert Preferences
+          </Button>
         </CardContent>
       </Card>
+        </div>
+      )}
 
+      {/* ============ ACCOUNT TAB (security) ============ */}
+      {tab === 'account' && (
+        <div className="space-y-6">
       {/* Security */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1035,7 +1132,12 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
+        </div>
+      )}
 
+      {/* ============ DRIVERS & PAY TAB ============ */}
+      {tab === 'drivers' && (
+        <div className="space-y-6">
       {/* Driver Pay Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1063,7 +1165,12 @@ export function AdminSettings() {
           <AdminUserManagement />
         </CardContent>
       </Card>
+        </div>
+      )}
 
+      {/* ============ NOTIFICATIONS TAB (SMS) ============ */}
+      {tab === 'notifications' && (
+        <div className="space-y-6">
       {/* SMS Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1219,6 +1326,8 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
+        </div>
+      )}
 
       {/* Change Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
@@ -1400,6 +1509,9 @@ export function AdminSettings() {
         </DialogContent>
       </Dialog>
 
+      {/* ============ ACCOUNT TAB (sign out) ============ */}
+      {tab === 'account' && (
+        <div className="space-y-6">
       {/* Sign Out */}
       <Button 
         variant="destructive" 
@@ -1409,6 +1521,8 @@ export function AdminSettings() {
         <LogOut className="w-4 h-4 mr-2" />
         Sign Out
       </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -13,10 +13,21 @@ export const ORG_ID = '00000000-0000-0000-0000-000000000001'
 export type AddressValidationLevel = 'off' | 'soft' | 'hard'
 export type DriverPayModel = 'per_order' | 'per_leg'
 
+/**
+ * How a parcel is routed to a driver when its zone has more than one assigned
+ * driver. Single-driver zones behave identically under every strategy.
+ *  - balanced:  assign to the zone driver with the fewest active parcels.
+ *  - nearest:   assign to the on-duty zone driver closest to the pickup.
+ *  - primary:   assign to the zone's primary driver; fall back to others.
+ *  - pool:      do not auto-assign; leave parcels claimable by any zone driver.
+ */
+export type ZoneRoutingStrategy = 'balanced' | 'nearest' | 'primary' | 'pool'
+
 export interface FeatureSettings {
   // Routing / zones
   zones_enabled: boolean
   auto_assign_driver: boolean
+  zone_routing_strategy: ZoneRoutingStrategy
   consolidation_enabled: boolean
   route_optimization_enabled: boolean
   // Intake / cutoff
@@ -41,6 +52,7 @@ export interface FeatureSettings {
 export const defaultFeatureSettings: FeatureSettings = {
   zones_enabled: true,
   auto_assign_driver: true,
+  zone_routing_strategy: 'balanced',
   consolidation_enabled: true,
   route_optimization_enabled: true,
   cutoff_enabled: true,

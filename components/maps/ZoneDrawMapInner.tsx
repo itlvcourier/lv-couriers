@@ -6,9 +6,10 @@
 // Capabilities:
 //  - Google base map centered on Calgary with a Map/Satellite toggle.
 //  - Existing zone polygons rendered with their color + click-to-select.
-//  - Drawing mode powered by the Drawing Library: draw a new boundary or edit
-//    an existing one by dragging vertices. Completed/edited paths are reported
-//    up via onPolygonComplete as [lat,lng] pairs.
+//  - Manual drawing mode (the Maps Drawing Library / DrawingManager was removed
+//    in v3.65): click the map to add boundary vertices, then drag vertices to
+//    fine-tune. Completed/edited paths are reported up via onPolygonComplete as
+//    [lat,lng] pairs.
 //  - A Places search box to jump the map to an address/neighbourhood.
 
 import { useEffect, useRef, useState } from 'react'
@@ -28,6 +29,12 @@ export interface ZoneDrawMapProps {
   /** Reports the full draft path whenever it is drawn or edited. */
   onPolygonComplete: (points: Array<[number, number]>) => void
   onSelectZone: (zoneId: string) => void
+  /** Increment to remove the last-placed vertex from the live draft. */
+  undoSignal?: number
+  /** Increment to clear all vertices from the live draft. */
+  clearSignal?: number
+  /** Called when the user double-clicks the map to finish the boundary. */
+  onFinish?: () => void
   center?: [number, number]
   zoom?: number
 }
@@ -44,6 +51,53 @@ function pathToPoints(path: google.maps.MVCArray<google.maps.LatLng>): Array<[nu
   return out
 }
 
+/**
+ * A centroid text label rendered via OverlayView instead of the deprecated
+ * `google.maps.Marker`. OverlayView needs no Map ID (unlike AdvancedMarker),
+ * so it works on a standard raster map without extra GCP configuration.
+ * Defined lazily because it extends a class that only exists after the Maps
+ * script has loaded.
+ */
+function createZoneLabel(
+  map: google.maps.Map,
+  position: google.maps.LatLng,
+  text: string,
+  color: string,
+): google.maps.OverlayView {
+  class ZoneLabel extends google.maps.OverlayView {
+    private div: HTMLDivElement | null = null
+    onAdd() {
+      const div = document.createElement('div')
+      div.className = 'zone-map-label'
+      div.textContent = text
+      div.style.position = 'absolute'
+      div.style.transform = 'translate(-50%, -50%)'
+      div.style.color = color
+      div.style.fontSize = '12px'
+      div.style.fontWeight = '600'
+      div.style.whiteSpace = 'nowrap'
+      div.style.pointerEvents = 'none'
+      this.div = div
+      this.getPanes()?.overlayMouseTarget.appendChild(div)
+    }
+    draw() {
+      if (!this.div) return
+      const pt = this.getProjection()?.fromLatLngToDivPixel(position)
+      if (pt) {
+        this.div.style.left = `${pt.x}px`
+        this.div.style.top = `${pt.y}px`
+      }
+    }
+    onRemove() {
+      this.div?.remove()
+      this.div = null
+    }
+  }
+  const label = new ZoneLabel()
+  label.setMap(map)
+  return label
+}
+
 export default function ZoneDrawMapInner({
   zones,
   parcelCounts,
@@ -52,6 +106,9 @@ export default function ZoneDrawMapInner({
   draftPoints,
   onPolygonComplete,
   onSelectZone,
+  undoSignal = 0,
+  clearSignal = 0,
+  onFinish,
   center = [51.0447, -114.0719], // Calgary, AB
   zoom = 11,
 }: ZoneDrawMapProps) {
@@ -59,9 +116,12 @@ export default function ZoneDrawMapInner({
   const searchEl = useRef<HTMLInputElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
   const savedPolysRef = useRef<google.maps.Polygon[]>([])
-  const labelsRef = useRef<google.maps.Marker[]>([])
+  const labelsRef = useRef<google.maps.OverlayView[]>([])
   const draftPolyRef = useRef<google.maps.Polygon | null>(null)
-  const drawingMgrRef = useRef<google.maps.drawing.DrawingManager | null>(null)
+  const drawClickRef = useRef<google.maps.MapsEventListener | null>(null)
+  const drawDblClickRef = useRef<google.maps.MapsEventListener | null>(null)
+  // The live, editable vertex path so undo/clear signals can mutate it.
+  const livePathRef = useRef<google.maps.MVCArray<google.maps.LatLng> | null>(null)
 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,6 +131,8 @@ export default function ZoneDrawMapInner({
   onCompleteRef.current = onPolygonComplete
   const onSelectRef = useRef(onSelectZone)
   onSelectRef.current = onSelectZone
+  const onFinishRef = useRef(onFinish)
+  onFinishRef.current = onFinish
 
   // --- Initialize the map + Places search once. ---
   useEffect(() => {
@@ -89,6 +151,9 @@ export default function ZoneDrawMapInner({
           streetViewControl: false,
           fullscreenControl: false,
           clickableIcons: false,
+          // We use double-click to "finish" the boundary, so suppress the
+          // default double-click-to-zoom behaviour while drawing.
+          disableDoubleClickZoom: true,
         })
         mapRef.current = map
 
@@ -163,22 +228,12 @@ export default function ZoneDrawMapInner({
       const bounds = new google.maps.LatLngBounds()
       path.forEach((pt) => bounds.extend(pt))
       const count = parcelCounts[zone.id] ?? 0
-      const label = new google.maps.Marker({
-        position: bounds.getCenter(),
+      const label = createZoneLabel(
         map,
-        clickable: false,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 0,
-        },
-        label: {
-          text: `${zone.name} · ${count}`,
-          color: zone.color,
-          fontSize: '12px',
-          fontWeight: '600',
-          className: 'zone-map-label',
-        },
-      })
+        bounds.getCenter(),
+        `${zone.name} · ${count}`,
+        zone.color,
+      )
       labelsRef.current.push(label)
     }
   }, [ready, zones, parcelCounts, selectedZoneId, drawing])
@@ -188,16 +243,29 @@ export default function ZoneDrawMapInner({
     if (!ready || !mapRef.current) return
     const map = mapRef.current
 
+    // A pending single-click timer, so a double-click (finish) doesn't also
+    // drop a stray vertex from its constituent single clicks.
+    let pendingClick: ReturnType<typeof setTimeout> | null = null
+
     // Tear down any previous draft artifacts.
     const teardown = () => {
-      if (drawingMgrRef.current) {
-        drawingMgrRef.current.setMap(null)
-        drawingMgrRef.current = null
+      if (pendingClick) {
+        clearTimeout(pendingClick)
+        pendingClick = null
+      }
+      if (drawClickRef.current) {
+        drawClickRef.current.remove()
+        drawClickRef.current = null
+      }
+      if (drawDblClickRef.current) {
+        drawDblClickRef.current.remove()
+        drawDblClickRef.current = null
       }
       if (draftPolyRef.current) {
         draftPolyRef.current.setMap(null)
         draftPolyRef.current = null
       }
+      livePathRef.current = null
     }
 
     if (!drawing) {
@@ -207,61 +275,87 @@ export default function ZoneDrawMapInner({
 
     const attachEditListeners = (poly: google.maps.Polygon) => {
       const path = poly.getPath()
+      if (!path) return
       const report = () => onCompleteRef.current(pathToPoints(path))
       path.addListener('set_at', report)
       path.addListener('insert_at', report)
       path.addListener('remove_at', report)
     }
 
-    if (draftPoints.length >= 3) {
-      // Edit existing shape: render an editable polygon, no drawing manager.
-      teardown()
-      const poly = new google.maps.Polygon({
-        paths: draftPoints.map(([lat, lng]) => ({ lat, lng })),
-        strokeColor: '#2563eb',
-        strokeWeight: 3,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.25,
-        editable: true,
-        draggable: false,
-        map,
-      })
-      draftPolyRef.current = poly
-      attachEditListeners(poly)
-    } else {
-      // Fresh draw: enable the DrawingManager in polygon mode.
-      teardown()
-      if (!google.maps.drawing?.DrawingManager) {
-        setError('Drawing tools failed to load. Please reload the page.')
-        return
+    teardown()
+
+    // Seed the editable path from any existing shape (edit mode), else empty.
+    // Constructing a Polygon with `paths: []` leaves getPath() undefined until
+    // vertices exist, so we always assign an explicit MVCArray up-front.
+    const path = new google.maps.MVCArray<google.maps.LatLng>(
+      draftPoints.map(([lat, lng]) => new google.maps.LatLng(lat, lng)),
+    )
+    const poly = new google.maps.Polygon({
+      strokeColor: '#2563eb',
+      strokeWeight: 3,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.25,
+      editable: true,
+      draggable: false,
+      map,
+    })
+    poly.setPath(path)
+    draftPolyRef.current = poly
+    livePathRef.current = path
+    attachEditListeners(poly)
+
+    // Click to append a vertex (debounced so it cooperates with double-click).
+    drawClickRef.current = map.addListener(
+      'click',
+      (e: google.maps.MapMouseEvent) => {
+        if (!e.latLng) return
+        const ll = e.latLng
+        if (pendingClick) clearTimeout(pendingClick)
+        pendingClick = setTimeout(() => {
+          path.push(ll)
+          onCompleteRef.current(pathToPoints(path))
+          pendingClick = null
+        }, 220)
+      },
+    )
+
+    // Double-click finishes the boundary (cancels the pending single click).
+    drawDblClickRef.current = map.addListener('dblclick', () => {
+      if (pendingClick) {
+        clearTimeout(pendingClick)
+        pendingClick = null
       }
-      const mgr = new google.maps.drawing.DrawingManager({
-        drawingMode: google.maps.drawing.OverlayType.POLYGON,
-        drawingControl: false,
-        polygonOptions: {
-          strokeColor: '#2563eb',
-          strokeWeight: 3,
-          fillColor: '#3b82f6',
-          fillOpacity: 0.25,
-          editable: true,
-        },
-      })
-      mgr.setMap(map)
-      drawingMgrRef.current = mgr
-      mgr.addListener('polygoncomplete', (poly: google.maps.Polygon) => {
-        // Stop drawing and switch to edit mode on the created polygon.
-        mgr.setDrawingMode(null)
-        draftPolyRef.current = poly
-        onCompleteRef.current(pathToPoints(poly.getPath()))
-        attachEditListeners(poly)
-      })
-    }
+      onFinishRef.current?.()
+    })
 
     return teardown
     // We intentionally only react to `drawing` toggling and whether a seed
     // shape exists, not to every draftPoints change (which we emit ourselves).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, drawing, selectedZoneId])
+
+  // --- Undo: remove the most recently placed vertex. ---
+  useEffect(() => {
+    if (!undoSignal) return
+    const path = livePathRef.current
+    if (path && path.getLength() > 0) {
+      path.pop()
+      onCompleteRef.current(pathToPoints(path))
+    }
+    // Only react to the incrementing signal, not to path/ready changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoSignal])
+
+  // --- Clear: remove every vertex from the live draft. ---
+  useEffect(() => {
+    if (!clearSignal) return
+    const path = livePathRef.current
+    if (path) {
+      path.clear()
+      onCompleteRef.current([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearSignal])
 
   if (error) {
     return (

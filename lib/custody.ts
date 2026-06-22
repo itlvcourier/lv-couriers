@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { ORG_ID, getFeatureSettings } from '@/lib/feature-settings'
-import { resolveZoneForPoint, getZoneDriver } from '@/lib/zones'
+import { resolveZoneForPoint, pickZoneDriver } from '@/lib/zones'
 import { getSystemSettings, calculateDriverPay } from '@/lib/settings'
 
 // ============================================================================
@@ -156,13 +156,15 @@ export async function recordCustodyEvent(
   const { data: deliveryRow } = await supabase
     .from('deliveries')
     .select(
-      'current_holder, dropoff_zone_id, sorted_for_driver_id, pickup_driver_id, holder_driver_id, driver_id, pickup_pay, delivery_pay, is_rush, is_urgent, distance_km',
+      'current_holder, dropoff_zone_id, dropoff_lat, dropoff_lng, sorted_for_driver_id, pickup_driver_id, holder_driver_id, driver_id, pickup_pay, delivery_pay, is_rush, is_urgent, distance_km',
     )
     .eq('id', input.deliveryId)
     .maybeSingle()
   const dRow = deliveryRow as {
     current_holder: string | null
     dropoff_zone_id: string | null
+    dropoff_lat: number | null
+    dropoff_lng: number | null
     sorted_for_driver_id: string | null
     pickup_driver_id: string | null
     holder_driver_id: string | null
@@ -240,7 +242,13 @@ export async function recordCustodyEvent(
   // means a later zone reassignment can't retroactively rewrite who the parcel
   // was staged for. Only snapshot once.
   if (input.eventType === 'hub_in' && dRow && !dRow.sorted_for_driver_id && dRow.dropoff_zone_id) {
-    const destDriverId = await getZoneDriver(dRow.dropoff_zone_id).catch(() => null)
+    // Snapshot the driver this parcel is sorted FOR using the configured
+    // routing strategy (nearest/balanced/primary). Under "pool", this resolves
+    // to null and the parcel is left unsorted-for until a driver claims it.
+    const destDriverId = await pickZoneDriver(dRow.dropoff_zone_id, {
+      pickupLat: dRow.dropoff_lat,
+      pickupLng: dRow.dropoff_lng,
+    }).catch(() => null)
     if (destDriverId) {
       const { data: drv } = await supabase
         .from('drivers')
@@ -408,9 +416,26 @@ export async function assignZonesForDelivery(input: {
   let pickupDriverId: string | null = null
   let deliveryDriverId: string | null = null
   if (input.autoAssignDriver) {
+    // Honour the configured multi-driver routing strategy. With the "pool"
+    // strategy, multi-driver zones intentionally resolve to null so the
+    // delivery stays claimable. Single-driver zones resolve to that driver
+    // under every strategy.
+    const strategy = (await getFeatureSettings()).zone_routing_strategy
     ;[pickupDriverId, deliveryDriverId] = await Promise.all([
-      pickupZoneId ? getZoneDriver(pickupZoneId) : Promise.resolve(null),
-      dropoffZoneId ? getZoneDriver(dropoffZoneId) : Promise.resolve(null),
+      pickupZoneId
+        ? pickZoneDriver(pickupZoneId, {
+            strategy,
+            pickupLat: input.pickupLat,
+            pickupLng: input.pickupLng,
+          })
+        : Promise.resolve(null),
+      dropoffZoneId
+        ? pickZoneDriver(dropoffZoneId, {
+            strategy,
+            pickupLat: input.dropoffLat,
+            pickupLng: input.dropoffLng,
+          })
+        : Promise.resolve(null),
     ])
   }
 

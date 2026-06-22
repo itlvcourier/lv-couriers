@@ -11,10 +11,16 @@ import {
   getZoneAssignments,
   assignDriverToZone,
   unassignDriverFromZone,
+  setPrimaryZoneDriver,
   type ZoneWithGeo,
   type GeoJSONPolygon,
   type ZoneAssignment,
 } from '@/lib/zones'
+import {
+  getFeatureSettings,
+  updateFeatureSettings,
+  type ZoneRoutingStrategy,
+} from '@/lib/feature-settings'
 import { loadAllDrivers } from '@/lib/db-extended'
 import type { Driver } from '@/lib/types'
 import { ZoneDrawMap } from '@/components/maps/ZoneDrawMap'
@@ -29,7 +35,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import {
   Dialog,
@@ -43,17 +48,76 @@ import {
   Plus,
   Save,
   Undo2,
+  Eraser,
   X,
   MapPin,
   Trash2,
   Package,
-  User,
+  Star,
+  Users,
+  Scale,
+  Navigation,
+  Crown,
+  Inbox,
 } from 'lucide-react'
 
 const ZONE_COLORS = [
   '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#0891b2',
   '#7c3aed', '#db2777', '#ca8a04', '#475569', '#0d9488',
 ]
+
+/** Routing strategies shown in the toggle (label + help + icon). */
+const ROUTING_STRATEGIES: Array<{
+  value: ZoneRoutingStrategy
+  label: string
+  help: string
+  Icon: typeof Scale
+}> = [
+  {
+    value: 'balanced',
+    label: 'Load balanced',
+    help: 'New parcels go to the zone driver with the fewest active parcels.',
+    Icon: Scale,
+  },
+  {
+    value: 'nearest',
+    label: 'Nearest driver',
+    help: 'Assign to the zone driver closest to the pickup location.',
+    Icon: Navigation,
+  },
+  {
+    value: 'primary',
+    label: 'Primary + backups',
+    help: 'The starred primary driver gets everything; others are backups.',
+    Icon: Crown,
+  },
+  {
+    value: 'pool',
+    label: 'Shared pool',
+    help: 'Do not auto-assign; any zone driver can claim parcels from the pool.',
+    Icon: Inbox,
+  },
+]
+
+/** Spherical area of a lat/lng polygon, in square kilometres. */
+function polygonAreaKm2(points: Array<[number, number]>): number {
+  if (points.length < 3) return 0
+  const R = 6378137 // Earth radius in metres
+  const toRad = (d: number) => (d * Math.PI) / 180
+  let area = 0
+  for (let i = 0; i < points.length; i++) {
+    const [lat1, lng1] = points[i]
+    const [lat2, lng2] = points[(i + 1) % points.length]
+    area += toRad(lng2 - lng1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)))
+  }
+  area = (area * R * R) / 2
+  return Math.abs(area) / 1e6
+}
+
+/** Validate a Canadian Forward Sortation Area code, e.g. "T2P". */
+function isValidFsa(code: string): boolean {
+  return /^[A-Za-z]\d[A-Za-z]$/.test(code.trim())
+}
 
 /** Convert Leaflet [lat,lng] draft points into a closed GeoJSON polygon. */
 function draftToPolygon(points: Array<[number, number]>): GeoJSONPolygon | null {
@@ -77,6 +141,14 @@ export function AdminZones() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [drawing, setDrawing] = useState(false)
   const [draftPoints, setDraftPoints] = useState<Array<[number, number]>>([])
+  // Incrementing command signals consumed by the map (undo / clear vertices).
+  const [undoSignal, setUndoSignal] = useState(0)
+  const [clearSignal, setClearSignal] = useState(0)
+  // Per-zone FSA code input drafts, keyed by zone id.
+  const [fsaInputs, setFsaInputs] = useState<Record<string, string>>({})
+  // Multi-driver routing strategy (org-wide setting).
+  const [routingStrategy, setRoutingStrategy] =
+    useState<ZoneRoutingStrategy>('balanced')
 
   // New-zone dialog
   const [newOpen, setNewOpen] = useState(false)
@@ -90,16 +162,18 @@ export function AdminZones() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [z, d, a, counts] = await Promise.all([
+      const [z, d, a, counts, settings] = await Promise.all([
         getZonesWithGeo(),
         loadAllDrivers(),
         getZoneAssignments(),
         getZoneParcelCounts(),
+        getFeatureSettings(),
       ])
       setZones(z)
       setDrivers(d)
       setAssignments(a)
       setParcelCounts(counts)
+      setRoutingStrategy(settings.zone_routing_strategy)
     } catch (err) {
       console.log('[v0] AdminZones load failed:', (err as Error).message)
       toast.error('Failed to load zones')
@@ -120,8 +194,12 @@ export function AdminZones() {
     return () => clearInterval(id)
   }, [])
 
-  const assignmentFor = useCallback(
-    (zoneId: string) => assignments.find((a) => a.zoneId === zoneId) ?? null,
+  // All standing assignments for a zone, primary first.
+  const driversForZone = useCallback(
+    (zoneId: string) =>
+      assignments
+        .filter((a) => a.zoneId === zoneId)
+        .sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary)),
     [assignments],
   )
 
@@ -191,18 +269,59 @@ export function AdminZones() {
     }
   }
 
-  const handleAssign = async (zoneId: string, driverId: string) => {
+  // Add a driver to a zone. The first driver added becomes primary by default.
+  const handleAddDriver = async (zoneId: string, driverId: string) => {
+    if (driverId === '__none__') return
     try {
-      if (driverId === '__none__') {
-        await unassignDriverFromZone(zoneId)
-      } else {
-        await assignDriverToZone({ zoneId, driverId })
-      }
-      const a = await getZoneAssignments()
-      setAssignments(a)
-      toast.success('Driver assignment updated')
+      const isFirst = driversForZone(zoneId).length === 0
+      await assignDriverToZone({ zoneId, driverId, isPrimary: isFirst })
+      setAssignments(await getZoneAssignments())
+      toast.success('Driver added to zone')
     } catch {
-      toast.error('Failed to assign driver')
+      toast.error('Failed to add driver')
+    }
+  }
+
+  const handleRemoveDriver = async (zoneId: string, driverId: string) => {
+    try {
+      const wasPrimary = driversForZone(zoneId).find(
+        (a) => a.driverId === driverId,
+      )?.isPrimary
+      await unassignDriverFromZone(zoneId, driverId)
+      // If we removed the primary, promote the next remaining driver.
+      if (wasPrimary) {
+        const remaining = driversForZone(zoneId).filter(
+          (a) => a.driverId !== driverId,
+        )
+        if (remaining.length > 0) {
+          await setPrimaryZoneDriver(zoneId, remaining[0].driverId)
+        }
+      }
+      setAssignments(await getZoneAssignments())
+      toast.success('Driver removed from zone')
+    } catch {
+      toast.error('Failed to remove driver')
+    }
+  }
+
+  const handleSetPrimary = async (zoneId: string, driverId: string) => {
+    try {
+      await setPrimaryZoneDriver(zoneId, driverId)
+      setAssignments(await getZoneAssignments())
+    } catch {
+      toast.error('Failed to set primary driver')
+    }
+  }
+
+  const handleStrategyChange = async (next: ZoneRoutingStrategy) => {
+    const prev = routingStrategy
+    setRoutingStrategy(next) // optimistic
+    const res = await updateFeatureSettings({ zone_routing_strategy: next })
+    if (!res.success) {
+      setRoutingStrategy(prev)
+      toast.error('Failed to update routing strategy')
+    } else {
+      toast.success('Routing strategy updated')
     }
   }
 
@@ -235,8 +354,69 @@ export function AdminZones() {
     setDraftPoints(points)
   }, [])
 
-  // Discard the current draft so the user can re-draw from scratch.
-  const clearDraft = () => setDraftPoints([])
+  // Remove the last placed vertex / clear all vertices via map command signals.
+  const undoPoint = () => setUndoSignal((n) => n + 1)
+  const clearDraft = () => setClearSignal((n) => n + 1)
+
+  // Double-click on the map finishes the boundary -> save if it's valid.
+  const finishDrawing = useCallback(() => {
+    if (draftPoints.length >= 3) void saveDraft()
+    else toast.error('Add at least 3 points to form an area')
+    // saveDraft is stable enough for this handler; deps kept minimal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftPoints.length])
+
+  // Keyboard shortcuts while drawing: Enter saves, Esc cancels, Ctrl/Cmd+Z undo.
+  useEffect(() => {
+    if (!drawing) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        finishDrawing()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        cancelDrawing()
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        undoPoint()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawing, finishDrawing])
+
+  // Live readout of the in-progress boundary.
+  const draftAreaKm2 = useMemo(() => polygonAreaKm2(draftPoints), [draftPoints])
+
+  // --- FSA (postal-code) management per zone. ---
+  const saveFsaCodes = async (zoneId: string, codes: string[]) => {
+    // De-dupe + normalise to uppercase 3-char FSAs.
+    const next = Array.from(new Set(codes.map((c) => c.trim().toUpperCase())))
+    try {
+      await updateZone(zoneId, { fsaCodes: next })
+      setZones((zs) => zs.map((z) => (z.id === zoneId ? { ...z, fsaCodes: next } : z)))
+    } catch {
+      toast.error('Failed to update postal codes')
+    }
+  }
+
+  const addFsaCode = (zone: ZoneWithGeo) => {
+    const raw = (fsaInputs[zone.id] ?? '').trim().toUpperCase()
+    if (!isValidFsa(raw)) {
+      toast.error('Enter a valid FSA, e.g. T2P')
+      return
+    }
+    if (zone.fsaCodes.includes(raw)) {
+      toast.error(`${raw} is already in this zone`)
+      return
+    }
+    void saveFsaCodes(zone.id, [...zone.fsaCodes, raw])
+    setFsaInputs((m) => ({ ...m, [zone.id]: '' }))
+  }
+
+  const removeFsaCode = (zone: ZoneWithGeo, code: string) => {
+    void saveFsaCodes(zone.id, zone.fsaCodes.filter((c) => c !== code))
+  }
 
   if (loading) {
     return (
@@ -262,6 +442,39 @@ export function AdminZones() {
         </Button>
       </div>
 
+      {/* Multi-driver routing strategy: decides who gets a parcel when a zone
+          has more than one assigned driver. */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Users className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">Routing when a zone has multiple drivers</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {ROUTING_STRATEGIES.map((s) => {
+            const active = routingStrategy === s.value
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => handleStrategyChange(s.value)}
+                aria-pressed={active}
+                className={`flex flex-col gap-1 rounded-lg border p-2.5 text-left transition-colors ${
+                  active
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/40'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  <s.Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                  {s.label}
+                </span>
+                <span className="text-xs text-muted-foreground leading-snug">{s.help}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* Map */}
         <div className="relative h-[420px] lg:h-[640px] rounded-xl overflow-hidden border border-border">
@@ -273,33 +486,67 @@ export function AdminZones() {
             draftPoints={draftPoints}
             onPolygonComplete={handlePolygonComplete}
             onSelectZone={(id) => !drawing && setSelectedZoneId(id)}
+            undoSignal={undoSignal}
+            clearSignal={clearSignal}
+            onFinish={finishDrawing}
           />
 
           {/* Drawing toolbar overlay */}
           {drawing && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-full bg-card/95 backdrop-blur border border-border px-3 py-2 shadow-lg">
-              <span className="text-sm font-medium pl-1">
-                <MapPin className="inline w-4 h-4 mr-1 text-primary" />
-                {draftPoints.length >= 3
-                  ? 'Drag vertices to adjust'
-                  : 'Use the polygon tool to draw the boundary'}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={clearDraft}
-                disabled={!draftPoints.length}
-              >
-                <Undo2 className="w-4 h-4" />
-                Redraw
-              </Button>
-              <Button size="sm" onClick={saveDraft} disabled={saving || draftPoints.length < 3} className="gap-1">
-                {saving ? <Spinner className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={cancelDrawing}>
-                <X className="w-4 h-4" />
-              </Button>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex flex-col items-center gap-1.5 rounded-2xl bg-card/95 backdrop-blur border border-border px-3 py-2 shadow-lg">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <MapPin className="inline w-4 h-4 text-primary" />
+                <span>
+                  {draftPoints.length === 0
+                    ? 'Click the map to place boundary points'
+                    : draftPoints.length < 3
+                      ? `${draftPoints.length} point${draftPoints.length === 1 ? '' : 's'} — add ${3 - draftPoints.length} more`
+                      : 'Double-click or press Enter to finish'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="gap-1 tabular-nums">
+                  {draftPoints.length} pts
+                </Badge>
+                {draftPoints.length >= 3 && (
+                  <Badge variant="outline" className="gap-1 tabular-nums">
+                    {draftAreaKm2 < 1
+                      ? `${Math.round(draftAreaKm2 * 100) / 100} km²`
+                      : `${Math.round(draftAreaKm2 * 10) / 10} km²`}
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={undoPoint}
+                  disabled={!draftPoints.length}
+                  title="Undo last point (Ctrl/Cmd+Z)"
+                >
+                  <Undo2 className="w-4 h-4" />
+                  Undo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearDraft}
+                  disabled={!draftPoints.length}
+                >
+                  <Eraser className="w-4 h-4" />
+                  Clear
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={saveDraft}
+                  disabled={saving || draftPoints.length < 3}
+                  className="gap-1"
+                >
+                  {saving ? <Spinner className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelDrawing} title="Cancel (Esc)">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -313,7 +560,11 @@ export function AdminZones() {
           )}
 
           {zones.map((zone) => {
-            const assignment = assignmentFor(zone.id)
+            const zoneDrivers = driversForZone(zone.id)
+            const assignedIds = new Set(zoneDrivers.map((a) => a.driverId))
+            const availableDrivers = drivers.filter((d) => !assignedIds.has(d.id))
+            const driverName = (id: string) =>
+              drivers.find((d) => d.id === id)?.name ?? 'Unknown'
             const isSelected = zone.id === selectedZoneId
             const count = parcelCounts[zone.id] ?? 0
             return (
@@ -347,9 +598,6 @@ export function AdminZones() {
                   >
                     {zone.polygon ? 'Has boundary' : 'No boundary'}
                   </Badge>
-                  {zone.fsaCodes.length > 0 && (
-                    <Badge variant="outline">{zone.fsaCodes.length} FSA</Badge>
-                  )}
                   <div className="flex items-center gap-1.5 ml-auto">
                     <span className="text-xs text-muted-foreground">Active</span>
                     <Switch
@@ -360,25 +608,73 @@ export function AdminZones() {
                   </div>
                 </div>
 
-                {/* Driver assignment */}
-                <div className="mt-2 flex items-center gap-2">
-                  <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <Select
-                    value={assignment?.driverId ?? '__none__'}
-                    onValueChange={(v) => handleAssign(zone.id, v)}
-                  >
-                    <SelectTrigger className="h-8 text-sm" onClick={(e) => e.stopPropagation()}>
-                      <SelectValue placeholder="Assign driver" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Unassigned</SelectItem>
-                      {drivers.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Driver assignment (multiple drivers per zone) */}
+                <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Drivers{zoneDrivers.length > 0 ? ` (${zoneDrivers.length})` : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {zoneDrivers.map((a) => {
+                      // The primary star is only meaningful for the "primary" strategy.
+                      const showPrimary = routingStrategy === 'primary'
+                      return (
+                        <Badge
+                          key={a.driverId}
+                          variant={a.isPrimary && showPrimary ? 'default' : 'secondary'}
+                          className="gap-1 pl-1.5 pr-1"
+                        >
+                          {showPrimary && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimary(zone.id, a.driverId)}
+                              title={a.isPrimary ? 'Primary driver' : 'Make primary'}
+                              className="rounded-full hover:bg-foreground/10 p-0.5"
+                              aria-label={a.isPrimary ? 'Primary driver' : 'Make primary'}
+                            >
+                              <Star
+                                className={`w-3 h-3 ${a.isPrimary ? 'fill-current' : ''}`}
+                              />
+                            </button>
+                          )}
+                          <span className="truncate max-w-28">{driverName(a.driverId)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDriver(zone.id, a.driverId)}
+                            className="rounded-full hover:bg-foreground/10 p-0.5"
+                            aria-label={`Remove ${driverName(a.driverId)}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      )
+                    })}
+                    {availableDrivers.length > 0 ? (
+                      <Select value="__none__" onValueChange={(v) => handleAddDriver(zone.id, v)}>
+                        <SelectTrigger
+                          className="h-7 w-auto gap-1 text-xs px-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add driver</span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__" disabled>
+                            Select a driver
+                          </SelectItem>
+                          {availableDrivers.map((d) => (
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : zoneDrivers.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">No drivers available</span>
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Boundary actions */}
@@ -410,6 +706,57 @@ export function AdminZones() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   )}
+                </div>
+
+                {/* Postal-code (FSA) coverage — used as a fallback when an
+                    address falls outside every drawn boundary. */}
+                <div className="mt-2 border-t border-border pt-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Postal codes (FSA)
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {zone.fsaCodes.map((code) => (
+                      <Badge key={code} variant="secondary" className="gap-1 pr-1">
+                        {code}
+                        <button
+                          type="button"
+                          onClick={() => removeFsaCode(zone, code)}
+                          className="rounded-full hover:bg-foreground/10 p-0.5"
+                          aria-label={`Remove ${code}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={fsaInputs[zone.id] ?? ''}
+                        onChange={(e) =>
+                          setFsaInputs((m) => ({ ...m, [zone.id]: e.target.value }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            addFsaCode(zone)
+                          }
+                        }}
+                        placeholder="T2P"
+                        maxLength={3}
+                        className="h-7 w-16 text-sm uppercase"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2"
+                        onClick={() => addFsaCode(zone)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )

@@ -310,6 +310,10 @@ export interface SystemSettings {
   allowDriverSelfClaim: boolean
   // Minimum number of proof-of-delivery photos a driver must capture at drop-off
   minDeliveryPhotos: number
+  // Admin dashboard alert preferences
+  notifyRushJobs: boolean
+  notifyTimeoutWarnings: boolean
+  notifyFlagAlerts: boolean
   // Invoice template settings
   invoiceCompanyName: string
   invoiceCompanyAddress: string

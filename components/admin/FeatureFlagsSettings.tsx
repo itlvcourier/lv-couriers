@@ -274,6 +274,39 @@ export function FeatureFlagsSettings() {
               </div>
               <p className="text-xs text-muted-foreground">Per-leg pays pickup and delivery legs separately.</p>
             </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="text-foreground flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Multi-driver zone routing
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ['balanced', 'Load balanced'],
+                    ['nearest', 'Nearest driver'],
+                    ['primary', 'Primary + backups'],
+                    ['pool', 'Shared pool'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={settings.zone_routing_strategy === value ? 'default' : 'outline'}
+                    size="sm"
+                    className={settings.zone_routing_strategy === value ? 'bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white' : ''}
+                    onClick={() => {
+                      setSettings((prev) => ({ ...prev, zone_routing_strategy: value }))
+                      setDirty(true)
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When a zone has several drivers, decides who gets each parcel. Shared pool leaves parcels claimable by any zone driver.
+              </p>
+            </div>
           </div>
         </fieldset>
 

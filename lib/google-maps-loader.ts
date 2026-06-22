@@ -11,22 +11,32 @@
 //
 // We deliberately use the classic loader (libraries in the URL, no
 // `loading=async`). At `onload` the classic loader populates the entire
-// namespace synchronously — `google.maps.places.AutocompleteSuggestion`,
-// `google.maps.drawing.DrawingManager`, etc. — without needing `importLibrary`,
-// which is only reliably available under the async bootstrap pattern.
+// namespace synchronously — `google.maps.Map`, `google.maps.geometry`, etc. —
+// without needing `importLibrary`, which is only reliably available under the
+// async bootstrap pattern.
 // ============================================================================
 
-const LIBRARIES = ['places', 'drawing', 'geometry', 'marker'] as const
+// Note: the `drawing` library (DrawingManager) was removed from the Maps JS API
+// in v3.65, so we no longer request it — zone drawing is done manually with map
+// click listeners in ZoneDrawMapInner.
+const LIBRARIES = ['places', 'geometry', 'marker'] as const
 
 let loadPromise: Promise<typeof google> | null = null
 
-// Resolves once the libraries we depend on are actually present on the
-// namespace. Polls briefly to cover any edge where onload fires a tick early.
+// Resolves once the CORE libraries the maps depend on are present: the base
+// Map class plus the geometry library (used by the zone editor).
+//
+// We intentionally do NOT gate on `places.AutocompleteSuggestion` here. That
+// class only exists when the "Places API (New)" is enabled on the Google Cloud
+// project; gating on it meant that for projects without Places-New enabled the
+// loader would time out and the ENTIRE map failed to load. Address autocomplete
+// checks for `AutocompleteSuggestion` itself and degrades gracefully, so it
+// must not block map readiness.
 function whenReady(resolve: (g: typeof google) => void, reject: (e: Error) => void) {
   const started = Date.now()
   const check = () => {
     const m = window.google?.maps
-    if (m?.places?.AutocompleteSuggestion && m?.drawing && m?.geometry) {
+    if (m?.Map && m?.geometry) {
       resolve(window.google)
       return
     }
@@ -63,6 +73,10 @@ export function loadGoogleMaps(): Promise<typeof google> {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&v=weekly`
     script.async = true
     script.defer = true
+    // Google's CDN serves CORS headers, so requesting the script with CORS lets
+    // the browser surface real error details to window.onerror instead of the
+    // opaque, un-actionable "Script error." that cross-origin scripts produce.
+    script.crossOrigin = 'anonymous'
     script.onload = () => whenReady(resolve, reject)
     script.onerror = () => reject(new Error('Failed to load Google Maps'))
     document.head.appendChild(script)
