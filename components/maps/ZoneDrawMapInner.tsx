@@ -245,6 +245,7 @@ export default function ZoneDrawMapInner({
 
     const attachEditListeners = (poly: google.maps.Polygon) => {
       const path = poly.getPath()
+      if (!path) return
       const report = () => onCompleteRef.current(pathToPoints(path))
       path.addListener('set_at', report)
       path.addListener('insert_at', report)
@@ -272,8 +273,11 @@ export default function ZoneDrawMapInner({
       // editable polygon; the user can then drag vertices to fine-tune. The
       // path is reported on every click and on every subsequent edit.
       teardown()
+      // Start with an explicit (empty) MVCArray path. Constructing a Polygon
+      // with `paths: []` leaves getPath() undefined until vertices exist, so we
+      // assign the path up-front to safely attach edit listeners and push to it.
+      const path = new google.maps.MVCArray<google.maps.LatLng>()
       const poly = new google.maps.Polygon({
-        paths: [],
         strokeColor: '#2563eb',
         strokeWeight: 3,
         fillColor: '#3b82f6',
@@ -282,6 +286,7 @@ export default function ZoneDrawMapInner({
         draggable: false,
         map,
       })
+      poly.setPath(path)
       draftPolyRef.current = poly
       attachEditListeners(poly)
 
@@ -289,8 +294,8 @@ export default function ZoneDrawMapInner({
         'click',
         (e: google.maps.MapMouseEvent) => {
           if (!e.latLng) return
-          poly.getPath().push(e.latLng)
-          onCompleteRef.current(pathToPoints(poly.getPath()))
+          path.push(e.latLng)
+          onCompleteRef.current(pathToPoints(path))
         },
       )
     }
