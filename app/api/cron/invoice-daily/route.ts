@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { verifyCron } from '@/lib/cron-auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   runGenerateDrafts,
   runAutoSend,
@@ -13,14 +14,17 @@ export const maxDuration = 60
 /**
  * SINGLE scheduled cron — runs once per day.
  *
- * Dispatches to the four invoice jobs based on the UTC calendar:
- *   - Every day:            process-reminders, mark-overdue
+ * Dispatches to every scheduled job based on the UTC calendar:
+ *   - Every day:            expire-requests, process-reminders, mark-overdue
  *   - 28th of each month:   + generate-drafts
  *   - 1st of each month:    + auto-send
  *
- * This keeps us inside the Vercel Hobby plan limit of 2 crons (daily) while
- * still covering the full monthly billing lifecycle. The individual
- * /api/cron/<job> endpoints remain available for manual testing.
+ * This is the ONLY cron in vercel.json so we stay within the Vercel Hobby plan
+ * limit (2 crons, once-per-day frequency). The individual /api/cron/<job>
+ * endpoints remain available for manual testing/triggering.
+ *
+ * Note: dispatch_requests also expire lazily whenever the approval queue is
+ * read (same RPC), so this daily sweep is just a backstop for idle days.
  */
 export async function GET(req: NextRequest) {
   const auth = verifyCron(req)
@@ -36,8 +40,19 @@ export async function GET(req: NextRequest) {
   }
   const jobs = summary.jobs as Record<string, unknown>
 
-  // Always run reminders first so today's due events go out before we flip
-  // anything to overdue below.
+  // Expire any overdue pending dispatch_requests (approval-queue feasibility
+  // window). Read paths also do this lazily; this is the idle-day backstop.
+  try {
+    const supabase = createAdminClient()
+    const { data, error } = await supabase.rpc('expire_dispatch_requests')
+    if (error) throw error
+    jobs.expireRequests = { ok: true, expired: (data as number) ?? 0 }
+  } catch (e) {
+    jobs.expireRequests = { ok: false, error: (e as Error).message }
+  }
+
+  // Run reminders next so today's due events go out before we flip anything to
+  // overdue below.
   try {
     jobs.processReminders = await runProcessReminders()
   } catch (e) {
