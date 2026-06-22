@@ -146,12 +146,18 @@ const FAIL_REASON_LABELS: Record<FailReason, string> = {
   other: 'Other reason',
 }
 
-function StatusStepper({ currentStatus }: { currentStatus: DeliveryStatus }) {
-  const currentIndex = STATUS_STEPS.findIndex(s => s.status === currentStatus)
+function StatusStepper({
+  currentStatus,
+  steps = STATUS_STEPS,
+}: {
+  currentStatus: string
+  steps?: StepDef[]
+}) {
+  const currentIndex = steps.findIndex(s => s.status === currentStatus)
   
   return (
     <div className="space-y-2">
-      {STATUS_STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const isCompleted = idx < currentIndex
         const isCurrent = idx === currentIndex
         
@@ -220,7 +226,8 @@ function TripJobCard({
     switch (delivery.status) {
       case 'claimed': return 'Start Pickup'
       case 'en_route_pickup': return 'Verify Pickup'
-      case 'picked_up': return 'Start Delivery'
+      case 'picked_up':
+        return getDriverRole(delivery) === 'pickup_to_hub' ? 'Drop at Hub' : 'Start Delivery'
       case 'en_route_dropoff': return 'Complete'
       default: return null
     }
@@ -275,6 +282,17 @@ function TripJobCard({
             <p className="text-xs text-muted-foreground mb-2">
               {delivery.pickupArea} → {delivery.dropoffArea}
             </p>
+
+            {delivery.routingMode === 'cross_dock' && (
+              <p className="text-xs text-[var(--accent-orange)] mb-2 flex items-center gap-1">
+                <Warehouse className="w-3 h-3" />
+                {getDriverRole(delivery) === 'pickup_to_hub'
+                  ? 'Carry to hub'
+                  : getDriverRole(delivery) === 'hub_to_dropoff'
+                  ? 'Final leg from hub'
+                  : 'Routes via hub'}
+              </p>
+            )}
             
             {/* Manifest summary */}
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -376,10 +394,11 @@ function TripView({
   deliveries: Delivery[]
   onAddJob: () => void
 }) {
-  const { reorderTrip, advanceStatus, getDriverMaxJobs, getDriverActiveJobs, currentUser, settings } = useApp()
+  const { reorderTrip, advanceStatus, getDriverMaxJobs, getDriverActiveJobs, currentUser, settings, refreshData } = useApp()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showVerification, setShowVerification] = useState<Delivery | null>(null)
   const [showCompletion, setShowCompletion] = useState<Delivery | null>(null)
+  const hubs = useHubs()
   
   const driverId = currentUser?.driverId || ''
   const maxJobs = getDriverMaxJobs(driverId)
@@ -410,6 +429,29 @@ function TripView({
     toast.success('Trip order updated')
   }
   
+  const handleHubDrop = async (delivery: Delivery) => {
+    if (!driverId) return
+    const hub = resolveHub(hubs, delivery.hubId)
+    try {
+      let lat: number | null = null
+      let lng: number | null = null
+      try {
+        const pos = await getCurrentPosition()
+        lat = pos.lat
+        lng = pos.lng
+      } catch {
+        /* best-effort */
+      }
+      await dropParcelAtHub({ deliveryId: delivery.id, driverId, lat, lng })
+      await refreshData()
+      toast.success(`Dropped at ${hub?.name ?? 'hub'}`, {
+        description: 'A zone driver takes the final leg from here.',
+      })
+    } catch {
+      toast.error('Could not record hub drop-off. Try again.')
+    }
+  }
+
   const handleAction = (delivery: Delivery) => {
     switch (delivery.status) {
       case 'claimed':
@@ -420,8 +462,13 @@ function TripView({
         setShowVerification(delivery)
         break
       case 'picked_up':
-        advanceStatus(delivery.id)
-        toast.success('En route to drop-off')
+        // Cross-dock pickup leg ends at the hub, not the recipient.
+        if (getDriverRole(delivery) === 'pickup_to_hub') {
+          void handleHubDrop(delivery)
+        } else {
+          advanceStatus(delivery.id)
+          toast.success('En route to drop-off')
+        }
         break
       case 'en_route_dropoff':
         setShowCompletion(delivery)
@@ -502,9 +549,43 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   const [showUpdateAddress, setShowUpdateAddress] = useState(false)
   const [failReason, setFailReason] = useState<FailReason | ''>('')
   const [failNotes, setFailNotes] = useState('')
-  const { advanceStatus, failDelivery, retryDelivery, escalateDelivery, currentUser } = useApp()
+  const [droppingAtHub, setDroppingAtHub] = useState(false)
+  const { advanceStatus, failDelivery, retryDelivery, escalateDelivery, currentUser, refreshData } = useApp()
   const addressValidationLevel = useFeatureFlag('address_validation_level')
   const canUpdateAddress = addressValidationLevel !== false && addressValidationLevel !== 'off'
+  const hubs = useHubs()
+
+  // Cross-dock awareness: what role does this driver play, and which hub?
+  const role = getDriverRole(delivery)
+  const hub = resolveHub(hubs, delivery.hubId)
+  const sortTimeLabel = formatSortTime(hub?.sortTime ?? null)
+
+  // The pickup leg of a cross-dock job ends at the hub, NOT the recipient.
+  const dropAtHub = async () => {
+    const driverId = currentUser?.driverId
+    if (!driverId) return
+    setDroppingAtHub(true)
+    try {
+      let lat: number | null = null
+      let lng: number | null = null
+      try {
+        const pos = await getCurrentPosition()
+        lat = pos.lat
+        lng = pos.lng
+      } catch {
+        /* location is best-effort */
+      }
+      await dropParcelAtHub({ deliveryId: delivery.id, driverId, lat, lng })
+      await refreshData()
+      toast.success(`Dropped at ${hub?.name ?? 'hub'}`, {
+        description: 'A zone driver will take the final leg from here.',
+      })
+    } catch {
+      toast.error('Could not record hub drop-off. Try again.')
+    } finally {
+      setDroppingAtHub(false)
+    }
+  }
 
   // Navigation helpers
   const openInGoogleMaps = (address: string) => {
@@ -537,8 +618,14 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
         setShowVerification(true)
         break
       case 'picked_up':
-        advanceStatus(delivery.id)
-        toast.success('Status updated - En route to drop-off')
+        // Cross-dock pickup driver: the next stop is the hub, not the
+        // recipient. Record the hub drop-off instead of advancing to dropoff.
+        if (role === 'pickup_to_hub') {
+          void dropAtHub()
+        } else {
+          advanceStatus(delivery.id)
+          toast.success('Status updated - En route to drop-off')
+        }
         break
       case 'en_route_dropoff':
         setShowCompletion(true)
@@ -591,6 +678,13 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
       case 'en_route_pickup':
         return { label: "I'm Here - Verify Pickup", color: 'bg-[var(--accent-orange)]' }
       case 'picked_up':
+        // Pickup driver on a cross-dock parcel heads to the hub next.
+        if (role === 'pickup_to_hub') {
+          return {
+            label: droppingAtHub ? 'Recording...' : `Drop at ${hub?.name ?? 'Hub'}`,
+            color: 'bg-[var(--accent-orange)]',
+          }
+        }
         return { label: 'Start Delivery Run', color: 'bg-[var(--accent-blue)]' }
       case 'en_route_dropoff':
         return { label: 'Mark as Delivered', color: 'bg-[var(--accent-green)]' }
@@ -669,14 +763,17 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
         {/* Job Overview */}
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-4">
-            <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start justify-between mb-3 gap-2">
               <h3 className="font-medium text-foreground">{delivery.businessName}</h3>
-              {delivery.isUrgent && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-xs font-medium border border-red-500/20">
-                  <Zap className="w-3 h-3" />
-                  Urgent
-                </span>
-              )}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <RoutingBadge delivery={delivery} hub={hub} />
+                {delivery.isUrgent && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-xs font-medium border border-red-500/20">
+                    <Zap className="w-3 h-3" />
+                    Urgent
+                  </span>
+                )}
+              </div>
             </div>
             
             {/* Manifest */}
@@ -702,7 +799,9 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
           </CardContent>
         </Card>
 
-        {/* Pickup Address */}
+        {/* Pickup Address - hidden once the parcel has left the hub on its
+            final leg (this driver did not do the original pickup). */}
+        {role !== 'hub_to_dropoff' && (
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
@@ -742,8 +841,70 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        {/* Dropoff Address */}
+        {/* Hub card - cross-dock parcels meet at the hub. Shown to the pickup
+            driver (their next stop) and as a relay note to the dropoff driver. */}
+        {role !== 'direct' && hub && (
+          <Card className="bg-[var(--accent-orange)]/5 border-[var(--accent-orange)]/30">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-[var(--accent-orange)] mb-1 flex items-center gap-1 font-medium">
+                    <Warehouse className="w-3 h-3" />
+                    {role === 'pickup_to_hub' ? 'Drop at Hub' : 'Collected from Hub'}
+                  </p>
+                  <p className="text-sm font-medium text-foreground">{hub.name}</p>
+                  {hub.address && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{hub.address}</p>
+                  )}
+                </div>
+                {hub.address && role === 'pickup_to_hub' && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 gap-1 border-[var(--accent-orange)]/40 tap-target"
+                      >
+                        <Navigation className="w-3 h-3" />
+                        Navigate
+                        <ChevronDown className="w-3 h-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openInGoogleMaps(hub.address!)}>
+                        <Map className="w-4 h-4 mr-2" />
+                        Google Maps
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openInWaze(hub.address!)}>
+                        <Navigation className="w-4 h-4 mr-2" />
+                        Waze
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openInAppleMaps(hub.address!)}>
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Apple Maps
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+              {sortTimeLabel && role === 'pickup_to_hub' && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--bg-card-2)] border border-[var(--border-color)]">
+                  <Clock className="w-4 h-4 text-[var(--accent-orange)] shrink-0" />
+                  <p className="text-xs text-foreground">
+                    Sort wave at <span className="font-medium">{sortTimeLabel}</span> - drop off
+                    before then so it makes the run.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Dropoff Address - the pickup driver on a cross-dock job does NOT
+            deliver to the recipient, so hide the final address from them. */}
+        {role !== 'pickup_to_hub' && (
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-4 space-y-3">
             <div className="flex items-start justify-between">
@@ -827,12 +988,28 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
             )}
           </CardContent>
         </Card>
+        )}
 
-        {/* Status Stepper */}
+        {/* Status Stepper - leg-specific for cross-dock parcels. */}
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-4">
-            <h4 className="text-sm font-medium text-foreground mb-4">Delivery Progress</h4>
-            <StatusStepper currentStatus={delivery.status} />
+            <h4 className="text-sm font-medium text-foreground mb-4">
+              {role === 'pickup_to_hub'
+                ? 'Pickup Leg Progress'
+                : role === 'hub_to_dropoff'
+                ? 'Final Leg Progress'
+                : 'Delivery Progress'}
+            </h4>
+            <StatusStepper
+              currentStatus={role === 'pickup_to_hub' && delivery.legStatus === 'at_hub' ? 'at_hub' : delivery.status}
+              steps={
+                role === 'pickup_to_hub'
+                  ? HUB_PICKUP_STEPS
+                  : role === 'hub_to_dropoff'
+                  ? HUB_DROPOFF_STEPS
+                  : STATUS_STEPS
+              }
+            />
           </CardContent>
         </Card>
 
@@ -840,7 +1017,8 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
         {actionButton && (
           <Button
             onClick={handleAction}
-            className={`w-full h-12 rounded-xl tap-target text-white font-medium ${actionButton.color} hover:opacity-90`}
+            disabled={droppingAtHub}
+            className={`w-full h-12 rounded-xl tap-target text-white font-medium ${actionButton.color} hover:opacity-90 disabled:opacity-60`}
           >
             {actionButton.label}
           </Button>

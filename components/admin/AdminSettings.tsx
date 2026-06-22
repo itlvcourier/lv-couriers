@@ -14,6 +14,7 @@ import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
 import { AdminUserManagement } from './AdminUserManagement'
 import { DriverPaySettings } from './DriverPaySettings'
 import { FeatureFlagsSettings } from './FeatureFlagsSettings'
+import { HubsSettings } from './HubsSettings'
 import { CutoffManager } from './CutoffManager'
 import {
   Dialog,
@@ -360,6 +361,9 @@ export function AdminSettings() {
         <div className="space-y-6">
       {/* Operations & Feature Flags (cross-dock operating model) */}
       <FeatureFlagsSettings />
+
+      {/* Cross-dock hub locations (meet/sort points) */}
+      <HubsSettings />
 
       {/* Per-business daily cutoffs */}
       <CutoffManager />

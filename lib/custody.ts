@@ -236,6 +236,12 @@ export async function recordCustodyEvent(
       }
     } else {
       patch.holder_driver_id = null
+      // Parcel is now held by the hub (or unassigned). Release driver_id so it
+      // drops out of the previous driver's Active queue. The destination driver
+      // is reattached on hub_out when they collect it.
+      if (input.eventType === 'hub_in' || input.eventType === 'transfer_out') {
+        patch.driver_id = null
+      }
     }
   }
   const nextLeg = legStatusForEvent(input.eventType)
