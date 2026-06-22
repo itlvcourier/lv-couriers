@@ -80,6 +80,10 @@ export function AdminSettings() {
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
     // Proof of delivery
     minDeliveryPhotos: settings.minDeliveryPhotos,
+    // Admin dashboard alerts
+    notifyRushJobs: settings.notifyRushJobs,
+    notifyTimeoutWarnings: settings.notifyTimeoutWarnings,
+    notifyFlagAlerts: settings.notifyFlagAlerts,
     // Invoice template settings
     invoiceCompanyName: settings.invoiceCompanyName,
     invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -136,6 +140,9 @@ export function AdminSettings() {
       smsEarningsSummary: settings.smsEarningsSummary,
       allowDriverSelfClaim: settings.allowDriverSelfClaim,
       minDeliveryPhotos: settings.minDeliveryPhotos,
+      notifyRushJobs: settings.notifyRushJobs,
+      notifyTimeoutWarnings: settings.notifyTimeoutWarnings,
+      notifyFlagAlerts: settings.notifyFlagAlerts,
       // Invoice template settings
       invoiceCompanyName: settings.invoiceCompanyName,
       invoiceCompanyAddress: settings.invoiceCompanyAddress,
@@ -293,6 +300,15 @@ export function AdminSettings() {
   const handleSaveProofPhotos = () => {
     updateSettings({ minDeliveryPhotos: localSettings.minDeliveryPhotos })
     toast.success('Proof of delivery settings saved')
+  }
+
+  const handleSaveAlerts = () => {
+    updateSettings({
+      notifyRushJobs: localSettings.notifyRushJobs,
+      notifyTimeoutWarnings: localSettings.notifyTimeoutWarnings,
+      notifyFlagAlerts: localSettings.notifyFlagAlerts,
+    })
+    toast.success('Alert preferences saved')
   }
   
   const clearOverride = (driverId: string) => {

@@ -274,6 +274,10 @@ export function mapSettingsRow(row: Row): SystemSettings {
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
     minDeliveryPhotos: row.min_delivery_photos != null ? Number(row.min_delivery_photos) : 3,
+    // Admin dashboard alert preferences (default on)
+    notifyRushJobs: row.notify_rush_jobs !== false,
+    notifyTimeoutWarnings: row.notify_timeout_warnings !== false,
+    notifyFlagAlerts: row.notify_flag_alerts !== false,
     // Invoice template settings
     invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
     invoiceCompanyAddress: (row.invoice_company_address as string) || '',
@@ -669,6 +673,10 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
   if (partial.minDeliveryPhotos != null) p.min_delivery_photos = partial.minDeliveryPhotos
+  // Admin dashboard alert preferences
+  if (partial.notifyRushJobs != null) p.notify_rush_jobs = partial.notifyRushJobs
+  if (partial.notifyTimeoutWarnings != null) p.notify_timeout_warnings = partial.notifyTimeoutWarnings
+  if (partial.notifyFlagAlerts != null) p.notify_flag_alerts = partial.notifyFlagAlerts
   // Invoice template settings
   if (partial.invoiceCompanyName != null) p.invoice_company_name = partial.invoiceCompanyName
   if (partial.invoiceCompanyAddress != null) p.invoice_company_address = partial.invoiceCompanyAddress

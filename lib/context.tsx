@@ -115,6 +115,10 @@ const DEFAULT_SETTINGS: SystemSettings = {
   allowDriverSelfClaim: true,
   // Minimum proof-of-delivery photos required at drop-off
   minDeliveryPhotos: 3,
+  // Admin dashboard alert preferences
+  notifyRushJobs: true,
+  notifyTimeoutWarnings: true,
+  notifyFlagAlerts: true,
   // Invoice template settings
   invoiceCompanyName: '',
   invoiceCompanyAddress: '',
