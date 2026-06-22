@@ -419,7 +419,15 @@ export async function loadAllRateCards(): Promise<RateCard[]> {
 
 export async function loadSettings(): Promise<SystemSettings> {
   const supabase = createClient()
-  const { data } = await supabase.from('system_settings').select('*').limit(1).maybeSingle()
+  // Always resolve to the SAME (oldest) row. Without an explicit order, reads
+  // and writes could hit different rows when duplicates exist, silently losing
+  // saved settings on reload.
+  const { data } = await supabase
+    .from('system_settings')
+    .select('*')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
   if (!data) return mapSettingsRow({})
   return mapSettingsRow(data as Row)
 }
@@ -694,7 +702,12 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.invoiceBankInstitutionNumber != null) p.invoice_bank_institution_number = partial.invoiceBankInstitutionNumber
   if (partial.invoiceFooterNotes != null) p.invoice_footer_notes = partial.invoiceFooterNotes
 
-  const { data: rows } = await supabase.from('system_settings').select('id').limit(1)
+  // Target the SAME (oldest) row the loader reads from, so saves persist.
+  const { data: rows } = await supabase
+    .from('system_settings')
+    .select('id')
+    .order('created_at', { ascending: true })
+    .limit(1)
   if (rows && rows.length > 0) {
     const { error } = await supabase.from('system_settings').update(p).eq('id', (rows[0] as Row).id)
     if (error) throw error
