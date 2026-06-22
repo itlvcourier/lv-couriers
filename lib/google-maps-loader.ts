@@ -70,6 +70,10 @@ export function loadGoogleMaps(): Promise<typeof google> {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&v=weekly`
     script.async = true
     script.defer = true
+    // Google's CDN serves CORS headers, so requesting the script with CORS lets
+    // the browser surface real error details to window.onerror instead of the
+    // opaque, un-actionable "Script error." that cross-origin scripts produce.
+    script.crossOrigin = 'anonymous'
     script.onload = () => whenReady(resolve, reject)
     script.onerror = () => reject(new Error('Failed to load Google Maps'))
     document.head.appendChild(script)
