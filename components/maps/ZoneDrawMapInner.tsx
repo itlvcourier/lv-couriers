@@ -29,6 +29,12 @@ export interface ZoneDrawMapProps {
   /** Reports the full draft path whenever it is drawn or edited. */
   onPolygonComplete: (points: Array<[number, number]>) => void
   onSelectZone: (zoneId: string) => void
+  /** Increment to remove the last-placed vertex from the live draft. */
+  undoSignal?: number
+  /** Increment to clear all vertices from the live draft. */
+  clearSignal?: number
+  /** Called when the user double-clicks the map to finish the boundary. */
+  onFinish?: () => void
   center?: [number, number]
   zoom?: number
 }
@@ -100,6 +106,9 @@ export default function ZoneDrawMapInner({
   draftPoints,
   onPolygonComplete,
   onSelectZone,
+  undoSignal = 0,
+  clearSignal = 0,
+  onFinish,
   center = [51.0447, -114.0719], // Calgary, AB
   zoom = 11,
 }: ZoneDrawMapProps) {
@@ -110,6 +119,9 @@ export default function ZoneDrawMapInner({
   const labelsRef = useRef<google.maps.OverlayView[]>([])
   const draftPolyRef = useRef<google.maps.Polygon | null>(null)
   const drawClickRef = useRef<google.maps.MapsEventListener | null>(null)
+  const drawDblClickRef = useRef<google.maps.MapsEventListener | null>(null)
+  // The live, editable vertex path so undo/clear signals can mutate it.
+  const livePathRef = useRef<google.maps.MVCArray<google.maps.LatLng> | null>(null)
 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,6 +131,8 @@ export default function ZoneDrawMapInner({
   onCompleteRef.current = onPolygonComplete
   const onSelectRef = useRef(onSelectZone)
   onSelectRef.current = onSelectZone
+  const onFinishRef = useRef(onFinish)
+  onFinishRef.current = onFinish
 
   // --- Initialize the map + Places search once. ---
   useEffect(() => {
@@ -137,6 +151,9 @@ export default function ZoneDrawMapInner({
           streetViewControl: false,
           fullscreenControl: false,
           clickableIcons: false,
+          // We use double-click to "finish" the boundary, so suppress the
+          // default double-click-to-zoom behaviour while drawing.
+          disableDoubleClickZoom: true,
         })
         mapRef.current = map
 
@@ -226,16 +243,29 @@ export default function ZoneDrawMapInner({
     if (!ready || !mapRef.current) return
     const map = mapRef.current
 
+    // A pending single-click timer, so a double-click (finish) doesn't also
+    // drop a stray vertex from its constituent single clicks.
+    let pendingClick: ReturnType<typeof setTimeout> | null = null
+
     // Tear down any previous draft artifacts.
     const teardown = () => {
+      if (pendingClick) {
+        clearTimeout(pendingClick)
+        pendingClick = null
+      }
       if (drawClickRef.current) {
         drawClickRef.current.remove()
         drawClickRef.current = null
+      }
+      if (drawDblClickRef.current) {
+        drawDblClickRef.current.remove()
+        drawDblClickRef.current = null
       }
       if (draftPolyRef.current) {
         draftPolyRef.current.setMap(null)
         draftPolyRef.current = null
       }
+      livePathRef.current = null
     }
 
     if (!drawing) {
@@ -252,59 +282,80 @@ export default function ZoneDrawMapInner({
       path.addListener('remove_at', report)
     }
 
-    if (draftPoints.length >= 3) {
-      // Edit existing shape: render an editable polygon, no drawing manager.
-      teardown()
-      const poly = new google.maps.Polygon({
-        paths: draftPoints.map(([lat, lng]) => ({ lat, lng })),
-        strokeColor: '#2563eb',
-        strokeWeight: 3,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.25,
-        editable: true,
-        draggable: false,
-        map,
-      })
-      draftPolyRef.current = poly
-      attachEditListeners(poly)
-    } else {
-      // Fresh draw: the DrawingManager was removed from the Maps JS API in
-      // v3.65, so we draw manually. Each map click appends a vertex to an
-      // editable polygon; the user can then drag vertices to fine-tune. The
-      // path is reported on every click and on every subsequent edit.
-      teardown()
-      // Start with an explicit (empty) MVCArray path. Constructing a Polygon
-      // with `paths: []` leaves getPath() undefined until vertices exist, so we
-      // assign the path up-front to safely attach edit listeners and push to it.
-      const path = new google.maps.MVCArray<google.maps.LatLng>()
-      const poly = new google.maps.Polygon({
-        strokeColor: '#2563eb',
-        strokeWeight: 3,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.25,
-        editable: true,
-        draggable: false,
-        map,
-      })
-      poly.setPath(path)
-      draftPolyRef.current = poly
-      attachEditListeners(poly)
+    teardown()
 
-      drawClickRef.current = map.addListener(
-        'click',
-        (e: google.maps.MapMouseEvent) => {
-          if (!e.latLng) return
-          path.push(e.latLng)
+    // Seed the editable path from any existing shape (edit mode), else empty.
+    // Constructing a Polygon with `paths: []` leaves getPath() undefined until
+    // vertices exist, so we always assign an explicit MVCArray up-front.
+    const path = new google.maps.MVCArray<google.maps.LatLng>(
+      draftPoints.map(([lat, lng]) => new google.maps.LatLng(lat, lng)),
+    )
+    const poly = new google.maps.Polygon({
+      strokeColor: '#2563eb',
+      strokeWeight: 3,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.25,
+      editable: true,
+      draggable: false,
+      map,
+    })
+    poly.setPath(path)
+    draftPolyRef.current = poly
+    livePathRef.current = path
+    attachEditListeners(poly)
+
+    // Click to append a vertex (debounced so it cooperates with double-click).
+    drawClickRef.current = map.addListener(
+      'click',
+      (e: google.maps.MapMouseEvent) => {
+        if (!e.latLng) return
+        const ll = e.latLng
+        if (pendingClick) clearTimeout(pendingClick)
+        pendingClick = setTimeout(() => {
+          path.push(ll)
           onCompleteRef.current(pathToPoints(path))
-        },
-      )
-    }
+          pendingClick = null
+        }, 220)
+      },
+    )
+
+    // Double-click finishes the boundary (cancels the pending single click).
+    drawDblClickRef.current = map.addListener('dblclick', () => {
+      if (pendingClick) {
+        clearTimeout(pendingClick)
+        pendingClick = null
+      }
+      onFinishRef.current?.()
+    })
 
     return teardown
     // We intentionally only react to `drawing` toggling and whether a seed
     // shape exists, not to every draftPoints change (which we emit ourselves).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, drawing, selectedZoneId])
+
+  // --- Undo: remove the most recently placed vertex. ---
+  useEffect(() => {
+    if (!undoSignal) return
+    const path = livePathRef.current
+    if (path && path.getLength() > 0) {
+      path.pop()
+      onCompleteRef.current(pathToPoints(path))
+    }
+    // Only react to the incrementing signal, not to path/ready changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoSignal])
+
+  // --- Clear: remove every vertex from the live draft. ---
+  useEffect(() => {
+    if (!clearSignal) return
+    const path = livePathRef.current
+    if (path) {
+      path.clear()
+      onCompleteRef.current([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearSignal])
 
   if (error) {
     return (

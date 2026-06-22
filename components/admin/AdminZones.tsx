@@ -43,6 +43,7 @@ import {
   Plus,
   Save,
   Undo2,
+  Eraser,
   X,
   MapPin,
   Trash2,
@@ -54,6 +55,26 @@ const ZONE_COLORS = [
   '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#0891b2',
   '#7c3aed', '#db2777', '#ca8a04', '#475569', '#0d9488',
 ]
+
+/** Spherical area of a lat/lng polygon, in square kilometres. */
+function polygonAreaKm2(points: Array<[number, number]>): number {
+  if (points.length < 3) return 0
+  const R = 6378137 // Earth radius in metres
+  const toRad = (d: number) => (d * Math.PI) / 180
+  let area = 0
+  for (let i = 0; i < points.length; i++) {
+    const [lat1, lng1] = points[i]
+    const [lat2, lng2] = points[(i + 1) % points.length]
+    area += toRad(lng2 - lng1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)))
+  }
+  area = (area * R * R) / 2
+  return Math.abs(area) / 1e6
+}
+
+/** Validate a Canadian Forward Sortation Area code, e.g. "T2P". */
+function isValidFsa(code: string): boolean {
+  return /^[A-Za-z]\d[A-Za-z]$/.test(code.trim())
+}
 
 /** Convert Leaflet [lat,lng] draft points into a closed GeoJSON polygon. */
 function draftToPolygon(points: Array<[number, number]>): GeoJSONPolygon | null {
@@ -77,6 +98,11 @@ export function AdminZones() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [drawing, setDrawing] = useState(false)
   const [draftPoints, setDraftPoints] = useState<Array<[number, number]>>([])
+  // Incrementing command signals consumed by the map (undo / clear vertices).
+  const [undoSignal, setUndoSignal] = useState(0)
+  const [clearSignal, setClearSignal] = useState(0)
+  // Per-zone FSA code input drafts, keyed by zone id.
+  const [fsaInputs, setFsaInputs] = useState<Record<string, string>>({})
 
   // New-zone dialog
   const [newOpen, setNewOpen] = useState(false)
@@ -235,8 +261,69 @@ export function AdminZones() {
     setDraftPoints(points)
   }, [])
 
-  // Discard the current draft so the user can re-draw from scratch.
-  const clearDraft = () => setDraftPoints([])
+  // Remove the last placed vertex / clear all vertices via map command signals.
+  const undoPoint = () => setUndoSignal((n) => n + 1)
+  const clearDraft = () => setClearSignal((n) => n + 1)
+
+  // Double-click on the map finishes the boundary -> save if it's valid.
+  const finishDrawing = useCallback(() => {
+    if (draftPoints.length >= 3) void saveDraft()
+    else toast.error('Add at least 3 points to form an area')
+    // saveDraft is stable enough for this handler; deps kept minimal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftPoints.length])
+
+  // Keyboard shortcuts while drawing: Enter saves, Esc cancels, Ctrl/Cmd+Z undo.
+  useEffect(() => {
+    if (!drawing) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        finishDrawing()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        cancelDrawing()
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        undoPoint()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawing, finishDrawing])
+
+  // Live readout of the in-progress boundary.
+  const draftAreaKm2 = useMemo(() => polygonAreaKm2(draftPoints), [draftPoints])
+
+  // --- FSA (postal-code) management per zone. ---
+  const saveFsaCodes = async (zoneId: string, codes: string[]) => {
+    // De-dupe + normalise to uppercase 3-char FSAs.
+    const next = Array.from(new Set(codes.map((c) => c.trim().toUpperCase())))
+    try {
+      await updateZone(zoneId, { fsaCodes: next })
+      setZones((zs) => zs.map((z) => (z.id === zoneId ? { ...z, fsaCodes: next } : z)))
+    } catch {
+      toast.error('Failed to update postal codes')
+    }
+  }
+
+  const addFsaCode = (zone: ZoneWithGeo) => {
+    const raw = (fsaInputs[zone.id] ?? '').trim().toUpperCase()
+    if (!isValidFsa(raw)) {
+      toast.error('Enter a valid FSA, e.g. T2P')
+      return
+    }
+    if (zone.fsaCodes.includes(raw)) {
+      toast.error(`${raw} is already in this zone`)
+      return
+    }
+    void saveFsaCodes(zone.id, [...zone.fsaCodes, raw])
+    setFsaInputs((m) => ({ ...m, [zone.id]: '' }))
+  }
+
+  const removeFsaCode = (zone: ZoneWithGeo, code: string) => {
+    void saveFsaCodes(zone.id, zone.fsaCodes.filter((c) => c !== code))
+  }
 
   if (loading) {
     return (
@@ -273,33 +360,67 @@ export function AdminZones() {
             draftPoints={draftPoints}
             onPolygonComplete={handlePolygonComplete}
             onSelectZone={(id) => !drawing && setSelectedZoneId(id)}
+            undoSignal={undoSignal}
+            clearSignal={clearSignal}
+            onFinish={finishDrawing}
           />
 
           {/* Drawing toolbar overlay */}
           {drawing && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-full bg-card/95 backdrop-blur border border-border px-3 py-2 shadow-lg">
-              <span className="text-sm font-medium pl-1">
-                <MapPin className="inline w-4 h-4 mr-1 text-primary" />
-                {draftPoints.length >= 3
-                  ? 'Drag vertices to adjust'
-                  : 'Use the polygon tool to draw the boundary'}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={clearDraft}
-                disabled={!draftPoints.length}
-              >
-                <Undo2 className="w-4 h-4" />
-                Redraw
-              </Button>
-              <Button size="sm" onClick={saveDraft} disabled={saving || draftPoints.length < 3} className="gap-1">
-                {saving ? <Spinner className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={cancelDrawing}>
-                <X className="w-4 h-4" />
-              </Button>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex flex-col items-center gap-1.5 rounded-2xl bg-card/95 backdrop-blur border border-border px-3 py-2 shadow-lg">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <MapPin className="inline w-4 h-4 text-primary" />
+                <span>
+                  {draftPoints.length === 0
+                    ? 'Click the map to place boundary points'
+                    : draftPoints.length < 3
+                      ? `${draftPoints.length} point${draftPoints.length === 1 ? '' : 's'} — add ${3 - draftPoints.length} more`
+                      : 'Double-click or press Enter to finish'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="gap-1 tabular-nums">
+                  {draftPoints.length} pts
+                </Badge>
+                {draftPoints.length >= 3 && (
+                  <Badge variant="outline" className="gap-1 tabular-nums">
+                    {draftAreaKm2 < 1
+                      ? `${Math.round(draftAreaKm2 * 100) / 100} km²`
+                      : `${Math.round(draftAreaKm2 * 10) / 10} km²`}
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={undoPoint}
+                  disabled={!draftPoints.length}
+                  title="Undo last point (Ctrl/Cmd+Z)"
+                >
+                  <Undo2 className="w-4 h-4" />
+                  Undo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearDraft}
+                  disabled={!draftPoints.length}
+                >
+                  <Eraser className="w-4 h-4" />
+                  Clear
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={saveDraft}
+                  disabled={saving || draftPoints.length < 3}
+                  className="gap-1"
+                >
+                  {saving ? <Spinner className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelDrawing} title="Cancel (Esc)">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -347,9 +468,6 @@ export function AdminZones() {
                   >
                     {zone.polygon ? 'Has boundary' : 'No boundary'}
                   </Badge>
-                  {zone.fsaCodes.length > 0 && (
-                    <Badge variant="outline">{zone.fsaCodes.length} FSA</Badge>
-                  )}
                   <div className="flex items-center gap-1.5 ml-auto">
                     <span className="text-xs text-muted-foreground">Active</span>
                     <Switch
@@ -410,6 +528,57 @@ export function AdminZones() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   )}
+                </div>
+
+                {/* Postal-code (FSA) coverage — used as a fallback when an
+                    address falls outside every drawn boundary. */}
+                <div className="mt-2 border-t border-border pt-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Postal codes (FSA)
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {zone.fsaCodes.map((code) => (
+                      <Badge key={code} variant="secondary" className="gap-1 pr-1">
+                        {code}
+                        <button
+                          type="button"
+                          onClick={() => removeFsaCode(zone, code)}
+                          className="rounded-full hover:bg-foreground/10 p-0.5"
+                          aria-label={`Remove ${code}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={fsaInputs[zone.id] ?? ''}
+                        onChange={(e) =>
+                          setFsaInputs((m) => ({ ...m, [zone.id]: e.target.value }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            addFsaCode(zone)
+                          }
+                        }}
+                        placeholder="T2P"
+                        maxLength={3}
+                        className="h-7 w-16 text-sm uppercase"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2"
+                        onClick={() => addFsaCode(zone)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )
