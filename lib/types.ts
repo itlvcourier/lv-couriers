@@ -247,6 +247,11 @@ export interface Delivery {
   legStatus?: import('./custody').LegStatus | null
   routingMode?: 'direct' | 'cross_dock' | null
   scanToken?: string | null
+  /** Which hub a cross-dock parcel routes through (null for direct jobs). */
+  hubId?: string | null
+  /** Driver this parcel was sorted FOR at the hub (snapshotted at hub-in). */
+  sortedForDriverId?: string | null
+  sortedForDriverName?: string | null
   pickupPay?: number | null
   deliveryPay?: number | null
   /** When the shipping label was last printed (null = never printed). */

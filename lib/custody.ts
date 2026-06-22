@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ORG_ID, getFeatureSettings } from '@/lib/feature-settings'
 import { resolveZoneForPoint, pickZoneDriver } from '@/lib/zones'
 import { getSystemSettings, calculateDriverPay } from '@/lib/settings'
+import { getDefaultHub } from '@/lib/hubs'
 
 // ============================================================================
 // Chain of custody (append-only ledger) + delivery leg-status derivation.
@@ -219,9 +220,28 @@ export async function recordCustodyEvent(
   if (input.toHolder !== undefined && input.toHolder !== null) {
     patch.current_holder = input.toHolder
     if (input.toHolder.startsWith('driver:')) {
-      patch.holder_driver_id = input.toHolder.slice('driver:'.length)
+      const holderId = input.toHolder.slice('driver:'.length)
+      patch.holder_driver_id = holderId
+      // When a NEW driver takes ownership at the hub (or via a relay/transfer),
+      // also move `driver_id` so the parcel shows up in that driver's Active
+      // tab. The active list filters on driver_id, so without this the
+      // destination driver would never see the cross-dock job they accepted.
+      // `pickup_driver_id` is preserved separately, so per-leg pay is unaffected.
+      if (
+        input.eventType === 'hub_out' ||
+        input.eventType === 'handoff' ||
+        input.eventType === 'transfer_in'
+      ) {
+        patch.driver_id = holderId
+      }
     } else {
       patch.holder_driver_id = null
+      // Parcel is now held by the hub (or unassigned). Release driver_id so it
+      // drops out of the previous driver's Active queue. The destination driver
+      // is reattached on hub_out when they collect it.
+      if (input.eventType === 'hub_in' || input.eventType === 'transfer_out') {
+        patch.driver_id = null
+      }
     }
   }
   const nextLeg = legStatusForEvent(input.eventType)
@@ -277,6 +297,31 @@ export async function recordCustodyEvent(
   }
 
   return mapEvent(data as CustodyRow)
+}
+
+/**
+ * A cross-dock pickup driver manually drops a parcel at the hub. Records a
+ * `hub_in` custody event (leg -> at_hub, holder -> hub) so the parcel leaves
+ * the pickup driver's queue and the hub-sort snapshot runs. Uses a
+ * deterministic client_event_id so a double-tap collapses to one event.
+ */
+export async function dropParcelAtHub(input: {
+  deliveryId: string
+  driverId: string
+  lat?: number | null
+  lng?: number | null
+}): Promise<CustodyEvent> {
+  return recordCustodyEvent({
+    deliveryId: input.deliveryId,
+    eventType: 'hub_in',
+    actorType: 'driver',
+    actorId: input.driverId,
+    toHolder: 'hub',
+    scanMethod: 'manual',
+    lat: input.lat ?? null,
+    lng: input.lng ?? null,
+    clientEventId: `evt:${input.deliveryId}:hub_in`,
+  })
 }
 
 type DeliveryPayFields = {
@@ -448,6 +493,14 @@ export async function assignZonesForDelivery(input: {
 
   const scanToken = await generateScanToken()
 
+  // Cross-dock parcels route through a hub: stamp which one (the org default)
+  // so the driver app can show its address + meet time. Direct jobs never hit a
+  // hub, so they carry no hub_id.
+  const hubId =
+    routingMode === 'cross_dock'
+      ? (await getDefaultHub().catch(() => null))?.id ?? null
+      : null
+
   // For a direct job we can hand the pickup driver the whole leg; for
   // cross-dock the pickup driver carries it to the hub.
   const patch: Record<string, unknown> = {
@@ -456,6 +509,7 @@ export async function assignZonesForDelivery(input: {
     routing_mode: routingMode,
     scan_token: scanToken,
     leg_status: 'created',
+    hub_id: hubId,
   }
   if (input.autoAssignDriver && pickupDriverId) {
     patch.driver_id = pickupDriverId
