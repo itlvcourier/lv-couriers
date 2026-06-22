@@ -20,13 +20,20 @@ const LIBRARIES = ['places', 'drawing', 'geometry', 'marker'] as const
 
 let loadPromise: Promise<typeof google> | null = null
 
-// Resolves once the libraries we depend on are actually present on the
-// namespace. Polls briefly to cover any edge where onload fires a tick early.
+// Resolves once the CORE libraries the maps depend on are present: the base
+// Map class plus the drawing + geometry libraries (used by the zone editor).
+//
+// We intentionally do NOT gate on `places.AutocompleteSuggestion` here. That
+// class only exists when the "Places API (New)" is enabled on the Google Cloud
+// project; gating on it meant that for projects without Places-New enabled the
+// loader would time out and the ENTIRE map (including drawing) failed to load.
+// Address autocomplete checks for `AutocompleteSuggestion` itself and degrades
+// gracefully, so it must not block map/drawing readiness.
 function whenReady(resolve: (g: typeof google) => void, reject: (e: Error) => void) {
   const started = Date.now()
   const check = () => {
     const m = window.google?.maps
-    if (m?.places?.AutocompleteSuggestion && m?.drawing && m?.geometry) {
+    if (m?.Map && m?.drawing?.DrawingManager && m?.geometry) {
       resolve(window.google)
       return
     }

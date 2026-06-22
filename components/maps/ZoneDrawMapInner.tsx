@@ -44,6 +44,53 @@ function pathToPoints(path: google.maps.MVCArray<google.maps.LatLng>): Array<[nu
   return out
 }
 
+/**
+ * A centroid text label rendered via OverlayView instead of the deprecated
+ * `google.maps.Marker`. OverlayView needs no Map ID (unlike AdvancedMarker),
+ * so it works on a standard raster map without extra GCP configuration.
+ * Defined lazily because it extends a class that only exists after the Maps
+ * script has loaded.
+ */
+function createZoneLabel(
+  map: google.maps.Map,
+  position: google.maps.LatLng,
+  text: string,
+  color: string,
+): google.maps.OverlayView {
+  class ZoneLabel extends google.maps.OverlayView {
+    private div: HTMLDivElement | null = null
+    onAdd() {
+      const div = document.createElement('div')
+      div.className = 'zone-map-label'
+      div.textContent = text
+      div.style.position = 'absolute'
+      div.style.transform = 'translate(-50%, -50%)'
+      div.style.color = color
+      div.style.fontSize = '12px'
+      div.style.fontWeight = '600'
+      div.style.whiteSpace = 'nowrap'
+      div.style.pointerEvents = 'none'
+      this.div = div
+      this.getPanes()?.overlayMouseTarget.appendChild(div)
+    }
+    draw() {
+      if (!this.div) return
+      const pt = this.getProjection()?.fromLatLngToDivPixel(position)
+      if (pt) {
+        this.div.style.left = `${pt.x}px`
+        this.div.style.top = `${pt.y}px`
+      }
+    }
+    onRemove() {
+      this.div?.remove()
+      this.div = null
+    }
+  }
+  const label = new ZoneLabel()
+  label.setMap(map)
+  return label
+}
+
 export default function ZoneDrawMapInner({
   zones,
   parcelCounts,
@@ -59,7 +106,7 @@ export default function ZoneDrawMapInner({
   const searchEl = useRef<HTMLInputElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
   const savedPolysRef = useRef<google.maps.Polygon[]>([])
-  const labelsRef = useRef<google.maps.Marker[]>([])
+  const labelsRef = useRef<google.maps.OverlayView[]>([])
   const draftPolyRef = useRef<google.maps.Polygon | null>(null)
   const drawingMgrRef = useRef<google.maps.drawing.DrawingManager | null>(null)
 
@@ -163,22 +210,12 @@ export default function ZoneDrawMapInner({
       const bounds = new google.maps.LatLngBounds()
       path.forEach((pt) => bounds.extend(pt))
       const count = parcelCounts[zone.id] ?? 0
-      const label = new google.maps.Marker({
-        position: bounds.getCenter(),
+      const label = createZoneLabel(
         map,
-        clickable: false,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 0,
-        },
-        label: {
-          text: `${zone.name} · ${count}`,
-          color: zone.color,
-          fontSize: '12px',
-          fontWeight: '600',
-          className: 'zone-map-label',
-        },
-      })
+        bounds.getCenter(),
+        `${zone.name} · ${count}`,
+        zone.color,
+      )
       labelsRef.current.push(label)
     }
   }, [ready, zones, parcelCounts, selectedZoneId, drawing])
