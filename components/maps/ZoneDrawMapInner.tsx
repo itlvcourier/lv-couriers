@@ -6,9 +6,10 @@
 // Capabilities:
 //  - Google base map centered on Calgary with a Map/Satellite toggle.
 //  - Existing zone polygons rendered with their color + click-to-select.
-//  - Drawing mode powered by the Drawing Library: draw a new boundary or edit
-//    an existing one by dragging vertices. Completed/edited paths are reported
-//    up via onPolygonComplete as [lat,lng] pairs.
+//  - Manual drawing mode (the Maps Drawing Library / DrawingManager was removed
+//    in v3.65): click the map to add boundary vertices, then drag vertices to
+//    fine-tune. Completed/edited paths are reported up via onPolygonComplete as
+//    [lat,lng] pairs.
 //  - A Places search box to jump the map to an address/neighbourhood.
 
 import { useEffect, useRef, useState } from 'react'
@@ -108,7 +109,7 @@ export default function ZoneDrawMapInner({
   const savedPolysRef = useRef<google.maps.Polygon[]>([])
   const labelsRef = useRef<google.maps.OverlayView[]>([])
   const draftPolyRef = useRef<google.maps.Polygon | null>(null)
-  const drawingMgrRef = useRef<google.maps.drawing.DrawingManager | null>(null)
+  const drawClickRef = useRef<google.maps.MapsEventListener | null>(null)
 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -227,9 +228,9 @@ export default function ZoneDrawMapInner({
 
     // Tear down any previous draft artifacts.
     const teardown = () => {
-      if (drawingMgrRef.current) {
-        drawingMgrRef.current.setMap(null)
-        drawingMgrRef.current = null
+      if (drawClickRef.current) {
+        drawClickRef.current.remove()
+        drawClickRef.current = null
       }
       if (draftPolyRef.current) {
         draftPolyRef.current.setMap(null)
@@ -266,32 +267,32 @@ export default function ZoneDrawMapInner({
       draftPolyRef.current = poly
       attachEditListeners(poly)
     } else {
-      // Fresh draw: enable the DrawingManager in polygon mode.
+      // Fresh draw: the DrawingManager was removed from the Maps JS API in
+      // v3.65, so we draw manually. Each map click appends a vertex to an
+      // editable polygon; the user can then drag vertices to fine-tune. The
+      // path is reported on every click and on every subsequent edit.
       teardown()
-      if (!google.maps.drawing?.DrawingManager) {
-        setError('Drawing tools failed to load. Please reload the page.')
-        return
-      }
-      const mgr = new google.maps.drawing.DrawingManager({
-        drawingMode: google.maps.drawing.OverlayType.POLYGON,
-        drawingControl: false,
-        polygonOptions: {
-          strokeColor: '#2563eb',
-          strokeWeight: 3,
-          fillColor: '#3b82f6',
-          fillOpacity: 0.25,
-          editable: true,
+      const poly = new google.maps.Polygon({
+        paths: [],
+        strokeColor: '#2563eb',
+        strokeWeight: 3,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.25,
+        editable: true,
+        draggable: false,
+        map,
+      })
+      draftPolyRef.current = poly
+      attachEditListeners(poly)
+
+      drawClickRef.current = map.addListener(
+        'click',
+        (e: google.maps.MapMouseEvent) => {
+          if (!e.latLng) return
+          poly.getPath().push(e.latLng)
+          onCompleteRef.current(pathToPoints(poly.getPath()))
         },
-      })
-      mgr.setMap(map)
-      drawingMgrRef.current = mgr
-      mgr.addListener('polygoncomplete', (poly: google.maps.Polygon) => {
-        // Stop drawing and switch to edit mode on the created polygon.
-        mgr.setDrawingMode(null)
-        draftPolyRef.current = poly
-        onCompleteRef.current(pathToPoints(poly.getPath()))
-        attachEditListeners(poly)
-      })
+      )
     }
 
     return teardown
