@@ -6,6 +6,7 @@ import { Scanner } from './Scanner'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import type { ScanContext } from '@/lib/scanning'
 import { recordHubCheckin } from '@/lib/consolidation'
+import { getDefaultHub } from '@/lib/hubs'
 import { getCurrentPosition } from '@/lib/native/geolocation'
 
 // ============================================================================
@@ -45,8 +46,14 @@ export function DriverScanScreen() {
         /* location optional */
       }
       if (cancelled) return
+      // Stamp which hub the driver is checking in at (the org default) so the
+      // admin sort board shows a real location instead of a blank.
+      const hubName = await getDefaultHub()
+        .then((h) => h?.name ?? null)
+        .catch(() => null)
+      if (cancelled) return
       try {
-        await recordHubCheckin({ driverId, hubName: null, lat, lng })
+        await recordHubCheckin({ driverId, hubName, lat, lng })
       } catch {
         /* best effort */
       }

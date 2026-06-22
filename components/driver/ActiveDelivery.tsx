@@ -20,6 +20,10 @@ import { PickupVerification } from './PickupVerification'
 import { DeliveryCompletion } from './DeliveryCompletion'
 import { UpdateAddressSheet } from './UpdateAddressSheet'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
+import { useHubs } from '@/lib/hooks/useHubs'
+import type { Hub } from '@/lib/hubs'
+import { dropParcelAtHub } from '@/lib/custody'
+import { getCurrentPosition } from '@/lib/native/geolocation'
 import { toast } from 'sonner'
 import { 
   Package, 
@@ -42,16 +46,89 @@ import {
   KeyRound,
   Navigation,
   Map,
+  Building2,
+  Warehouse,
 } from 'lucide-react'
 import type { Delivery, DeliveryStatus, FailReason, Trip } from '@/lib/types'
 
-const STATUS_STEPS: { status: DeliveryStatus; label: string }[] = [
+type StepDef = { status: string; label: string }
+
+const STATUS_STEPS: StepDef[] = [
   { status: 'claimed', label: 'Claimed' },
   { status: 'en_route_pickup', label: 'En Route to Pickup' },
   { status: 'picked_up', label: 'Picked Up' },
   { status: 'en_route_dropoff', label: 'En Route to Drop-off' },
   { status: 'delivered', label: 'Delivered' },
 ]
+
+// Cross-dock pickup leg: the driver carries the parcel to the hub, not the
+// recipient. "Drop at Hub" is the final step (the parcel then leaves the queue).
+const HUB_PICKUP_STEPS: StepDef[] = [
+  { status: 'claimed', label: 'Claimed' },
+  { status: 'en_route_pickup', label: 'En Route to Pickup' },
+  { status: 'picked_up', label: 'Pickup Verified' },
+  { status: 'at_hub', label: 'Drop at Hub' },
+]
+
+// Cross-dock delivery leg: a driver who collected the parcel from the hub takes
+// it the last mile to the recipient.
+const HUB_DROPOFF_STEPS: StepDef[] = [
+  { status: 'picked_up', label: 'Collected from Hub' },
+  { status: 'en_route_dropoff', label: 'En Route to Recipient' },
+  { status: 'delivered', label: 'Delivered' },
+]
+
+/** The role the current driver plays on a given (possibly cross-dock) parcel. */
+type DriverRole = 'direct' | 'pickup_to_hub' | 'hub_to_dropoff'
+
+function getDriverRole(d: Delivery): DriverRole {
+  if (d.routingMode !== 'cross_dock') return 'direct'
+  // Once a parcel is out for delivery it's been collected from the hub, so the
+  // current owner is running the last-mile leg.
+  if ((d.legStatus ?? 'created') === 'out_for_delivery') return 'hub_to_dropoff'
+  return 'pickup_to_hub'
+}
+
+/** Resolve which hub a parcel routes through from the shared hub cache. */
+function resolveHub(hubs: Hub[] | null, hubId: string | null | undefined): Hub | null {
+  if (!hubs) return null
+  return (
+    (hubId ? hubs.find((h) => h.id === hubId) : null) ??
+    hubs.find((h) => h.isDefault && h.isActive) ??
+    hubs.find((h) => h.isActive) ??
+    null
+  )
+}
+
+/** "2:00 PM" from a "HH:MM" string. */
+function formatSortTime(t: string | null): string | null {
+  if (!t) return null
+  const m = /^(\d{2}):(\d{2})/.exec(t)
+  if (!m) return t
+  let h = parseInt(m[1], 10)
+  const min = m[2]
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12 || 12
+  return `${h}:${min} ${ampm}`
+}
+
+/** Small pill describing how a parcel is routed (direct vs through a hub). */
+function RoutingBadge({ delivery, hub }: { delivery: Delivery; hub: Hub | null }) {
+  if (delivery.routingMode !== 'cross_dock') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] text-xs font-medium border border-[var(--accent-blue)]/20">
+        <Navigation className="w-3 h-3" />
+        Direct
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--accent-orange)]/10 text-[var(--accent-orange)] text-xs font-medium border border-[var(--accent-orange)]/20">
+      <Warehouse className="w-3 h-3" />
+      Via {hub?.name ?? 'hub'}
+    </span>
+  )
+}
 
 const FAIL_REASONS: FailReason[] = [
   'no_one_home',
