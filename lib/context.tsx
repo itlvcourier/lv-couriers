@@ -494,8 +494,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Auth functions — real Supabase Auth.
   const login = useCallback(async (email: string, password: string) => {
+    console.log('[v0] login: start')
     const supabase = createSupabaseClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('[v0] login: signInWithPassword returned', { hasUser: !!data?.user, error: error?.message })
     if (error || !data.user) {
       return { success: false, error: 'Incorrect email or password. Please try again.' }
     }

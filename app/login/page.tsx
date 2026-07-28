@@ -25,27 +25,36 @@ export default function LoginPage() {
     setError(null)
     setIsLoading(true)
 
-    const result = await login(email, password)
+    try {
+      const result = await login(email, password)
 
-    if (!result.success) {
-      setError(result.error || 'Login failed')
+      if (!result.success) {
+        setError(result.error || 'Login failed')
+        setIsLoading(false)
+        return
+      }
+
+      // Route based on role
+      switch (result.role) {
+        case 'admin':
+          router.push('/admin')
+          break
+        case 'driver':
+          router.push('/driver')
+          break
+        case 'business':
+          router.push('/business')
+          break
+        default:
+          router.push('/')
+      }
+    } catch (err) {
+      // Without this the button sticks on "Signing in..." forever and the user
+      // gets no feedback -- a cold auth service or dropped connection is enough
+      // to trigger it, and retrying is usually all that's needed.
+      console.error('[v0] login failed', err)
+      setError('Could not reach the server. Please check your connection and try again.')
       setIsLoading(false)
-      return
-    }
-
-    // Route based on role
-    switch (result.role) {
-      case 'admin':
-        router.push('/admin')
-        break
-      case 'driver':
-        router.push('/driver')
-        break
-      case 'business':
-        router.push('/business')
-        break
-      default:
-        router.push('/')
     }
   }
 
