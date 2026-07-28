@@ -6,11 +6,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * SMS adapter wrapping Twilio.
  *
  * - Server-only. Never import from a Client Component.
- * - Test redirect is OPT-IN. Set SMS_TEST_MODE=true AND SMS_TEST_RECIPIENT to
- *   redirect every outbound SMS to that single phone number (the original
- *   recipient is prepended to the body). Without SMS_TEST_MODE enabled, every
- *   message goes to its real per-profile recipient. This prevents a leftover
- *   SMS_TEST_RECIPIENT from silently hijacking production sends.
+ * - There is NO test redirect. Every SMS is delivered to its real recipient
+ *   (customer / business / driver). The legacy SMS_TEST_MODE and
+ *   SMS_TEST_RECIPIENT vars are ignored; if present, a warning is logged once.
+ * - Placeholder numbers (fictional 555 range, 1234567890) are rejected up front
+ *   and logged as failed, instead of being accepted by Twilio and silently
+ *   dropped at the carrier as a misleading "sent".
  * - Records every send (success OR failure) in public.sms_log so the admin
  *   SMS Logs view stays the source of truth.
  */
@@ -64,7 +65,7 @@ export type SendSmsInput = {
 }
 
 export type SendSmsResult =
-  | { ok: true; sid: string; redirected: boolean }
+  | { ok: true; sid: string }
   | { ok: false; reason: string; logged: boolean }
 
 let _client: ReturnType<typeof twilio> | null = null
@@ -91,6 +92,45 @@ function normalize(phone: string): string {
   if (cleaned.length === 10) return `+1${cleaned}`
   if (cleaned.length === 11 && cleaned.startsWith('1')) return `+${cleaned}`
   return cleaned
+}
+
+let _legacyEnvWarned = false
+/**
+ * The old build redirected every SMS to SMS_TEST_RECIPIENT. Those vars are now
+ * ignored, but warn once if they're still configured so the leftover value
+ * doesn't cause confusion about where messages are going.
+ */
+function warnIfLegacyTestEnvPresent() {
+  if (_legacyEnvWarned) return
+  const legacy = ['SMS_TEST_MODE', 'SMS_TEST_RECIPIENT'].filter(
+    (k) => (process.env[k] ?? '').trim() !== '',
+  )
+  if (legacy.length > 0) {
+    _legacyEnvWarned = true
+    console.warn(
+      `[v0] sms: ignoring legacy env ${legacy.join(', ')} — SMS always goes to the real per-recipient number. Safe to delete these vars.`,
+    )
+  }
+}
+
+/**
+ * Detects numbers that can never receive a real SMS: the reserved fictional
+ * 555 range (e.g. 403-555-0101) and obvious placeholders like 1234567890.
+ * Twilio accepts these and returns a SID, then fails silently at the carrier,
+ * which previously made the SMS log show a misleading "sent".
+ */
+export function isUnroutablePlaceholder(e164: string): boolean {
+  const digits = e164.replace(/\D/g, '')
+  const national = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits
+  if (national.length !== 10) return true
+  // NANP 555 exchange is reserved for fiction/directory use (403-555-0101,
+  // 403-555-1001, ...). No real subscriber number uses it.
+  if (/^\d{3}555\d{4}$/.test(national)) return true
+  if (/^(\d)\1{9}$/.test(national)) return true // all same digit
+  if (national === '1234567890' || national === '0123456789') return true
+  // Area code and exchange code must not start with 0 or 1 in the NANP.
+  if (/^[01]/.test(national) || /^\d{3}[01]/.test(national)) return true
+  return false
 }
 
 async function recordSms(opts: {
@@ -127,6 +167,27 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
   const intendedTo = normalize(input.to)
   if (!intendedTo) {
     return { ok: false, reason: 'Invalid phone number', logged: false }
+  }
+
+  // Fail fast on placeholder/seed numbers. Twilio would accept them and return
+  // a SID, then drop the message at the carrier — recording a false "sent".
+  if (isUnroutablePlaceholder(intendedTo)) {
+    const reason = `Unroutable placeholder number (${intendedTo}) — set a real phone on this record`
+    console.warn('[v0] sms.unroutable', { type: input.type, to: intendedTo })
+    if (!input.skipLog) {
+      await recordSms({
+        to: intendedTo,
+        body: input.body,
+        type: input.type,
+        status: 'failed',
+        providerMessageId: null,
+        errorMessage: reason,
+        deliveryId: input.deliveryId ?? null,
+        invoiceId: input.invoiceId ?? null,
+        driverId: input.driverId ?? null,
+      })
+    }
+    return { ok: false, reason, logged: !input.skipLog }
   }
 
   // Opt-out check: skip sending to numbers that have replied STOP
@@ -172,28 +233,22 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
     }
   }
 
-  // Test redirect is OPT-IN. It only activates when SMS_TEST_MODE is explicitly
-  // truthy AND a test recipient is configured. Previously the mere presence of
-  // SMS_TEST_RECIPIENT redirected EVERY message to that one number, so all
-  // profiles received SMS at the same number. Now real sends always go to the
-  // intended per-profile number unless test mode is deliberately enabled.
-  const testModeEnabled = /^(1|true|yes|on)$/i.test(
-    (process.env.SMS_TEST_MODE ?? '').trim(),
-  )
-  const testRecipient = process.env.SMS_TEST_RECIPIENT?.trim()
-  const redirect = testModeEnabled && !!testRecipient && testRecipient !== intendedTo
-  const finalTo = redirect ? normalize(testRecipient!) : intendedTo
-  const finalBody = redirect
-    ? `[TEST -> ${intendedTo}] ${input.body}`
-    : input.body
+  // There is NO test redirect. Every message always goes to its real,
+  // per-recipient number (customer / business / driver). The legacy
+  // SMS_TEST_MODE + SMS_TEST_RECIPIENT pair used to rewrite the destination of
+  // every outbound SMS to a single number, which made all profiles appear to
+  // share one phone. That behaviour is removed entirely so no leftover env var
+  // can ever hijack routing again.
+  warnIfLegacyTestEnvPresent()
+
+  const finalTo = intendedTo
+  const finalBody = input.body
 
   const client = getClient()
   const sender = getSender()
   console.log('[v0] sms.send', {
     type: input.type,
     to: intendedTo,
-    redirected: redirect,
-    finalTo,
     hasClient: !!client,
     hasSender: !!sender,
   })
@@ -202,7 +257,6 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
     console.log('[v0] sms.disabled missing TWILIO env — would have sent:', {
       type: input.type,
       to: intendedTo,
-      redirectTo: redirect ? finalTo : undefined,
       body: finalBody,
     })
     if (!input.skipLog) {
@@ -218,7 +272,7 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
         driverId: input.driverId ?? null,
       })
     }
-    return { ok: true, sid: 'dev-stub', redirected: redirect }
+    return { ok: true, sid: 'dev-stub' }
   }
 
   try {
@@ -240,7 +294,7 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
         driverId: input.driverId ?? null,
       })
     }
-    return { ok: true, sid: message.sid, redirected: redirect }
+    return { ok: true, sid: message.sid }
   } catch (err) {
     const reason = err instanceof Error ? err.message : 'Twilio error'
     if (!input.skipLog) {
