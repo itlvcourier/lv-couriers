@@ -28,15 +28,31 @@ export async function POST(req: Request) {
 
   const { data: settings } = await supabase
     .from('system_settings')
-    .select('sms_notify_feedback_request, review_request_delay_mins')
+    .select(
+      'sms_notify_feedback_request, review_request_delay_mins, tracking_link_expiry_hours',
+    )
     .limit(1)
     .maybeSingle<{
       sms_notify_feedback_request: boolean | null
       review_request_delay_mins: number | null
+      tracking_link_expiry_hours: number | null
     }>()
 
-  // Respect the master gate up front so we don't queue work that the sweep
-  // would only discard later.
+  // Start the clock on the public tracking link. There is no DB default for
+  // tracking_expires_at, so without this a link would stay live forever — and
+  // it exposes recipient name, address and proof-of-delivery images to anyone
+  // holding the URL. Do this before any early return below.
+  const expiryHours = Math.max(1, settings?.tracking_link_expiry_hours ?? 24)
+  await supabase
+    .from('deliveries')
+    .update({
+      tracking_expires_at: new Date(Date.now() + expiryHours * 3_600_000).toISOString(),
+    })
+    .eq('id', deliveryId)
+    .eq('status', 'delivered')
+    .is('tracking_expires_at', null)
+
+  // Respect the master gate so we don't queue work the sweep would discard.
   if (settings?.sms_notify_feedback_request === false) {
     return NextResponse.json({ ok: false, reason: 'Feature disabled in settings' })
   }

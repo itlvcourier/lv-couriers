@@ -272,8 +272,12 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsNotifyPaymentReceived: row.sms_notify_payment_received !== false,
     smsNotifyWeeklySummary: !!row.sms_notify_weekly_summary,
     smsOptOutManagement: row.sms_opt_out_management !== false,
-    smsShiftReminder: !!row.sms_shift_reminder,
-    smsEarningsSummary: !!row.sms_earnings_summary,
+    // Minutes to wait after delivery before the review-request SMS goes out.
+    reviewRequestDelayMins:
+      row.review_request_delay_mins != null ? Number(row.review_request_delay_mins) : 30,
+    // How long a public /track link stays live after delivery.
+    trackingLinkExpiryHours:
+      row.tracking_link_expiry_hours != null ? Number(row.tracking_link_expiry_hours) : 24,
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
     minDeliveryPhotos: row.min_delivery_photos != null ? Number(row.min_delivery_photos) : 3,
@@ -679,8 +683,8 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsNotifyPaymentReceived != null) p.sms_notify_payment_received = partial.smsNotifyPaymentReceived
   if (partial.smsNotifyWeeklySummary != null) p.sms_notify_weekly_summary = partial.smsNotifyWeeklySummary
   if (partial.smsOptOutManagement != null) p.sms_opt_out_management = partial.smsOptOutManagement
-  if (partial.smsShiftReminder != null) p.sms_shift_reminder = partial.smsShiftReminder
-  if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
+  if (partial.reviewRequestDelayMins != null) p.review_request_delay_mins = partial.reviewRequestDelayMins
+  if (partial.trackingLinkExpiryHours != null) p.tracking_link_expiry_hours = partial.trackingLinkExpiryHours
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
   if (partial.minDeliveryPhotos != null) p.min_delivery_photos = partial.minDeliveryPhotos
