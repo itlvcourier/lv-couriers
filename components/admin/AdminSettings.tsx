@@ -364,7 +364,7 @@ export function AdminSettings() {
         })}
       </div>
 
-      {/* ============ OPERATIONS TAB ============ */}
+      {/* =============== OPERATIONS TAB =============== */}
       {tab === 'operations' && (
         <div className="space-y-6">
       {/* Operations & Feature Flags (cross-dock operating model) */}
@@ -708,7 +708,40 @@ export function AdminSettings() {
         </div>
       )}
 
-      {/* ============ BILLING TAB (invoice settings) ============ */}
+      {/* ================ DRIVERS TAB ================ */}
+      {tab === 'drivers' && (
+        <div className="space-y-6">
+      {/* Driver Pay Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <DollarSign className="w-5 h-5" />
+            Driver Pay System
+          </CardTitle>
+          <CardDescription>Configure automatic driver pay calculation or disable for manual payments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DriverPaySettings />
+        </CardContent>
+      </Card>
+
+      {/* Admin User Management */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Users className="w-5 h-5" />
+            Admin Users
+          </CardTitle>
+          <CardDescription>Manage administrator accounts</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdminUserManagement />
+        </CardContent>
+      </Card>
+        </div>
+      )}
+
+      {/* ================ BILLING TAB ================ */}
       {tab === 'billing' && (
         <div className="space-y-6">
       {/* Invoice Settings */}
@@ -887,31 +920,6 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
-        </div>
-      )}
-
-      {/* ============ ACCOUNT TAB (appearance) ============ */}
-      {tab === 'account' && (
-        <div className="space-y-6">
-      {/* Appearance */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Moon className="w-5 h-5" />
-            Appearance
-          </CardTitle>
-          <CardDescription>Customize how DOMS looks on your device</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ThemeToggleRow id="admin-dark-mode" />
-        </CardContent>
-      </Card>
-        </div>
-      )}
-
-      {/* ============ BILLING TAB (invoice template) ============ */}
-      {tab === 'billing' && (
-        <div className="space-y-6">
       {/* Invoice Template Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1125,7 +1133,7 @@ export function AdminSettings() {
         </div>
       )}
 
-      {/* ============ NOTIFICATIONS TAB (admin alerts) ============ */}
+      {/* ============= NOTIFICATIONS TAB ============= */}
       {tab === 'notifications' && (
         <div className="space-y-6">
       {/* Notifications */}
@@ -1179,87 +1187,6 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
-        </div>
-      )}
-
-      {/* ============ ACCOUNT TAB (security) ============ */}
-      {tab === 'account' && (
-        <div className="space-y-6">
-      {/* Security */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Lock className="w-5 h-5" />
-            Security
-          </CardTitle>
-          <CardDescription>Account security settings</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2"
-            onClick={() => setShowPasswordDialog(true)}
-          >
-            <Lock className="w-4 h-4" />
-            Change Password
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2"
-            onClick={() => {
-              setTwoFaStep(twoFaEnabled ? 'done' : 'intro')
-              setShow2faDialog(true)
-            }}
-          >
-            <Shield className="w-4 h-4" />
-            Two-Factor Authentication
-            {twoFaEnabled && (
-              <Badge variant="outline" className="ml-auto border-green-500/30 text-green-400">
-                Enabled
-              </Badge>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-        </div>
-      )}
-
-      {/* ============ DRIVERS & PAY TAB ============ */}
-      {tab === 'drivers' && (
-        <div className="space-y-6">
-      {/* Driver Pay Settings */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <DollarSign className="w-5 h-5" />
-            Driver Pay System
-          </CardTitle>
-          <CardDescription>Configure automatic driver pay calculation or disable for manual payments</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DriverPaySettings />
-        </CardContent>
-      </Card>
-
-      {/* Admin User Management */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Users className="w-5 h-5" />
-            Admin Users
-          </CardTitle>
-          <CardDescription>Manage administrator accounts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminUserManagement />
-        </CardContent>
-      </Card>
-        </div>
-      )}
-
-      {/* ============ NOTIFICATIONS TAB (SMS) ============ */}
-      {tab === 'notifications' && (
-        <div className="space-y-6">
       {/* SMS Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1430,6 +1357,71 @@ export function AdminSettings() {
       </Card>
         </div>
       )}
+
+      {/* ================ ACCOUNT TAB ================ */}
+      {tab === 'account' && (
+        <div className="space-y-6">
+      {/* Appearance */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Moon className="w-5 h-5" />
+            Appearance
+          </CardTitle>
+          <CardDescription>Customize how DOMS looks on your device</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggleRow id="admin-dark-mode" />
+        </CardContent>
+      </Card>
+      {/* Security */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Lock className="w-5 h-5" />
+            Security
+          </CardTitle>
+          <CardDescription>Account security settings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => setShowPasswordDialog(true)}
+          >
+            <Lock className="w-4 h-4" />
+            Change Password
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => {
+              setTwoFaStep(twoFaEnabled ? 'done' : 'intro')
+              setShow2faDialog(true)
+            }}
+          >
+            <Shield className="w-4 h-4" />
+            Two-Factor Authentication
+            {twoFaEnabled && (
+              <Badge variant="outline" className="ml-auto border-green-500/30 text-green-400">
+                Enabled
+              </Badge>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+      {/* Sign Out */}
+      <Button 
+        variant="destructive" 
+        className="w-full"
+        onClick={() => { void logout() }}
+      >
+        <LogOut className="w-4 h-4 mr-2" />
+        Sign Out
+      </Button>
+        </div>
+      )}
+
 
       {/* Change Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
@@ -1611,20 +1603,6 @@ export function AdminSettings() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ ACCOUNT TAB (sign out) ============ */}
-      {tab === 'account' && (
-        <div className="space-y-6">
-      {/* Sign Out */}
-      <Button 
-        variant="destructive" 
-        className="w-full"
-        onClick={() => { void logout() }}
-      >
-        <LogOut className="w-4 h-4 mr-2" />
-        Sign Out
-      </Button>
-        </div>
-      )}
     </div>
   )
 }

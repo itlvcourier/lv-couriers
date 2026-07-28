@@ -1,4 +1,24 @@
 /**
+ * True when `value` looks like a real, non-empty image we can actually render.
+ *
+ * A zero-sized canvas returns the empty "data:," URI from toDataURL(), and an
+ * aborted upload can leave an empty string. Both look like a saved photo but
+ * render as a broken image, so callers should reject them before saving.
+ */
+export function isUsableImageDataUrl(value: string | null | undefined): value is string {
+  if (!value) return false
+  const trimmed = value.trim()
+  if (trimmed === '' || trimmed === 'data:' || trimmed === 'data:,') return false
+  // A data URL carrying actual bytes always has a comma with content after it.
+  if (trimmed.startsWith('data:')) {
+    const comma = trimmed.indexOf(',')
+    return comma !== -1 && trimmed.length > comma + 1
+  }
+  // Remote URLs (e.g. blob storage) are assumed usable.
+  return true
+}
+
+/**
  * Normalizes an image data URL so proof/pickup photos are a consistent,
  * reasonable size on every device and platform.
  *
