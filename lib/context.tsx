@@ -788,12 +788,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ deliveryId }),
     }).catch(err => console.error('[v0] delivered SMS failed', err))
     
-    // Send feedback request SMS (setting-gated in the API endpoint)
-    void fetch('/api/sms/feedback-request', {
+    // Schedule the review request instead of sending it now. Firing it here
+    // would land a second text within a second of the "delivered" one, before
+    // the customer has even handled the parcel. The /api/cron/review-requests
+    // sweep picks this up once review_request_due_at has passed.
+    void fetch('/api/reviews/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId }),
-    }).catch(err => console.error('[v0] feedback request SMS failed', err))
+    }).catch(err => console.error('[v0] review request scheduling failed', err))
     
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
