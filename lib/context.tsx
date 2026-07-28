@@ -330,6 +330,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPayment[]>([])
   const [smsLog, setSMSLog] = useState<SMSLogEntry[]>([])
   const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>([])
+  // Mirror for dedupe checks inside stable callbacks. Lets the SLA sweep see
+  // notifications already persisted (and hydrated from the DB on mount) so it
+  // doesn't recreate the same alert on every page reload.
+  const adminNotificationsRef = useRef<AdminNotification[]>(adminNotifications)
+  useEffect(() => {
+    adminNotificationsRef.current = adminNotifications
+  }, [adminNotifications])
   const [driverGPS, setDriverGPS] = useState<DriverGPS[]>([])
   const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([])
   const [trips, setTrips] = useState<Trip[]>([])
@@ -922,10 +929,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         businessId?: string | null
         invoiceId?: string | null
         priority?: 'high' | 'medium' | 'low'
+        // When true, skip if an alert of the same type already exists for this
+        // delivery. Keeps repeat sweeps / page reloads from stacking duplicates.
+        dedupeByDelivery?: boolean
       },
       enabled = true,
     ) => {
       if (!enabled) return
+
+      if (input.dedupeByDelivery && input.deliveryId) {
+        const exists = adminNotificationsRef.current.some(
+          n => n.type === input.type && n.deliveryId === input.deliveryId,
+        )
+        if (exists) return
+      }
 
       const notification: AdminNotification = {
         id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -1005,6 +1022,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           driverId: d.driverId ?? null,
           businessId: d.businessId ?? null,
           priority: 'high',
+          // Survive reloads: don't recreate this alert if one already exists
+          // for the delivery.
+          dedupeByDelivery: true,
         })
       }
     }
@@ -1178,6 +1198,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             deliveryId: saved.id,
             businessId: enriched.businessId,
             priority: 'high',
+            dedupeByDelivery: true,
           },
           settingsRef.current.notifyRushJobs,
         )

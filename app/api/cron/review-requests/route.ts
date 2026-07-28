@@ -106,6 +106,9 @@ export async function GET(req: Request) {
         delivery.driver_id,
         delivery.business_id,
         delivery.location_id,
+        // Pass the service-role client: this cron has no user session, and the
+        // customer_feedback insert policy only allows the authenticated role.
+        supabase,
       )
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lvcourier.ca'
       const feedbackUrl = `${baseUrl}/feedback/${token}`

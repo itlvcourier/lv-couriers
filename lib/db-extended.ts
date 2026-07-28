@@ -1370,8 +1370,15 @@ export async function createFeedbackToken(
   driverId: string,
   businessId: string,
   locationId: string,
+  // Server-side callers (e.g. the review-request cron) have no auth cookie, so
+  // the default anon client is blocked by the "authenticated"-only insert
+  // policy on customer_feedback. They pass an admin (service-role) client here
+  // to insert on the system's behalf. Client-side callers omit it and keep the
+  // existing session-scoped behavior. Typed structurally so either the SSR
+  // browser client or the supabase-js admin client is accepted.
+  client?: Pick<ReturnType<typeof createClient>, 'from'>,
 ): Promise<string> {
-  const supabase = createClient()
+  const supabase = client ?? createClient()
   
   // Generate a secure random token
   const token = `fb_${crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + (b % 36).toString(36), '')}`
