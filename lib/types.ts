@@ -309,8 +309,10 @@ export interface SystemSettings {
   smsNotifyPaymentReceived: boolean
   smsNotifyWeeklySummary: boolean
   smsOptOutManagement: boolean
-  smsShiftReminder: boolean
-  smsEarningsSummary: boolean
+  /** Minutes to wait after delivery before sending the review-request SMS. */
+  reviewRequestDelayMins: number
+  /** Hours a public /track link stays live after delivery before it expires. */
+  trackingLinkExpiryHours: number
   // Dispatch mode
   allowDriverSelfClaim: boolean
   // Minimum number of proof-of-delivery photos a driver must capture at drop-off

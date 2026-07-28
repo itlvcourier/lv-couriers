@@ -272,8 +272,12 @@ export function mapSettingsRow(row: Row): SystemSettings {
     smsNotifyPaymentReceived: row.sms_notify_payment_received !== false,
     smsNotifyWeeklySummary: !!row.sms_notify_weekly_summary,
     smsOptOutManagement: row.sms_opt_out_management !== false,
-    smsShiftReminder: !!row.sms_shift_reminder,
-    smsEarningsSummary: !!row.sms_earnings_summary,
+    // Minutes to wait after delivery before the review-request SMS goes out.
+    reviewRequestDelayMins:
+      row.review_request_delay_mins != null ? Number(row.review_request_delay_mins) : 30,
+    // How long a public /track link stays live after delivery.
+    trackingLinkExpiryHours:
+      row.tracking_link_expiry_hours != null ? Number(row.tracking_link_expiry_hours) : 24,
     // Dispatch mode
     allowDriverSelfClaim: row.allow_driver_self_claim !== false,
     minDeliveryPhotos: row.min_delivery_photos != null ? Number(row.min_delivery_photos) : 3,
@@ -348,11 +352,11 @@ export function mapInvoiceRow(row: Row): Invoice {
     lines: lineItems.map((li): InvoiceLine => ({
       id: li.id as string,
       description: (li.description as string) || '',
-      deliveryType: li.delivery_type as InvoiceLine['deliveryType'],
-      quantity: Number(li.count) || 0,
-      rate: Number(li.rate) || 0,
-      total: Number(li.subtotal) || 0,
-      deliveryIds: Array.isArray(li.delivery_ids) ? (li.delivery_ids as string[]) : [],
+      deliveryType: (li.delivery_type as InvoiceLine['deliveryType']) || 'regular',
+      quantity: Number(li.quantity) || 0,
+      rate: Number(li.unit_rate) || 0,
+      total: Number(li.total) || 0,
+      deliveryIds: li.delivery_id ? [li.delivery_id as string] : [],
     })),
   }
 }
@@ -679,8 +683,8 @@ export async function saveSettingsToDb(partial: Partial<SystemSettings>): Promis
   if (partial.smsNotifyPaymentReceived != null) p.sms_notify_payment_received = partial.smsNotifyPaymentReceived
   if (partial.smsNotifyWeeklySummary != null) p.sms_notify_weekly_summary = partial.smsNotifyWeeklySummary
   if (partial.smsOptOutManagement != null) p.sms_opt_out_management = partial.smsOptOutManagement
-  if (partial.smsShiftReminder != null) p.sms_shift_reminder = partial.smsShiftReminder
-  if (partial.smsEarningsSummary != null) p.sms_earnings_summary = partial.smsEarningsSummary
+  if (partial.reviewRequestDelayMins != null) p.review_request_delay_mins = partial.reviewRequestDelayMins
+  if (partial.trackingLinkExpiryHours != null) p.tracking_link_expiry_hours = partial.trackingLinkExpiryHours
   // Dispatch mode
   if (partial.allowDriverSelfClaim != null) p.allow_driver_self_claim = partial.allowDriverSelfClaim
   if (partial.minDeliveryPhotos != null) p.min_delivery_photos = partial.minDeliveryPhotos
@@ -1263,15 +1267,19 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
   // Insert line items
   if (invoice.lines && invoice.lines.length > 0) {
     console.log('[v0] createInvoiceInDb: Inserting', invoice.lines.length, 'line items')
-    const lineItems = invoice.lines.map((line, idx) => ({
+    // Columns must match the real invoice_line_items schema:
+    // delivery_id, description, quantity, unit_rate, gst, total, is_adjustment.
+    // line.total is the NET (pre-GST) line subtotal, so sum(total) === invoice.subtotal.
+    const invoiceHasGst = Number(invoice.gstAmount) > 0
+    const lineItems = invoice.lines.map((line) => ({
       invoice_id: invoice.id,
+      delivery_id: line.deliveryIds?.[0] ?? null,
       description: line.description,
-      delivery_type: line.deliveryType || null,
       quantity: line.quantity,
-      rate: line.rate,
-      subtotal: line.total,
-      delivery_ids: line.deliveryIds || [],
-      sort_order: idx,
+      unit_rate: line.rate,
+      gst: invoiceHasGst ? +(Number(line.total) * 0.05).toFixed(2) : 0,
+      total: line.total,
+      is_adjustment: false,
     }))
     
     const { error: linesError } = await supabase
@@ -1366,8 +1374,15 @@ export async function createFeedbackToken(
   driverId: string,
   businessId: string,
   locationId: string,
+  // Server-side callers (e.g. the review-request cron) have no auth cookie, so
+  // the default anon client is blocked by the "authenticated"-only insert
+  // policy on customer_feedback. They pass an admin (service-role) client here
+  // to insert on the system's behalf. Client-side callers omit it and keep the
+  // existing session-scoped behavior. Typed structurally so either the SSR
+  // browser client or the supabase-js admin client is accepted.
+  client?: Pick<ReturnType<typeof createClient>, 'from'>,
 ): Promise<string> {
-  const supabase = createClient()
+  const supabase = client ?? createClient()
   
   // Generate a secure random token
   const token = `fb_${crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + (b % 36).toString(36), '')}`

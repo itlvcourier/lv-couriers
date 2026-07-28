@@ -48,23 +48,55 @@ import {
 
 type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
-const baseNavItems: { id: AdminPage; label: string; icon: React.ElementType }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'dispatch', label: 'Dispatch', icon: Radio },
-  { id: 'requests', label: 'Requests', icon: Inbox },
-  { id: 'drivers', label: 'Drivers', icon: Users },
-  { id: 'businesses', label: 'Businesses', icon: Building2 },
-  { id: 'orders', label: 'Orders', icon: Package },
-  { id: 'zones', label: 'Zones', icon: MapIcon },
-  { id: 'sort', label: 'Hub Sort', icon: Boxes },
-  { id: 'transfers', label: 'Transfers', icon: ArrowLeftRight },
-  { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
-  { id: 'invoices', label: 'Invoices', icon: FileText },
-  { id: 'communications', label: 'Communications', icon: MessageSquare },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'audit', label: 'Audit Log', icon: ScrollText },
-  { id: 'settings', label: 'Settings', icon: Settings },
+type NavItem = { id: AdminPage; label: string; icon: React.ElementType }
+
+/**
+ * Sidebar nav, grouped by what the admin is actually trying to do. A flat list
+ * of fifteen items gave no hint that "Hub Sort" and "Transfers" are network
+ * plumbing while "Dispatch" and "Requests" are live work, so everything read as
+ * equally urgent. Order runs live work -> network -> money -> records.
+ */
+const navGroups: { heading: string; items: NavItem[] }[] = [
+  {
+    heading: 'Operations',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'dispatch', label: 'Dispatch', icon: Radio },
+      { id: 'requests', label: 'Requests', icon: Inbox },
+      { id: 'orders', label: 'Orders', icon: Package },
+    ],
+  },
+  {
+    heading: 'Network',
+    items: [
+      { id: 'drivers', label: 'Drivers', icon: Users },
+      { id: 'businesses', label: 'Businesses', icon: Building2 },
+      { id: 'zones', label: 'Zones', icon: MapIcon },
+      { id: 'sort', label: 'Hub Sort', icon: Boxes },
+      { id: 'transfers', label: 'Transfers', icon: ArrowLeftRight },
+    ],
+  },
+  {
+    heading: 'Finance',
+    items: [
+      { id: 'rate_cards', label: 'Rate Cards', icon: CreditCard },
+      { id: 'invoices', label: 'Invoices', icon: FileText },
+    ],
+  },
+  {
+    heading: 'Records',
+    items: [
+      { id: 'communications', label: 'Communications', icon: MessageSquare },
+      { id: 'reports', label: 'Reports', icon: BarChart3 },
+      { id: 'audit', label: 'Audit Log', icon: ScrollText },
+      { id: 'settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ]
+
+const PAGE_LABELS: Record<AdminPage, string> = Object.fromEntries(
+  navGroups.flatMap(g => g.items.map(i => [i.id, i.label])),
+) as Record<AdminPage, string>
 
 export function AdminView() {
   const [activePage, setActivePage] = useState<AdminPage>('dashboard')
@@ -75,22 +107,32 @@ export function AdminView() {
   const consolidationEnabled = useFeatureFlag('consolidation_enabled')
   const transfersEnabled = useFeatureFlag('driver_transfers_enabled')
 
-  // Hide flag-gated pages when their feature is off.
-  const navItems = baseNavItems.filter((item) => {
-    if (item.id === 'zones') return zonesEnabled
-    if (item.id === 'sort') return consolidationEnabled
-    if (item.id === 'transfers') return transfersEnabled
-    return true
-  })
+  // Hide flag-gated pages when their feature is off. Groups that end up empty
+  // are dropped so we don't render a heading with nothing under it.
+  const visibleGroups = navGroups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (item.id === 'zones') return zonesEnabled
+        if (item.id === 'sort') return consolidationEnabled
+        if (item.id === 'transfers') return transfersEnabled
+        return true
+      }),
+    }))
+    .filter(group => group.items.length > 0)
 
   // If a flag-gated page is open but its flag turns off, fall back to dashboard.
-  if (
-    (!zonesEnabled && activePage === 'zones') ||
-    (!consolidationEnabled && activePage === 'sort') ||
-    (!transfersEnabled && activePage === 'transfers')
-  ) {
-    setActivePage('dashboard')
-  }
+  // This has to run in an effect — calling setActivePage during render triggers
+  // a render-phase state update, which React re-renders to resolve.
+  useEffect(() => {
+    if (
+      (!zonesEnabled && activePage === 'zones') ||
+      (!consolidationEnabled && activePage === 'sort') ||
+      (!transfersEnabled && activePage === 'transfers')
+    ) {
+      setActivePage('dashboard')
+    }
+  }, [zonesEnabled, consolidationEnabled, transfersEnabled, activePage])
 
   useEffect(() => {
     let active = true
@@ -183,28 +225,36 @@ export function AdminView() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => (
-            <Button
-              key={item.id}
-              variant={activePage === item.id ? 'secondary' : 'ghost'}
-              className={cn(
-                "w-full justify-start gap-3 h-11",
-                activePage === item.id && "bg-primary/10 text-primary hover:bg-primary/15"
-              )}
-              onClick={() => {
-                setActivePage(item.id)
-                setSidebarOpen(false)
-              }}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-              {item.id === 'requests' && pendingRequests > 0 && (
-                <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold">
-                  {pendingRequests}
-                </span>
-              )}
-            </Button>
+        <nav className="flex-1 p-4 overflow-y-auto flex flex-col gap-5">
+          {visibleGroups.map((group) => (
+            <div key={group.heading} className="flex flex-col gap-1">
+              <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {group.heading}
+              </p>
+              {group.items.map((item) => (
+                <Button
+                  key={item.id}
+                  variant={activePage === item.id ? 'secondary' : 'ghost'}
+                  aria-current={activePage === item.id ? 'page' : undefined}
+                  className={cn(
+                    "w-full justify-start gap-3 h-11",
+                    activePage === item.id && "bg-primary/10 text-primary hover:bg-primary/15"
+                  )}
+                  onClick={() => {
+                    setActivePage(item.id)
+                    setSidebarOpen(false)
+                  }}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.label}
+                  {item.id === 'requests' && pendingRequests > 0 && (
+                    <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold">
+                      {pendingRequests}
+                    </span>
+                  )}
+                </Button>
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -246,7 +296,7 @@ export function AdminView() {
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <h2 className="text-lg font-semibold capitalize truncate">{activePage.replace('_', ' ')}</h2>
+            <h2 className="text-lg font-semibold truncate">{PAGE_LABELS[activePage]}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <NotificationCenter />

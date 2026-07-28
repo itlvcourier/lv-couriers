@@ -45,6 +45,7 @@ interface TrackedDelivery {
   proof_photo_url: string | null
   signature_url: string | null
   recipient_note: string | null
+  tracking_expires_at: string | null
   business: { name: string } | null
   driver: { name: string; phone: string | null } | null
 }
@@ -74,6 +75,7 @@ export default function TrackingPage() {
   const [routePolyline, setRoutePolyline] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [expired, setExpired] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -86,7 +88,7 @@ export default function TrackingPage() {
           `id, driver_id, status, recipient_name, dropoff_address,
            dropoff_lat, dropoff_lng, pickup_lat, pickup_lng, delivered_at,
            picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
-           proof_photo_url, signature_url, recipient_note,
+           proof_photo_url, signature_url, recipient_note, tracking_expires_at,
            business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name, phone)`,
         )
         .eq('id', code)
@@ -98,7 +100,19 @@ export default function TrackingPage() {
         setLoading(false)
         return
       }
-      setDelivery(data as unknown as TrackedDelivery)
+
+      // A tracking URL is an unauthenticated link that exposes recipient name,
+      // address and proof-of-delivery images. Once it is past its expiry we
+      // stop rendering any of that, regardless of delivery state.
+      const row = data as unknown as TrackedDelivery
+      if (row.tracking_expires_at && new Date(row.tracking_expires_at).getTime() < Date.now()) {
+        setExpired(true)
+        setDelivery(null)
+        setLoading(false)
+        return
+      }
+
+      setDelivery(row)
       setLoading(false)
     }
 
@@ -290,6 +304,33 @@ export default function TrackingPage() {
     )
   }
 
+  if (expired) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <TrackingHeader />
+        <main className="flex-1 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full p-8 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+              <Clock className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">This tracking link has expired</h2>
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              For privacy, tracking links stop working a while after the delivery is
+              complete. If you still need details about this delivery, give us a call and
+              we&apos;ll help.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Contact LV Courier:{' '}
+              <a href="tel:5875759699" className="text-primary font-medium">
+                587-575-9699
+              </a>
+            </p>
+          </Card>
+        </main>
+      </div>
+    )
+  }
+
   if (notFound || !delivery) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -348,6 +389,16 @@ export default function TrackingPage() {
   const steps = buildStatusSteps(delivery)
   const isDelivered = delivery.status === 'delivered'
 
+  // Once delivered, the live-tracking justification for showing the exact street
+  // address is gone, but the link may still be shared around. Coarsen it to the
+  // city/region so the confirmation still reads sensibly without republishing
+  // someone's doorstep. (The driver strip is already hidden when delivered.)
+  const coarseDestination = (() => {
+    if (!delivery.dropoff_address) return null
+    const parts = delivery.dropoff_address.split(',').map(p => p.trim()).filter(Boolean)
+    return parts.length > 1 ? parts.slice(1).join(', ') : null
+  })()
+
   // Determine pickup/dropoff locations for the map
   const pickupLocation =
     delivery.status === 'en_route_pickup' &&
@@ -389,6 +440,11 @@ export default function TrackingPage() {
                     ? formatTime(delivery.delivered_at)
                     : ''}
                 </p>
+                {coarseDestination && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Delivered to {coarseDestination}
+                  </p>
+                )}
               </div>
             </Card>
           ) : hasMapData ? (

@@ -86,8 +86,8 @@ export function AdminSettings() {
     smsNotifyPaymentReceived: settings.smsNotifyPaymentReceived,
     smsNotifyWeeklySummary: settings.smsNotifyWeeklySummary,
     smsOptOutManagement: settings.smsOptOutManagement,
-    smsShiftReminder: settings.smsShiftReminder,
-    smsEarningsSummary: settings.smsEarningsSummary,
+    reviewRequestDelayMins: settings.reviewRequestDelayMins,
+    trackingLinkExpiryHours: settings.trackingLinkExpiryHours,
     // Dispatch mode
     allowDriverSelfClaim: settings.allowDriverSelfClaim,
     // Proof of delivery
@@ -148,8 +148,8 @@ export function AdminSettings() {
       smsNotifyPaymentReceived: settings.smsNotifyPaymentReceived,
       smsNotifyWeeklySummary: settings.smsNotifyWeeklySummary,
       smsOptOutManagement: settings.smsOptOutManagement,
-      smsShiftReminder: settings.smsShiftReminder,
-      smsEarningsSummary: settings.smsEarningsSummary,
+      reviewRequestDelayMins: settings.reviewRequestDelayMins,
+      trackingLinkExpiryHours: settings.trackingLinkExpiryHours,
       allowDriverSelfClaim: settings.allowDriverSelfClaim,
       minDeliveryPhotos: settings.minDeliveryPhotos,
       notifyRushJobs: settings.notifyRushJobs,
@@ -274,6 +274,14 @@ export function AdminSettings() {
     toast.success('Dispatch mode updated')
   }
 
+  const handleSaveProofOfDelivery = () => {
+    updateSettings({
+      minDeliveryPhotos: localSettings.minDeliveryPhotos,
+      trackingLinkExpiryHours: localSettings.trackingLinkExpiryHours,
+    })
+    toast.success('Proof of delivery & tracking updated')
+  }
+
   const handleSaveInvoiceTemplate = () => {
     updateSettings({
       invoiceCompanyName: localSettings.invoiceCompanyName,
@@ -356,7 +364,7 @@ export function AdminSettings() {
         })}
       </div>
 
-      {/* ============ OPERATIONS TAB ============ */}
+      {/* =============== OPERATIONS TAB =============== */}
       {tab === 'operations' && (
         <div className="space-y-6">
       {/* Operations & Feature Flags (cross-dock operating model) */}
@@ -441,6 +449,83 @@ export function AdminSettings() {
           >
             <Save className="w-4 h-4 mr-2" />
             Save Dispatch Mode
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Proof of Delivery + customer tracking privacy */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Camera className="w-5 h-5" />
+            Proof of Delivery &amp; Tracking
+          </CardTitle>
+          <CardDescription>
+            What drivers must capture at drop-off, and how long the customer&apos;s
+            tracking link stays live
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="min-photos" className="text-foreground">
+              Minimum photos at drop-off
+            </Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="min-photos"
+                type="number"
+                min={0}
+                max={10}
+                value={localSettings.minDeliveryPhotos}
+                onChange={(e) =>
+                  setLocalSettings(prev => ({
+                    ...prev,
+                    minDeliveryPhotos: Math.max(0, Number(e.target.value) || 0),
+                  }))
+                }
+                className="w-28"
+              />
+              <span className="text-sm text-muted-foreground">photos</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Drivers can&apos;t complete a delivery until they&apos;ve captured this many
+              photos. Set 0 to make photos optional.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tracking-expiry" className="text-foreground">
+              Tracking link stays live for
+            </Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="tracking-expiry"
+                type="number"
+                min={1}
+                max={720}
+                value={localSettings.trackingLinkExpiryHours}
+                onChange={(e) =>
+                  setLocalSettings(prev => ({
+                    ...prev,
+                    trackingLinkExpiryHours: Math.max(1, Number(e.target.value) || 1),
+                  }))
+                }
+                className="w-28"
+              />
+              <span className="text-sm text-muted-foreground">hours after delivery</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Tracking links need no login, so they stop working after this window to
+              avoid leaving a customer&apos;s address and proof photos public forever.
+            </p>
+          </div>
+
+          <Button
+            onClick={handleSaveProofOfDelivery}
+            className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Proof &amp; Tracking
           </Button>
         </CardContent>
       </Card>
@@ -623,7 +708,40 @@ export function AdminSettings() {
         </div>
       )}
 
-      {/* ============ BILLING TAB (invoice settings) ============ */}
+      {/* ================ DRIVERS TAB ================ */}
+      {tab === 'drivers' && (
+        <div className="space-y-6">
+      {/* Driver Pay Settings */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <DollarSign className="w-5 h-5" />
+            Driver Pay System
+          </CardTitle>
+          <CardDescription>Configure automatic driver pay calculation or disable for manual payments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DriverPaySettings />
+        </CardContent>
+      </Card>
+
+      {/* Admin User Management */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Users className="w-5 h-5" />
+            Admin Users
+          </CardTitle>
+          <CardDescription>Manage administrator accounts</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdminUserManagement />
+        </CardContent>
+      </Card>
+        </div>
+      )}
+
+      {/* ================ BILLING TAB ================ */}
       {tab === 'billing' && (
         <div className="space-y-6">
       {/* Invoice Settings */}
@@ -802,31 +920,6 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
-        </div>
-      )}
-
-      {/* ============ ACCOUNT TAB (appearance) ============ */}
-      {tab === 'account' && (
-        <div className="space-y-6">
-      {/* Appearance */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Moon className="w-5 h-5" />
-            Appearance
-          </CardTitle>
-          <CardDescription>Customize how DOMS looks on your device</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ThemeToggleRow id="admin-dark-mode" />
-        </CardContent>
-      </Card>
-        </div>
-      )}
-
-      {/* ============ BILLING TAB (invoice template) ============ */}
-      {tab === 'billing' && (
-        <div className="space-y-6">
       {/* Invoice Template Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1040,7 +1133,7 @@ export function AdminSettings() {
         </div>
       )}
 
-      {/* ============ NOTIFICATIONS TAB (admin alerts) ============ */}
+      {/* ============= NOTIFICATIONS TAB ============= */}
       {tab === 'notifications' && (
         <div className="space-y-6">
       {/* Notifications */}
@@ -1094,87 +1187,6 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
-        </div>
-      )}
-
-      {/* ============ ACCOUNT TAB (security) ============ */}
-      {tab === 'account' && (
-        <div className="space-y-6">
-      {/* Security */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Lock className="w-5 h-5" />
-            Security
-          </CardTitle>
-          <CardDescription>Account security settings</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2"
-            onClick={() => setShowPasswordDialog(true)}
-          >
-            <Lock className="w-4 h-4" />
-            Change Password
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2"
-            onClick={() => {
-              setTwoFaStep(twoFaEnabled ? 'done' : 'intro')
-              setShow2faDialog(true)
-            }}
-          >
-            <Shield className="w-4 h-4" />
-            Two-Factor Authentication
-            {twoFaEnabled && (
-              <Badge variant="outline" className="ml-auto border-green-500/30 text-green-400">
-                Enabled
-              </Badge>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-        </div>
-      )}
-
-      {/* ============ DRIVERS & PAY TAB ============ */}
-      {tab === 'drivers' && (
-        <div className="space-y-6">
-      {/* Driver Pay Settings */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <DollarSign className="w-5 h-5" />
-            Driver Pay System
-          </CardTitle>
-          <CardDescription>Configure automatic driver pay calculation or disable for manual payments</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DriverPaySettings />
-        </CardContent>
-      </Card>
-
-      {/* Admin User Management */}
-      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-            <Users className="w-5 h-5" />
-            Admin Users
-          </CardTitle>
-          <CardDescription>Manage administrator accounts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminUserManagement />
-        </CardContent>
-      </Card>
-        </div>
-      )}
-
-      {/* ============ NOTIFICATIONS TAB (SMS) ============ */}
-      {tab === 'notifications' && (
-        <div className="space-y-6">
       {/* SMS Settings */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
@@ -1300,24 +1312,37 @@ export function AdminSettings() {
                 />
                 <span className="text-sm text-foreground">Opt-Out Management (STOP/START replies)</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={localSettings.smsShiftReminder}
-                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsShiftReminder: e.target.checked }))}
-                  className="w-4 h-4"
+            </div>
+          </div>
+
+          {/* Review request timing */}
+          <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-lg space-y-3">
+            <p className="text-sm font-medium text-foreground">Review Request Timing</p>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="review-delay" className="text-sm text-muted-foreground">
+                Wait this long after delivery before texting the review link
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="review-delay"
+                  type="number"
+                  min={0}
+                  max={1440}
+                  value={localSettings.reviewRequestDelayMins}
+                  onChange={(e) =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      reviewRequestDelayMins: Math.max(0, Number(e.target.value) || 0),
+                    }))
+                  }
+                  className="w-28"
                 />
-                <span className="text-sm text-foreground">Shift Reminders (Optional)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={localSettings.smsEarningsSummary}
-                  onChange={(e) => setLocalSettings(prev => ({ ...prev, smsEarningsSummary: e.target.checked }))}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-foreground">Earnings Summary (Optional)</span>
-              </label>
+                <span className="text-sm text-muted-foreground">minutes</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Stops the review text landing in the same breath as the delivery
+                confirmation. Set 0 to send on the next sweep (runs every 15 minutes).
+              </p>
             </div>
           </div>
 
@@ -1332,6 +1357,71 @@ export function AdminSettings() {
       </Card>
         </div>
       )}
+
+      {/* ================ ACCOUNT TAB ================ */}
+      {tab === 'account' && (
+        <div className="space-y-6">
+      {/* Appearance */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Moon className="w-5 h-5" />
+            Appearance
+          </CardTitle>
+          <CardDescription>Customize how DOMS looks on your device</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggleRow id="admin-dark-mode" />
+        </CardContent>
+      </Card>
+      {/* Security */}
+      <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+            <Lock className="w-5 h-5" />
+            Security
+          </CardTitle>
+          <CardDescription>Account security settings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => setShowPasswordDialog(true)}
+          >
+            <Lock className="w-4 h-4" />
+            Change Password
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => {
+              setTwoFaStep(twoFaEnabled ? 'done' : 'intro')
+              setShow2faDialog(true)
+            }}
+          >
+            <Shield className="w-4 h-4" />
+            Two-Factor Authentication
+            {twoFaEnabled && (
+              <Badge variant="outline" className="ml-auto border-green-500/30 text-green-400">
+                Enabled
+              </Badge>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+      {/* Sign Out */}
+      <Button 
+        variant="destructive" 
+        className="w-full"
+        onClick={() => { void logout() }}
+      >
+        <LogOut className="w-4 h-4 mr-2" />
+        Sign Out
+      </Button>
+        </div>
+      )}
+
 
       {/* Change Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
@@ -1513,20 +1603,6 @@ export function AdminSettings() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ ACCOUNT TAB (sign out) ============ */}
-      {tab === 'account' && (
-        <div className="space-y-6">
-      {/* Sign Out */}
-      <Button 
-        variant="destructive" 
-        className="w-full"
-        onClick={() => { void logout() }}
-      >
-        <LogOut className="w-4 h-4 mr-2" />
-        Sign Out
-      </Button>
-        </div>
-      )}
     </div>
   )
 }

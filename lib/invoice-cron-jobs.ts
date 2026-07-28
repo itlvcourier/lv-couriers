@@ -23,25 +23,30 @@ export async function runGenerateDrafts() {
 
   const supabase = createAdminClient()
   const now = new Date()
-  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+  // Bill the PREVIOUS (just-ended) month. The job runs on the 28th, so using
+  // the current month would bill a period that isn't over yet and miss the
+  // last few days once it did close. Support an explicit override for backfills.
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0))
   const periodStartISO = periodStart.toISOString().split('T')[0]
   const periodEndISO = periodEnd.toISOString().split('T')[0]
 
   const { data: deliveries, error: delErr } = await supabase
     .from('deliveries')
-    .select('id, business_id, location_id, status, delivery_type, base_price, rush_fee, total, delivered_at')
+    .select('id, business_id, location_id, status, is_urgent, is_out_of_town, calculated_rate, gst_amount, total_amount, delivered_at')
     .eq('status', 'delivered')
     .gte('delivered_at', periodStart.toISOString())
     .lte('delivered_at', new Date(periodEnd.getTime() + 86_399_000).toISOString())
 
   if (delErr) throw new Error(delErr.message)
 
-  type Bucket = { businessId: string; locationId: string | null; rows: NonNullable<typeof deliveries> }
+  // One combined draft per business per period (format: 'combined'), covering
+  // all of that business's locations — matches the client-side combined flow.
+  type Bucket = { businessId: string; rows: NonNullable<typeof deliveries> }
   const buckets = new Map<string, Bucket>()
   for (const d of deliveries || []) {
-    const key = `${d.business_id}::${d.location_id || 'none'}`
-    if (!buckets.has(key)) buckets.set(key, { businessId: d.business_id, locationId: d.location_id, rows: [] })
+    const key = d.business_id
+    if (!buckets.has(key)) buckets.set(key, { businessId: d.business_id, rows: [] })
     buckets.get(key)!.rows.push(d)
   }
 
@@ -62,27 +67,35 @@ export async function runGenerateDrafts() {
       continue
     }
 
-    const [{ data: business }, { data: location }] = await Promise.all([
-      supabase.from('businesses').select('id, name, email').eq('id', bucket.businessId).maybeSingle(),
-      bucket.locationId
-        ? supabase.from('business_locations').select('name, billing_email').eq('id', bucket.locationId).maybeSingle()
-        : Promise.resolve({ data: null as { name: string; billing_email: string | null } | null }),
-    ])
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('id, name, email')
+      .eq('id', bucket.businessId)
+      .maybeSingle()
 
     if (!business) continue
 
-    const subtotal = bucket.rows.reduce((s, r) => s + Number(r.base_price || 0) + Number(r.rush_fee || 0), 0)
-    const gstTotal = +(subtotal * 0.05).toFixed(2)
-    const total = +(subtotal + gstTotal).toFixed(2)
+    // Aggregate from the real delivery pricing columns. GST is taken from each
+    // delivery's stored gst_amount so GST-exempt businesses (gst_amount = 0) are
+    // billed correctly instead of assuming a flat 5%.
+    const subtotal = +bucket.rows.reduce((s, r) => s + Number(r.calculated_rate || 0), 0).toFixed(2)
+    const gstTotal = +bucket.rows.reduce((s, r) => s + Number(r.gst_amount || 0), 0).toFixed(2)
+    const total = +bucket.rows
+      .reduce((s, r) => s + Number(r.total_amount ?? Number(r.calculated_rate || 0) + Number(r.gst_amount || 0)), 0)
+      .toFixed(2)
     const dueDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1 + settings.invoice_due_days))
-    const invoiceNumber = `INV-${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}-${key.slice(-4).toUpperCase()}`
+    // Suffix is derived from the business id so numbers are unique per business
+    // per period and never collide (previously all no-location buckets produced
+    // the same "INV-YYYYMM-NONE").
+    const suffix = bucket.businessId.replace(/-/g, '').slice(0, 8).toUpperCase()
+    const invoiceNumber = `INV-${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}-${suffix}`
 
     const { data: newInvoice, error: invErr } = await supabase
       .from('invoices')
       .insert({
         invoice_number: invoiceNumber,
         business_id: bucket.businessId,
-        location_id: bucket.locationId,
+        location_id: null,
         format: 'combined',
         period_start: periodStartISO,
         period_end: periodEndISO,
@@ -92,7 +105,7 @@ export async function runGenerateDrafts() {
         total,
         status: 'draft',
         due_date: dueDate.toISOString().split('T')[0],
-        billing_email: location?.billing_email || business.email || null,
+        billing_email: business.email || null,
       })
       .select('id')
       .single()
@@ -102,16 +115,25 @@ export async function runGenerateDrafts() {
       continue
     }
 
-    const lineItems = bucket.rows.map((d) => ({
-      invoice_id: newInvoice.id,
-      delivery_id: d.id,
-      description: `${d.delivery_type} delivery`,
-      quantity: 1,
-      unit_rate: Number(d.base_price || 0) + Number(d.rush_fee || 0),
-      gst: +((Number(d.base_price || 0) + Number(d.rush_fee || 0)) * 0.05).toFixed(2),
-      total: Number(d.total || 0),
-      is_adjustment: false,
-    }))
+    const lineItems = bucket.rows.map((d) => {
+      const net = Number(d.calculated_rate || 0)
+      const gst = Number(d.gst_amount || 0)
+      const label = d.is_urgent
+        ? 'Rush delivery'
+        : d.is_out_of_town
+          ? 'Out-of-town delivery'
+          : 'Regular delivery'
+      return {
+        invoice_id: newInvoice.id,
+        delivery_id: d.id,
+        description: label,
+        quantity: 1,
+        unit_rate: net,
+        gst,
+        total: net, // NET line subtotal; GST tracked separately in the gst column
+        is_adjustment: false,
+      }
+    })
     if (lineItems.length > 0) {
       await supabase.from('invoice_line_items').insert(lineItems)
     }

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type {
   MockUser,
   Driver,
@@ -24,6 +24,7 @@ import type {
   PaymentDetails,
   SMSLogEntry,
   AdminNotification,
+  AdminNotificationType,
   DriverGPS,
   ActivityFeedItem,
   Trip,
@@ -109,8 +110,11 @@ const DEFAULT_SETTINGS: SystemSettings = {
   smsNotifyPaymentReceived: true,
   smsNotifyWeeklySummary: false,
   smsOptOutManagement: true,
-  smsShiftReminder: false,
-  smsEarningsSummary: false,
+  // Wait before asking for a review so it doesn't arrive alongside the
+  // "delivered" text.
+  reviewRequestDelayMins: 30,
+  // Public tracking links stop working a day after delivery.
+  trackingLinkExpiryHours: 24,
   // Dispatch mode – defaults to self-claim (current behavior)
   allowDriverSelfClaim: true,
   // Minimum proof-of-delivery photos required at drop-off
@@ -311,6 +315,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS)
+  // Mirror of `settings` for use inside stable callbacks. Reading the toggle
+  // through a ref keeps event handlers from being rebuilt (and effects from
+  // re-firing) every time an unrelated setting changes.
+  const settingsRef = useRef<SystemSettings>(settings)
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
   const [rateCards, setRateCards] = useState<RateCard[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   // In-memory state: starts empty on every session. These aren't persisted yet.
@@ -319,6 +330,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPayment[]>([])
   const [smsLog, setSMSLog] = useState<SMSLogEntry[]>([])
   const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>([])
+  // Mirror for dedupe checks inside stable callbacks. Lets the SLA sweep see
+  // notifications already persisted (and hydrated from the DB on mount) so it
+  // doesn't recreate the same alert on every page reload.
+  const adminNotificationsRef = useRef<AdminNotification[]>(adminNotifications)
+  useEffect(() => {
+    adminNotificationsRef.current = adminNotifications
+  }, [adminNotifications])
   const [driverGPS, setDriverGPS] = useState<DriverGPS[]>([])
   const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([])
   const [trips, setTrips] = useState<Trip[]>([])
@@ -788,12 +806,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ deliveryId }),
     }).catch(err => console.error('[v0] delivered SMS failed', err))
     
-    // Send feedback request SMS (setting-gated in the API endpoint)
-    void fetch('/api/sms/feedback-request', {
+    // Schedule the review request instead of sending it now. Firing it here
+    // would land a second text within a second of the "delivered" one, before
+    // the customer has even handled the parcel. The /api/cron/review-requests
+    // sweep picks this up once review_request_due_at has passed.
+    void fetch('/api/reviews/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId }),
-    }).catch(err => console.error('[v0] feedback request SMS failed', err))
+    }).catch(err => console.error('[v0] review request scheduling failed', err))
     
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
@@ -889,6 +910,130 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [deliveries])
 
+  /**
+   * Raise an admin notification that survives a refresh.
+   *
+   * Several call sites used to push straight into local `notifications` state,
+   * which meant the alert vanished on reload and the matching Settings toggle
+   * did nothing. This routes everything through one place: check the toggle,
+   * update local state for immediacy, then persist.
+   */
+  const emitAdminNotification = useCallback(
+    (
+      input: {
+        type: AdminNotificationType
+        title: string
+        message: string
+        deliveryId?: string | null
+        driverId?: string | null
+        businessId?: string | null
+        invoiceId?: string | null
+        priority?: 'high' | 'medium' | 'low'
+        // When true, skip if an alert of the same type already exists for this
+        // delivery. Keeps repeat sweeps / page reloads from stacking duplicates.
+        dedupeByDelivery?: boolean
+      },
+      enabled = true,
+    ) => {
+      if (!enabled) return
+
+      if (input.dedupeByDelivery && input.deliveryId) {
+        const exists = adminNotificationsRef.current.some(
+          n => n.type === input.type && n.deliveryId === input.deliveryId,
+        )
+        if (exists) return
+      }
+
+      const notification: AdminNotification = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        deliveryId: input.deliveryId ?? null,
+        driverId: input.driverId ?? null,
+        businessId: input.businessId ?? null,
+        invoiceId: input.invoiceId ?? null,
+        createdAt: new Date().toISOString(),
+        read: false,
+        priority: input.priority ?? 'medium',
+      }
+
+      setAdminNotifications(prev => [notification, ...prev])
+      persist(
+        insertAdminNotification({
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          deliveryId: notification.deliveryId,
+          driverId: notification.driverId,
+          businessId: notification.businessId,
+          invoiceId: notification.invoiceId,
+          priority: notification.priority,
+          read: false,
+        }).then(saved => {
+          if (saved.id !== notification.id) {
+            setAdminNotifications(prev =>
+              prev.map(n => (n.id === notification.id ? saved : n)),
+            )
+          }
+        }),
+        `insertAdminNotification:${notification.type}`,
+      )
+    },
+    [],
+  )
+
+  /**
+   * Watch in-flight deliveries and raise one alert per delivery that blows past
+   * its SLA. The rushSlaMins / intownTimeoutMins settings existed but nothing
+   * ever measured against them, so a stalled job was invisible to dispatch.
+   * Gated on the "Timeout warnings" preference in Settings.
+   */
+  const timeoutAlertedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const IN_FLIGHT: DeliveryStatus[] = [
+      'posted',
+      'claimed',
+      'en_route_pickup',
+      'picked_up',
+      'en_route_dropoff',
+    ]
+
+    const sweep = () => {
+      if (!settingsRef.current.notifyTimeoutWarnings) return
+
+      for (const d of deliveries) {
+        if (!IN_FLIGHT.includes(d.status)) continue
+        if (timeoutAlertedRef.current.has(d.id)) continue
+
+        const limitMins = d.isRush
+          ? settingsRef.current.rushSlaMins
+          : settingsRef.current.intownTimeoutMins
+        if (!d.createdAt) continue
+        const ageMins = (Date.now() - new Date(d.createdAt).getTime()) / 60_000
+        if (ageMins < limitMins) continue
+
+        timeoutAlertedRef.current.add(d.id)
+        emitAdminNotification({
+          type: 'sla_breach',
+          title: d.isRush ? 'Rush SLA Breached' : 'Delivery Overdue',
+          message: `${d.dropoffArea || d.dropoffAddress} is ${Math.round(ageMins)} min old (limit ${limitMins} min) and still ${d.status.replace(/_/g, ' ')}`,
+          deliveryId: d.id,
+          driverId: d.driverId ?? null,
+          businessId: d.businessId ?? null,
+          priority: 'high',
+          // Survive reloads: don't recreate this alert if one already exists
+          // for the delivery.
+          dedupeByDelivery: true,
+        })
+      }
+    }
+
+    sweep()
+    const timer = setInterval(sweep, 5 * 60_000)
+    return () => clearInterval(timer)
+  }, [deliveries, emitAdminNotification])
+
   const flagDelivery = useCallback((deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => {
     const flag: DeliveryFlag = {
       id: `flag-${Date.now()}`,
@@ -926,18 +1071,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
 
-    // Add notification for admin
-    const newNotification: Notification = {
-      id: `notif-${Date.now()}`,
-      type: 'flag',
-      title: 'Delivery Flagged',
-      message: `Driver flagged delivery: ${type}`,
-      deliveryId,
-      createdAt: new Date().toISOString(),
-      read: false,
-    }
-    setNotifications(prev => [newNotification, ...prev])
-  }, [])
+    // Alert admins. Gated on the "Flag alerts" preference in Settings.
+    const flagged = deliveries.find(d => d.id === deliveryId)
+    emitAdminNotification(
+      {
+        type: 'flag',
+        title: 'Delivery Flagged',
+        message: `Driver flagged delivery: ${type}${note ? ` — ${note}` : ''}`,
+        deliveryId,
+        driverId: flagged?.driverId ?? null,
+        businessId: flagged?.businessId ?? null,
+        priority: 'high',
+      },
+      settingsRef.current.notifyFlagAlerts,
+    )
+  }, [deliveries, emitAdminNotification])
 
   const resolveFlag = useCallback((deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => {
     setDeliveries(prev => prev.map(d => {
@@ -1039,12 +1187,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ deliveryId: saved.id }),
       }).catch(err => console.error('[v0] geocode failed', err))
 
+      // Rush jobs carry a tight SLA, so surface them to dispatch immediately.
+      // Gated on the "Rush jobs" alert preference in Settings.
+      if (enriched.isRush) {
+        emitAdminNotification(
+          {
+            type: 'new_job',
+            title: 'Rush Job Posted',
+            message: `Rush delivery to ${enriched.dropoffArea || enriched.dropoffAddress} — ${settingsRef.current.rushSlaMins} min SLA`,
+            deliveryId: saved.id,
+            businessId: enriched.businessId,
+            priority: 'high',
+            dedupeByDelivery: true,
+          },
+          settingsRef.current.notifyRushJobs,
+        )
+      }
+
       return enriched
     } catch (err) {
       console.error('[db] postDelivery failed', err)
       return null
     }
-  }, [businesses])
+  }, [businesses, emitAdminNotification])
 
   const reassignDriver = useCallback((deliveryId: string, newDriverId: string) => {
     const newDriver = drivers.find(d => d.id === newDriverId)
@@ -1857,13 +2022,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const location = business?.locations.find(l => l.id === locationId)
     if (!business || !location) return null
 
-    // Get deliveries for this location in the period
+    // Get deliveries for this location in the period. Compare on the date
+    // portion only: deliveredAt is a full ISO timestamp while periodEnd is a
+    // date-only string, so a raw string compare would drop deliveries that
+    // happened any time after midnight on the final day of the period.
     const periodDeliveries = deliveries.filter(d => 
       d.locationId === locationId &&
       d.status === 'delivered' &&
       d.deliveredAt &&
-      d.deliveredAt >= periodStart &&
-      d.deliveredAt <= periodEnd
+      d.deliveredAt.slice(0, 10) >= periodStart &&
+      d.deliveredAt.slice(0, 10) <= periodEnd
     )
 
     const lines = calculateInvoiceLines(periodDeliveries, rateCard)
@@ -1971,8 +2139,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           d.locationId === location.id &&
           d.status === 'delivered' &&
           d.deliveredAt &&
-          d.deliveredAt >= periodStart &&
-          d.deliveredAt <= periodEnd
+          // Date-only compare so the whole final day is included (see note above).
+          d.deliveredAt.slice(0, 10) >= periodStart &&
+          d.deliveredAt.slice(0, 10) <= periodEnd
         )
         
         if (periodDeliveries.length === 0) continue

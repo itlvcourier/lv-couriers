@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { isNativeApp } from '@/lib/native'
 import { takeNativePhoto } from '@/lib/native/camera'
-import { normalizeImageDataUrl } from '@/lib/image'
+import { isUsableImageDataUrl, normalizeImageDataUrl } from '@/lib/image'
 
 interface CameraCaptureProps {
   onCapture: (imageDataUrl: string) => void
@@ -37,8 +37,10 @@ export function CameraCapture({
     if (isNativeApp()) {
       try {
         const dataUrl = await takeNativePhoto('camera', { quality: 80 })
-        if (dataUrl) {
+        if (isUsableImageDataUrl(dataUrl)) {
           setPreview(await normalizeImageDataUrl(dataUrl))
+        } else if (dataUrl) {
+          toast.error('Could not capture the photo. Please try again.')
         }
       } catch (err) {
         console.error('[v0] native camera error:', err)
@@ -96,6 +98,14 @@ export function CameraCapture({
     
     if (!ctx) return
 
+    // The video only reports real dimensions once it has decoded a frame. Capturing
+    // before that gives a 0x0 canvas, and toDataURL() then returns the empty
+    // "data:," URI -- a proof photo that looks saved but renders as a broken image.
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      toast.error('Camera is still starting up. Try again in a moment.')
+      return
+    }
+
     // Set canvas dimensions to match video
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
@@ -105,6 +115,10 @@ export function CameraCapture({
     
     // Convert to data URL, then normalize for consistent size across devices
     const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+    if (!isUsableImageDataUrl(dataUrl)) {
+      toast.error('Could not capture the photo. Please try again.')
+      return
+    }
     setPreview(await normalizeImageDataUrl(dataUrl))
     
     // Stop camera
@@ -140,17 +154,27 @@ export function CameraCapture({
 
     const reader = new FileReader()
     reader.onloadend = async () => {
-      setPreview(await normalizeImageDataUrl(reader.result as string))
+      const dataUrl = reader.result as string
+      if (!isUsableImageDataUrl(dataUrl)) {
+        toast.error('That image could not be read. Please try another file.')
+        return
+      }
+      setPreview(await normalizeImageDataUrl(dataUrl))
     }
     reader.readAsDataURL(file)
   }
 
   // Confirm the captured photo
   const handleConfirm = () => {
-    if (preview) {
-      onCapture(preview)
-      toast.success('Photo captured')
+    // Last line of defence: never hand an unrenderable image to the caller,
+    // otherwise it gets saved as a proof photo that shows up broken later.
+    if (!isUsableImageDataUrl(preview)) {
+      toast.error('That photo did not save correctly. Please retake it.')
+      setPreview(null)
+      return
     }
+    onCapture(preview)
+    toast.success('Photo captured')
   }
 
   // Clear and retake
