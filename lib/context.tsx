@@ -2022,13 +2022,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const location = business?.locations.find(l => l.id === locationId)
     if (!business || !location) return null
 
-    // Get deliveries for this location in the period
+    // Get deliveries for this location in the period. Compare on the date
+    // portion only: deliveredAt is a full ISO timestamp while periodEnd is a
+    // date-only string, so a raw string compare would drop deliveries that
+    // happened any time after midnight on the final day of the period.
     const periodDeliveries = deliveries.filter(d => 
       d.locationId === locationId &&
       d.status === 'delivered' &&
       d.deliveredAt &&
-      d.deliveredAt >= periodStart &&
-      d.deliveredAt <= periodEnd
+      d.deliveredAt.slice(0, 10) >= periodStart &&
+      d.deliveredAt.slice(0, 10) <= periodEnd
     )
 
     const lines = calculateInvoiceLines(periodDeliveries, rateCard)
@@ -2136,8 +2139,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           d.locationId === location.id &&
           d.status === 'delivered' &&
           d.deliveredAt &&
-          d.deliveredAt >= periodStart &&
-          d.deliveredAt <= periodEnd
+          // Date-only compare so the whole final day is included (see note above).
+          d.deliveredAt.slice(0, 10) >= periodStart &&
+          d.deliveredAt.slice(0, 10) <= periodEnd
         )
         
         if (periodDeliveries.length === 0) continue

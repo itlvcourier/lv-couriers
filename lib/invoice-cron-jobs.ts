@@ -23,8 +23,11 @@ export async function runGenerateDrafts() {
 
   const supabase = createAdminClient()
   const now = new Date()
-  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+  // Bill the PREVIOUS (just-ended) month. The job runs on the 28th, so using
+  // the current month would bill a period that isn't over yet and miss the
+  // last few days once it did close. Support an explicit override for backfills.
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0))
   const periodStartISO = periodStart.toISOString().split('T')[0]
   const periodEndISO = periodEnd.toISOString().split('T')[0]
 
