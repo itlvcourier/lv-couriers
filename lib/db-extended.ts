@@ -352,11 +352,11 @@ export function mapInvoiceRow(row: Row): Invoice {
     lines: lineItems.map((li): InvoiceLine => ({
       id: li.id as string,
       description: (li.description as string) || '',
-      deliveryType: li.delivery_type as InvoiceLine['deliveryType'],
-      quantity: Number(li.count) || 0,
-      rate: Number(li.rate) || 0,
-      total: Number(li.subtotal) || 0,
-      deliveryIds: Array.isArray(li.delivery_ids) ? (li.delivery_ids as string[]) : [],
+      deliveryType: (li.delivery_type as InvoiceLine['deliveryType']) || 'regular',
+      quantity: Number(li.quantity) || 0,
+      rate: Number(li.unit_rate) || 0,
+      total: Number(li.total) || 0,
+      deliveryIds: li.delivery_id ? [li.delivery_id as string] : [],
     })),
   }
 }
@@ -1267,15 +1267,19 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
   // Insert line items
   if (invoice.lines && invoice.lines.length > 0) {
     console.log('[v0] createInvoiceInDb: Inserting', invoice.lines.length, 'line items')
-    const lineItems = invoice.lines.map((line, idx) => ({
+    // Columns must match the real invoice_line_items schema:
+    // delivery_id, description, quantity, unit_rate, gst, total, is_adjustment.
+    // line.total is the NET (pre-GST) line subtotal, so sum(total) === invoice.subtotal.
+    const invoiceHasGst = Number(invoice.gstAmount) > 0
+    const lineItems = invoice.lines.map((line) => ({
       invoice_id: invoice.id,
+      delivery_id: line.deliveryIds?.[0] ?? null,
       description: line.description,
-      delivery_type: line.deliveryType || null,
       quantity: line.quantity,
-      rate: line.rate,
-      subtotal: line.total,
-      delivery_ids: line.deliveryIds || [],
-      sort_order: idx,
+      unit_rate: line.rate,
+      gst: invoiceHasGst ? +(Number(line.total) * 0.05).toFixed(2) : 0,
+      total: line.total,
+      is_adjustment: false,
     }))
     
     const { error: linesError } = await supabase
