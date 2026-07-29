@@ -7,6 +7,7 @@ import {
   runProcessReminders,
   runMarkOverdue,
 } from '@/lib/invoice-cron-jobs'
+import { runReviewRequests, runWeeklySmsSummary } from '@/lib/sms-cron-jobs'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -15,7 +16,9 @@ export const maxDuration = 60
  * SINGLE scheduled cron — runs once per day.
  *
  * Dispatches to every scheduled job based on the UTC calendar:
- *   - Every day:            expire-requests, process-reminders, mark-overdue
+ *   - Every day:            expire-requests, process-reminders, mark-overdue,
+ *                           review-requests
+ *   - Mondays:              + sms-weekly-summary
  *   - 28th of each month:   + generate-drafts
  *   - 1st of each month:    + auto-send
  *
@@ -32,10 +35,12 @@ export async function GET(req: NextRequest) {
 
   const now = new Date()
   const dayOfMonth = now.getUTCDate()
+  const dayOfWeek = now.getUTCDay() // 0 = Sunday, 1 = Monday
 
   const summary: Record<string, unknown> = {
     ranAt: now.toISOString(),
     dayOfMonth,
+    dayOfWeek,
     jobs: {} as Record<string, unknown>,
   }
   const jobs = summary.jobs as Record<string, unknown>
@@ -63,6 +68,22 @@ export async function GET(req: NextRequest) {
     jobs.markOverdue = await runMarkOverdue()
   } catch (e) {
     jobs.markOverdue = { ok: false, error: (e as Error).message }
+  }
+
+  // Queued customer review-request SMS whose delay has elapsed.
+  try {
+    jobs.reviewRequests = await runReviewRequests()
+  } catch (e) {
+    jobs.reviewRequests = { ok: false, error: (e as Error).message }
+  }
+
+  // Weekly per-business delivery summary (Mondays only).
+  if (dayOfWeek === 1) {
+    try {
+      jobs.weeklySmsSummary = await runWeeklySmsSummary()
+    } catch (e) {
+      jobs.weeklySmsSummary = { ok: false, error: (e as Error).message }
+    }
   }
 
   if (dayOfMonth === 28) {
