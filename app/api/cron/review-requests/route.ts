@@ -1,22 +1,20 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms } from '@/lib/twilio'
-import { createFeedbackToken } from '@/lib/db-extended'
+import { runReviewRequests } from '@/lib/sms-cron-jobs'
+
+export const dynamic = 'force-dynamic'
 
 /**
- * Cron: send queued review-request SMS messages whose delay has elapsed.
+ * Review-request SMS sweep.
  *
- * completeDelivery() stamps review_request_due_at (now + review_request_delay_mins)
- * rather than texting immediately, so the customer isn't hit with two messages
- * a second apart. This sweep sends anything now due.
+ * The Vercel Hobby plan allows 2 crons at once-per-day frequency. This job uses
+ * the second slot at 21:00 UTC, while the dispatcher at /api/cron/invoice-daily
+ * also runs it at 09:00 UTC — giving two sweeps a day (max ~12h latency instead
+ * of 24h). Double-running is safe: review_request_sent_at is claimed atomically
+ * before each send, so a customer can never be texted twice.
  *
- * Schedule: every 15 minutes (see vercel.json)
- * Setting gate: sms_notify_feedback_request
- * Auth: CRON_SECRET header required
+ * The real logic lives in lib/sms-cron-jobs.ts.
  *
- * Idempotency: review_request_sent_at is set before the send is attempted, and
- * the query only picks rows where it is null — so a delivery can never be
- * texted twice even if two sweeps overlap.
+ * Auth: CRON_SECRET via `x-cron-secret` or `Authorization: Bearer <secret>`.
  */
 export async function GET(req: Request) {
   const secret =
@@ -25,119 +23,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const supabase = createAdminClient()
-
-  const { data: settings } = await supabase
-    .from('system_settings')
-    .select('sms_notify_feedback_request')
-    .limit(1)
-    .maybeSingle<{ sms_notify_feedback_request: boolean | null }>()
-
-  if (settings?.sms_notify_feedback_request === false) {
-    return NextResponse.json({ ok: false, reason: 'Feedback requests are disabled' })
+  try {
+    const result = await runReviewRequests()
+    return NextResponse.json(result)
+  } catch (e) {
+    return NextResponse.json({ ok: false, reason: (e as Error).message }, { status: 500 })
   }
-
-  const nowISO = new Date().toISOString()
-
-  const { data: due, error } = await supabase
-    .from('deliveries')
-    .select(
-      'id, recipient_name, recipient_phone, driver_id, business_id, location_id, businesses(name)',
-    )
-    .eq('status', 'delivered')
-    .not('review_request_due_at', 'is', null)
-    .is('review_request_sent_at', null)
-    .lte('review_request_due_at', nowISO)
-    .limit(100)
-    .returns<
-      {
-        id: string
-        recipient_name: string | null
-        recipient_phone: string | null
-        driver_id: string | null
-        business_id: string
-        location_id: string
-        businesses: { name: string } | null
-      }[]
-    >()
-
-  if (error) {
-    console.error('[v0] review-requests sweep query failed', error.message)
-    return NextResponse.json({ ok: false, reason: error.message }, { status: 500 })
-  }
-
-  if (!due || due.length === 0) {
-    return NextResponse.json({ ok: true, due: 0, sent: 0 })
-  }
-
-  let sent = 0
-  let skipped = 0
-  const failures: string[] = []
-
-  for (const delivery of due) {
-    if (!delivery.recipient_phone || !delivery.driver_id) {
-      // Nothing we can do with these — clear the flag so the sweep doesn't
-      // keep re-reading them on every run.
-      await supabase
-        .from('deliveries')
-        .update({ review_request_sent_at: nowISO })
-        .eq('id', delivery.id)
-      skipped++
-      continue
-    }
-
-    // Claim the row *before* sending. If the send then fails we accept losing
-    // that one review request rather than risk texting a customer twice.
-    const { data: claimed } = await supabase
-      .from('deliveries')
-      .update({ review_request_sent_at: new Date().toISOString() })
-      .eq('id', delivery.id)
-      .is('review_request_sent_at', null)
-      .select('id')
-
-    if (!claimed || claimed.length === 0) {
-      // Another concurrent sweep already took it.
-      continue
-    }
-
-    try {
-      const token = await createFeedbackToken(
-        delivery.id,
-        delivery.driver_id,
-        delivery.business_id,
-        delivery.location_id,
-        // Pass the service-role client: this cron has no user session, and the
-        // customer_feedback insert policy only allows the authenticated role.
-        supabase,
-      )
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lvcourier.ca'
-      const feedbackUrl = `${baseUrl}/feedback/${token}`
-      const businessName = delivery.businesses?.name || 'LV Couriers'
-      const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
-
-      const result = await sendSms({
-        to: delivery.recipient_phone,
-        body:
-          `${greeting}, how was your delivery from ${businessName}? ` +
-          `Share your feedback here: ${feedbackUrl} ` +
-          `(link expires in 7 days)\n` +
-          `Reply STOP to unsubscribe. — LV Couriers`,
-        type: 'feedback_request',
-        deliveryId: delivery.id,
-      })
-
-      if (result.ok) sent++
-      else failures.push(`${delivery.id}: ${result.reason ?? 'send failed'}`)
-    } catch (err) {
-      failures.push(`${delivery.id}: ${err instanceof Error ? err.message : 'unknown error'}`)
-    }
-  }
-
-  return NextResponse.json({
-    ok: true,
-    due: due.length,
-    sent,
-    skipped,
-    failures: failures.length ? failures : undefined,
-  })
 }
