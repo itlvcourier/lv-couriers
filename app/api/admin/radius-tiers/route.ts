@@ -1,17 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
-// Force dynamic - this route requires runtime env vars
 export const dynamic = 'force-dynamic'
-
-// Lazy initialization to avoid build-time errors
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 interface RadiusTierInput {
   maxDistanceKm: number
@@ -23,8 +14,11 @@ interface RadiusTierInput {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (isAuthError(auth)) return auth
+
   try {
-    const adminClient = getSupabaseAdmin()
+    const adminClient = createAdminClient()
 
     const { locationId, tiers } = await request.json() as {
       locationId: string
@@ -97,9 +91,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (isAuthError(auth)) return auth
+
   try {
-    const adminClient = getSupabaseAdmin()
-    
+    const adminClient = createAdminClient()
+
     const { searchParams } = new URL(request.url)
     const locationId = searchParams.get('locationId')
 

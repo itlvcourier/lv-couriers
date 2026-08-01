@@ -3,9 +3,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { driverWelcomeEmail } from '@/lib/email-templates'
 import { sendSms } from '@/lib/twilio'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
+
+const inviteLimiter = rateLimit({ max: 10, windowMs: 60 * 60 * 1000 })
 
 /**
  * Create a new driver end-to-end:
@@ -21,6 +25,18 @@ export const maxDuration = 30
  * use "resend invite" for that case (not implemented here).
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
+  const ip = getClientIp(req)
+  const limit = inviteLimiter.check(ip)
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
+    )
+  }
+
   const body = (await req.json().catch(() => ({}))) as {
     name?: string
     email?: string

@@ -1,21 +1,27 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
-// Force dynamic - this route requires runtime env vars
 export const dynamic = 'force-dynamic'
 
-// Lazy initialization to avoid build-time errors
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+const createUserLimiter = rateLimit({ max: 10, windowMs: 60 * 60 * 1000 })
 
-export async function POST(request: Request) {
-  const supabaseAdmin = getSupabaseAdmin()
-  
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (isAuthError(auth)) return auth
+
+  const ip = getClientIp(request)
+  const limit = createUserLimiter.check(ip)
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
+    )
+  }
+
+  const supabaseAdmin = createAdminClient()
+
   try {
     const { email, password, name, businessId, locationId, role } = await request.json()
 

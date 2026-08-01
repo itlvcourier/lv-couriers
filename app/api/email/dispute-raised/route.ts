@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { disputeRaisedEmail } from '@/lib/email-templates'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -9,12 +10,13 @@ export const maxDuration = 20
 /**
  * Notify admin(s) that a new dispute has been raised.
  * Called by the business client after raiseDispute() persists the row.
- *
- * Admin recipient resolution order:
- *   1. ADMIN_NOTIFICATION_EMAIL env var (comma-separated allowed)
- *   2. All admin profiles' emails
+ * Requires any authenticated user (business or admin) — the DB join verifies
+ * the disputeId belongs to a real invoice before sending.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req)
+  if (isAuthError(auth)) return auth
+
   const body = (await req.json().catch(() => ({}))) as { disputeId?: string }
   const disputeId = body.disputeId
   if (!disputeId) {

@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
 /**
  * Stamp a delivery as due for a review-request SMS.
@@ -11,7 +12,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
  *
  * Delay is admin-controlled via system_settings.review_request_delay_mins.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { deliveryId?: string }
   try {
     body = await req.json()

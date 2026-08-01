@@ -1,7 +1,25 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
-export async function POST(request: Request) {
+export const dynamic = 'force-dynamic'
+
+const resetLimiter = rateLimit({ max: 5, windowMs: 15 * 60 * 1000 })
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (isAuthError(auth)) return auth
+
+  const ip = getClientIp(request)
+  const limit = resetLimiter.check(ip)
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
+    )
+  }
+
   try {
     const { userId, newPassword } = await request.json()
 
@@ -19,12 +37,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create admin client
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    const supabaseAdmin = createAdminClient()
 
     // Update user password using admin API
     const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {

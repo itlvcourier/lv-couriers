@@ -6,6 +6,7 @@ import {
   getInvoiceSettings,
   type CronInvoiceRow,
 } from '@/lib/invoice-db'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -17,6 +18,9 @@ export const maxDuration = 30
  * the reminder/overdue/escalation events.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   const body = (await req.json().catch(() => ({}))) as {
     invoiceId?: string
     backupEmail?: string
@@ -25,8 +29,6 @@ export async function POST(req: NextRequest) {
   if (!invoiceId) {
     return NextResponse.json({ error: 'Missing invoiceId' }, { status: 400 })
   }
-
-  console.log('[v0] invoice-sent API called for invoiceId:', invoiceId)
 
   const supabase = createAdminClient()
 
@@ -51,7 +53,6 @@ export async function POST(req: NextRequest) {
       }
 
       if (attempt < maxRetries) {
-        console.log(`[v0] invoice-sent: Invoice not found, retrying (${attempt}/${maxRetries})...`)
         await new Promise(resolve => setTimeout(resolve, delayMs))
       } else {
         return { data: null, error: error || new Error('Invoice not found after retries') }
@@ -64,11 +65,8 @@ export async function POST(req: NextRequest) {
 
   if (error || !inv) {
     const errMsg = error instanceof Error ? error.message : (error as { message?: string })?.message || 'Invoice not found'
-    console.log('[v0] invoice-sent: Invoice not found in DB. Error:', errMsg)
     return NextResponse.json({ error: errMsg }, { status: 404 })
   }
-
-  console.log('[v0] invoice-sent: Found invoice', inv.invoice_number, 'billing_email:', inv.billing_email)
 
   // If an admin explicitly provided a backupEmail (because the original
   // bounced), route the send there and clear the bounced flag for the retry.
@@ -88,8 +86,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { result } = await sendInvoiceAndRecord(normalized, 'sent')
-  console.log('[v0] invoice-sent: sendInvoiceAndRecord result:', result)
-  
+
   // If email failed, keep invoice as draft and return error
   if (!result.ok) {
     return NextResponse.json({ 

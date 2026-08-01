@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { disputeResolvedEmail } from '@/lib/email-templates'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -12,6 +13,9 @@ export const maxDuration = 20
  * business's primary email.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   const body = (await req.json().catch(() => ({}))) as { disputeId?: string }
   const disputeId = body.disputeId
   if (!disputeId) {
