@@ -1,26 +1,13 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
-// This endpoint creates the store_requests table if it doesn't exist
-// Only accessible by admins
-export async function POST() {
+// This endpoint checks/describes the store_requests table — admin only
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   const supabase = await createClient()
-  
-  // Check if user is admin
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  
-  if (profile?.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
 
   // Check if table already exists by trying to query it
   const { error: checkError } = await supabase
@@ -73,9 +60,12 @@ CREATE POLICY "Allow all for authenticated" ON store_requests
   })
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   const supabase = await createClient()
-  
+
   // Check if table exists
   const { error } = await supabase
     .from('store_requests')

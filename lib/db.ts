@@ -46,6 +46,7 @@ export interface DbDriver {
   phone: string
   status: 'available' | 'on_delivery' | 'off_duty'
   max_jobs_override: number | null
+  monthly_adjustments: number | null
   total_deliveries: number
   today_deliveries: number
   month_deliveries: number
@@ -96,6 +97,8 @@ export interface DbDelivery {
   cancellation_stage: string | null
   cancellation_fee: number | null
   cancellation_reason: string | null
+  pickup_pay: number | null
+  delivery_pay: number | null
   retry_count: number
   trip_order: number | null
   // Cross-dock foundations (Phase 0/2)
@@ -244,7 +247,7 @@ export async function getDriverDeliveries(driverId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
-    .select('*')
+    .select('id, driver_id, business_id, location_id, status, pickup_address, pickup_area, dropoff_address, dropoff_area, recipient_name, recipient_phone, is_rush, is_out_of_town, is_urgent, calculated_rate, gst_amount, total_amount, delivered_at, posted_at, claimed_at, picked_up_at, distance_km, tracking_code, pickup_pay, delivery_pay, created_at')
     .eq('driver_id', driverId)
     .eq('status', 'delivered')
     .order('delivered_at', { ascending: false })
@@ -259,9 +262,9 @@ export async function getBusinessDeliveries(businessId: string) {
     .from('deliveries')
     .select(`
       *,
-      driver:drivers!deliveries_driver_id_fkey(*),
-      location:business_locations(*),
-      manifest_items(*)
+      driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+      location:business_locations(id, name, address),
+      manifest_items(id, delivery_id, item_type, quantity, notes)
     `)
     .eq('business_id', businessId)
     .order('created_at', { ascending: false })
@@ -287,21 +290,24 @@ export async function getLocationDeliveries(locationId: string) {
   return data as DbDelivery[]
 }
 
-export async function getAllDeliveries(status?: DeliveryStatus) {
+export async function getAllDeliveries(status?: DeliveryStatus, businessId?: string) {
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
     .select(`
       *,
-      business:businesses(*),
-      location:business_locations(*),
-      driver:drivers!deliveries_driver_id_fkey(*),
-      manifest_items(*)
+      business:businesses(id, name, email, phone),
+      location:business_locations(id, name, address),
+      driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+      manifest_items(id, delivery_id, item_type, quantity, notes)
     `)
     .order('created_at', { ascending: false })
 
   if (status) {
     query = query.eq('status', status)
+  }
+  if (businessId) {
+    query = query.eq('business_id', businessId)
   }
 
   const { data, error } = await query
@@ -795,6 +801,32 @@ export async function getDriverLocation(driverId: string) {
 }
 
 /**
+ * Bulk fetch the latest location row for every driver in one query.
+ * Uses a DISTINCT ON equivalent via order+limit-per-driver served by
+ * the unique constraint (driver_id is UNIQUE on driver_locations).
+ */
+export async function getAllDriverLocations(): Promise<DbDriverLocation[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('driver_locations')
+    .select('*')
+    .order('driver_id')
+    .order('recorded_at', { ascending: false })
+
+  if (error || !data) return []
+  // Keep only the first (most recent) row per driver_id
+  const seen = new Set<string>()
+  const latest: DbDriverLocation[] = []
+  for (const row of data as DbDriverLocation[]) {
+    if (!seen.has(row.driver_id)) {
+      seen.add(row.driver_id)
+      latest.push(row)
+    }
+  }
+  return latest
+}
+
+/**
  * Public live location for a tracking page: returns the assigned driver's
  * latest GPS fix for a given delivery, but only while the delivery is actively
  * in transit (so we don't leak a driver's position before/after the job).
@@ -821,10 +853,16 @@ export async function getLiveLocationForDelivery(
 
 // ============ DASHBOARD STATS ============
 
-export async function getDashboardStats() {
+export async function getDashboardStats(businessId?: string) {
   const supabase = createClient()
   const today = new Date().toISOString().split('T')[0]
-  
+
+  // Helper: start a delivery query optionally scoped to one business
+  const deliveryQ = () => {
+    const q = supabase.from('deliveries').select('*', { count: 'exact', head: true })
+    return businessId ? q.eq('business_id', businessId) : q
+  }
+
   const [
     { count: totalDeliveries },
     { count: activeDeliveries },
@@ -835,14 +873,14 @@ export async function getDashboardStats() {
     { count: totalBusinesses },
     { count: flaggedDeliveries },
   ] = await Promise.all([
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).in('status', ['posted', 'claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff']),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).eq('status', 'delivered').gte('delivered_at', today),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).eq('status', 'posted'),
+    deliveryQ(),
+    deliveryQ().in('status', ['posted', 'claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff']),
+    deliveryQ().eq('status', 'delivered').gte('delivered_at', today),
+    deliveryQ().eq('status', 'posted'),
     supabase.from('drivers').select('*', { count: 'exact', head: true }),
     supabase.from('drivers').select('*', { count: 'exact', head: true }).in('status', ['available', 'on_delivery']).eq('invite_status', 'active'),
     supabase.from('businesses').select('*', { count: 'exact', head: true }),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).eq('status', 'flagged'),
+    deliveryQ().eq('status', 'flagged'),
   ])
 
   return {
@@ -854,6 +892,59 @@ export async function getDashboardStats() {
     activeDrivers: activeDrivers || 0,
     totalBusinesses: totalBusinesses || 0,
     flaggedDeliveries: flaggedDeliveries || 0,
+  }
+}
+
+// ============ ADMIN RATINGS SUMMARY ============
+
+export interface AdminRatingsSummary {
+  totalFeedback: number
+  avgOverallRating: number | null
+  avgDriverRating: number | null
+  avgBusinessRating: number | null
+  last30Days: number
+}
+
+/**
+ * Platform-wide feedback summary for the admin dashboard.
+ * Reads directly from customer_feedback so it stays in sync with
+ * the same data that populates business-level reports.
+ */
+export async function getAdminRatingsSummary(businessId?: string): Promise<AdminRatingsSummary> {
+  const supabase = createClient()
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  const baseQ = () => {
+    const q = supabase.from('customer_feedback').select('overall_rating, driver_rating, business_rating').not('overall_rating', 'is', null)
+    return businessId ? q.eq('business_id', businessId) : q
+  }
+  const recentQ = () => {
+    const q = supabase.from('customer_feedback').select('*', { count: 'exact', head: true }).gte('created_at', since30)
+    return businessId ? q.eq('business_id', businessId) : q
+  }
+
+  const [allRows, recentCount] = await Promise.all([
+    baseQ(),
+    recentQ(),
+  ])
+
+  const rows = allRows.data ?? []
+  const total = rows.length
+
+  const avg = (key: 'overall_rating' | 'driver_rating' | 'business_rating') => {
+    const vals = rows
+      .map((r: Record<string, unknown>) => Number(r[key]))
+      .filter((v: number) => !isNaN(v) && v > 0)
+    if (vals.length === 0) return null
+    return Math.round((vals.reduce((s: number, v: number) => s + v, 0) / vals.length) * 10) / 10
+  }
+
+  return {
+    totalFeedback: total,
+    avgOverallRating: avg('overall_rating'),
+    avgDriverRating: avg('driver_rating'),
+    avgBusinessRating: avg('business_rating'),
+    last30Days: recentCount.count ?? 0,
   }
 }
 

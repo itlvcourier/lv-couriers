@@ -923,7 +923,7 @@ export async function loadSavedContacts(profile: {
   if (profile.role === 'driver') return []
   let query = supabase
     .from('saved_contacts')
-    .select('*')
+    .select('id, business_id, name, phone, address, area, buzz_code, notes, use_count, last_used_at')
     .order('last_used_at', { ascending: false, nullsFirst: false })
     .limit(500)
   if (profile.role === 'business' && profile.businessId) {
@@ -994,7 +994,7 @@ export async function loadAdminNotifications(profile: {
   if (profile.role !== 'admin') return []
   const { data, error } = await supabase
     .from('admin_notifications')
-    .select('*')
+    .select('id, notification_type, title, message, delivery_id, driver_id, business_id, invoice_id, priority, is_read, created_at')
     .order('created_at', { ascending: false })
     .limit(200)
   if (error) throw error
@@ -1059,7 +1059,7 @@ export async function loadSMSLog(profile: {
   if (profile.role === 'driver') return [] // drivers don't view SMS log
   const { data, error } = await supabase
     .from('sms_log')
-    .select('*')
+    .select('id, delivery_id, invoice_id, recipient_phone, sms_type, message_body, status, error_message, sent_at, is_retried')
     .order('sent_at', { ascending: false })
     .limit(200)
   if (error) throw error
@@ -1149,7 +1149,7 @@ export async function loadDisputes(
   const supabase = createClient()
   const { data, error } = await supabase
     .from('invoice_disputes')
-    .select('*')
+    .select('id, invoice_id, line_item_id, reason, photo_url, status, resolution_notes, credit_amount, created_at, resolved_at')
     .order('created_at', { ascending: false })
     .limit(200)
   if (error) throw error
@@ -1303,6 +1303,15 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
     })
   
   if (eventError) console.error('[v0] Failed to log invoice generated event:', eventError)
+}
+
+export async function deleteInvoiceFromDb(invoiceId: string): Promise<void> {
+  const supabase = createClient()
+  // Delete line items first (FK constraint)
+  await supabase.from('invoice_line_items').delete().eq('invoice_id', invoiceId)
+  await supabase.from('invoice_events').delete().eq('invoice_id', invoiceId)
+  const { error } = await supabase.from('invoices').delete().eq('id', invoiceId)
+  if (error) throw new Error(`deleteInvoiceFromDb: ${error.message}`)
 }
 
 // ============================================================================
@@ -1561,22 +1570,63 @@ export async function getDriverRatingsSummary(driverId: string): Promise<DriverR
 /**
  * Get business ratings summary for a location
  */
-export async function getBusinessRatingsSummary(businessId: string, locationId: string): Promise<BusinessRatingsSummary | null> {
+export async function getBusinessRatingsSummary(
+  businessId: string,
+  locationId: string | null,
+): Promise<BusinessRatingsSummary | null> {
   const supabase = createClient()
-  
+
+  // Single-location path — use the pre-aggregated view
+  if (locationId) {
+    const { data, error } = await supabase
+      .from('business_ratings_summary')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('location_id', locationId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('getBusinessRatingsSummary (single): query failed:', error.message)
+      return null
+    }
+
+    return data ? mapBusinessRatingsSummaryRow(data) : null
+  }
+
+  // All-locations path — aggregate across every location for this business
   const { data, error } = await supabase
-    .from('business_ratings_summary')
-    .select('*')
+    .from('customer_feedback')
+    .select('overall_rating, driver_rating, business_rating')
     .eq('business_id', businessId)
-    .eq('location_id', locationId)
-    .maybeSingle()
-  
+    .not('overall_rating', 'is', null)
+
   if (error) {
-    console.error('[v0] Failed to fetch business ratings summary:', error.message)
+    console.error('getBusinessRatingsSummary (all-locs): query failed:', error.message)
     return null
   }
-  
-  return data ? mapBusinessRatingsSummaryRow(data) : null
+
+  const rows = data ?? []
+  if (rows.length === 0) return null
+
+  const avg = (key: 'overall_rating' | 'driver_rating' | 'business_rating') => {
+    const vals = rows
+      .map((r: Record<string, unknown>) => Number(r[key]))
+      .filter((v: number) => !isNaN(v) && v > 0)
+    return vals.length
+      ? Math.round((vals.reduce((s: number, v: number) => s + v, 0) / vals.length) * 10) / 10
+      : null
+  }
+
+  return {
+    businessId,
+    locationId: 'all',
+    avgOverallRating: avg('overall_rating'),
+    avgDriverRating: avg('driver_rating'),
+    avgBusinessRating: avg('business_rating'),
+    totalRatings: rows.length,
+    totalFeedback: rows.length,
+    feedbackReceivedCount: rows.length,
+  }
 }
 
 // ============================================================================

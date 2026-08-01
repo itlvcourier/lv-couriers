@@ -44,16 +44,17 @@ export function BusinessReports() {
   const accessibleLocations = getAccessibleLocations()
   const canViewAll = isOwner()
   
-  // Fetch business ratings for the selected location
+  // Fetch business ratings — for a single location pass locationId,
+  // for "all locations" pass null to get the business-wide aggregate.
   const { data: businessRatings } = useSWR(
-    business && selectedLocationId !== 'all' 
-      ? ['business-ratings', business.id, selectedLocationId] 
-      : null,
+    business ? ['business-ratings', business.id, selectedLocationId] : null,
     async () => {
       if (!business) return null
-      const summary = await getBusinessRatingsSummary(business.id, selectedLocationId)
-      return summary
-    }
+      return getBusinessRatingsSummary(
+        business.id,
+        selectedLocationId !== 'all' ? selectedLocationId : null,
+      )
+    },
   )
   
   // Calculate date range
@@ -239,29 +240,29 @@ export function BusinessReports() {
             </CardContent>
           </Card>
 
-          {/* Customer Rating (shown when viewing a single location) */}
-          {selectedLocationId !== 'all' && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium">Rating</CardTitle>
-                <Star className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-                <div className="text-xl sm:text-2xl font-bold flex items-center gap-1">
-                  {businessRatings?.avgOverallRating 
-                    ? businessRatings.avgOverallRating.toFixed(1)
-                    : 'N/A'
-                  }
-                  {businessRatings?.avgOverallRating && (
-                    <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 fill-yellow-400" />
-                  )}
-                </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">
-                  {businessRatings ? `${businessRatings.feedbackReceivedCount} reviews` : 'No reviews'}
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          {/* Customer Rating — shown for both single and all-locations views */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Rating</CardTitle>
+              <Star className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl sm:text-2xl font-bold flex items-center gap-1">
+                {businessRatings?.avgOverallRating
+                  ? businessRatings.avgOverallRating.toFixed(1)
+                  : 'N/A'
+                }
+                {businessRatings?.avgOverallRating && (
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 fill-yellow-400" />
+                )}
+              </div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                {businessRatings
+                  ? `${businessRatings.feedbackReceivedCount} review${businessRatings.feedbackReceivedCount !== 1 ? 's' : ''}${selectedLocationId === 'all' ? ' (all locations)' : ''}`
+                  : 'No reviews yet'}
+              </p>
+            </CardContent>
+          </Card>
         </div>
       )}
       

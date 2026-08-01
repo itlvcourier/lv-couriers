@@ -1,6 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  // Disabled in production — creates accounts with known credentials via service role.
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY

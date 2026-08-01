@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -8,7 +9,10 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * Recipients: new driver (job details), old driver (removed), business (updated)
  * Setting gate: sms_notify_reassigned
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { deliveryId?: string; newDriverId?: string; oldDriverId?: string | null }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

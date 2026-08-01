@@ -13,6 +13,7 @@ import { BusinessProfile } from './BusinessProfile'
 import { BusinessReports } from './BusinessReports'
 import { LocationSwitcher } from './LocationSwitcher'
 import { BusinessNotificationCenter } from './BusinessNotificationCenter'
+import { HelpGuide } from '@/components/shared/HelpGuide'
 import {
   Plus,
   Package,
@@ -46,6 +47,7 @@ export function BusinessView() {
               <LocationSwitcher />
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <HelpGuide role="business" />
               <BusinessNotificationCenter />
               <Avatar className="w-8 h-8 sm:w-9 sm:h-9">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs sm:text-sm">
@@ -62,7 +64,7 @@ export function BusinessView() {
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="max-w-7xl mx-auto px-4 py-4 pb-24">
             <TabsContent value="orders" className="mt-0 m-0">
-              <BusinessOrders />
+              <BusinessOrders onNavigate={setActiveTab} />
             </TabsContent>
 
             <TabsContent value="live" className="mt-0 m-0">

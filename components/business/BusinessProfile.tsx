@@ -131,7 +131,24 @@ export function BusinessProfile() {
   const completedDeliveries = businessDeliveries.filter(d => d.status === 'delivered')
   const totalSpent = completedDeliveries.reduce((sum, d) => sum + (d.calculatedRate || 0), 0)
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    if (!primaryLocation) return
+    const supabase = createClient()
+    const updates: Record<string, string> = {}
+    if (editedPhone.trim()) updates.phone = editedPhone.trim()
+    if (editedAddress.trim()) updates.address = editedAddress.trim()
+    if (Object.keys(updates).length === 0) {
+      setIsEditing(false)
+      return
+    }
+    const { error } = await supabase
+      .from('business_locations')
+      .update(updates)
+      .eq('id', primaryLocation.id)
+    if (error) {
+      toast.error('Failed to save: ' + error.message)
+      return
+    }
     toast.success('Profile updated')
     setIsEditing(false)
   }
@@ -421,7 +438,7 @@ export function BusinessProfile() {
               size="sm"
               onClick={() => {
                 if (isEditing) {
-                  handleSaveProfile()
+                  void handleSaveProfile()
                 } else {
                   setEditedPhone(primaryLocation?.phone || '')
                   setEditedAddress(primaryLocation?.address || '')

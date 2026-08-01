@@ -72,7 +72,7 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
     >()
 
   if (error) {
-    console.error('[v0] review-requests sweep query failed', error.message)
+    console.error('review-requests sweep: query failed:', error.message)
     throw new Error(error.message)
   }
 

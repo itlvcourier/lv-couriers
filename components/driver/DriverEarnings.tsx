@@ -53,7 +53,10 @@ export function DriverEarnings() {
     { refreshInterval: 60000 },
   )
 
-  const isLoading = settingsLoading || deliveriesLoading
+  // Include legEarnings loading for per_leg mode so the section never
+  // flashes empty while the fetch is in flight.
+  const legEarningsLoading = payModel === 'per_leg' && !legEarnings && !settingsLoading
+  const isLoading = settingsLoading || deliveriesLoading || legEarningsLoading
 
   // Calculate earnings based on settings
   const earnings = useMemo(() => {
@@ -71,7 +74,7 @@ export function DriverEarnings() {
       calculatedPay: calculateDriverPay(settings, {
         is_rush: d.is_rush,
         is_urgent: d.is_urgent,
-        distance_km: (d as DbDelivery & { distance_km?: number }).distance_km || 5, // Default 5km if not tracked
+        distance_km: (d as DbDelivery & { distance_km?: number }).distance_km ?? undefined,
       })
     }))
     

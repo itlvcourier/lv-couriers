@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
 
@@ -8,7 +9,10 @@ import { sendSms } from '@/lib/twilio'
  * Recipients: billing contact phone for the location
  * Setting gate: sms_notify_payment_received
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { invoiceId?: string }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

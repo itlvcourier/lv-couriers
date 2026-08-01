@@ -190,10 +190,9 @@ export interface DecisionInput {
 async function decide(
   id: string,
   status: Extract<DispatchRequestStatus, "approved" | "rejected" | "cancelled">,
-  input: DecisionInput = {},
+  input: DecisionInput & { adminOverride?: boolean } = {},
 ): Promise<DispatchRequest> {
   const supabase = createClient()
-  // Guard: only a still-pending request can be decided (prevents racing an expiry).
   const { data: current, error: readErr } = await supabase
     .from("dispatch_requests")
     .select("*")
@@ -201,8 +200,11 @@ async function decide(
     .single()
   if (readErr) throw readErr
   const cur = current as DispatchRow
-  if (cur.status !== "pending") {
-    throw new Error(`Request is no longer pending (current status: ${cur.status}).`)
+  // Admins may override expired requests (e.g. approve an after-hours delivery
+  // that came in close to the window). Non-admin callers are still gated.
+  const decidable = cur.status === "pending" || (input.adminOverride && cur.status === "expired")
+  if (!decidable) {
+    throw new Error(`Request is no longer actionable (current status: ${cur.status}).`)
   }
   const mergedPayload = input.payloadPatch
     ? { ...(cur.payload ?? {}), ...input.payloadPatch }
@@ -217,20 +219,21 @@ async function decide(
       payload: mergedPayload,
     })
     .eq("id", id)
-    .eq("status", "pending")
+    // Admin override: allow updating expired rows too.
+    .in("status", input.adminOverride ? ["pending", "expired"] : ["pending"])
     .select("*")
     .single()
   if (error) throw error
   return mapRequest(data as DispatchRow)
 }
 
-export function approveDispatchRequest(id: string, input?: DecisionInput) {
+export function approveDispatchRequest(id: string, input?: DecisionInput & { adminOverride?: boolean }) {
   return decide(id, "approved", input)
 }
-export function rejectDispatchRequest(id: string, input?: DecisionInput) {
+export function rejectDispatchRequest(id: string, input?: DecisionInput & { adminOverride?: boolean }) {
   return decide(id, "rejected", input)
 }
-export function cancelDispatchRequest(id: string, input?: DecisionInput) {
+export function cancelDispatchRequest(id: string, input?: DecisionInput & { adminOverride?: boolean }) {
   return decide(id, "cancelled", input)
 }
 

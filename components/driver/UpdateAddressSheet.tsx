@@ -177,7 +177,7 @@ export function UpdateAddressSheet({
       reset()
       onOpenChange(false)
     } catch (err) {
-      console.log('[v0] update address submit failed:', err)
+      console.error('Update address submit failed:', err)
       toast.error('Could not save address change')
     } finally {
       setSubmitting(false)

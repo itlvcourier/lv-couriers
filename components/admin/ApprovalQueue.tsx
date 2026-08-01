@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { mutate as globalMutate } from 'swr'
 import { useApp } from '@/lib/context'
+import { createDeliveryInDb } from '@/lib/db-extended'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,7 +49,7 @@ const STATUS_VARIANT: Record<DispatchRequestStatus, 'default' | 'secondary' | 'd
   cancelled: 'secondary',
 }
 
-type FilterTab = 'pending' | 'all'
+type FilterTab = 'pending' | 'all' | 'expired'
 
 export function ApprovalQueue() {
   const { currentUser, businesses } = useApp()
@@ -64,7 +66,13 @@ export function ApprovalQueue() {
 
   const load = useCallback(() => {
     setLoading(true)
-    listDispatchRequests(tab === 'pending' ? { status: 'pending' } : { limit: 100 })
+    const filter =
+      tab === 'pending'
+        ? { status: 'pending' as const }
+        : tab === 'expired'
+          ? { status: 'expired' as const, limit: 100 }
+          : { limit: 100 }
+    listDispatchRequests(filter)
       .then(setRequests)
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to load requests'))
       .finally(() => setLoading(false))
@@ -79,15 +87,80 @@ export function ApprovalQueue() {
     [requests],
   )
 
+  const expiredCount = useMemo(
+    () => requests.filter((r) => r.status === 'expired').length,
+    [requests],
+  )
+
   const decide = async (req: DispatchRequest, action: 'approve' | 'reject') => {
     setBusyId(req.id)
     try {
       const reason = reasons[req.id]?.trim() || null
+      // Admins can force-approve/reject expired requests (e.g. an after-hours
+      // delivery that came in just over the deadline window).
+      const isExpired = req.status === 'expired'
+      const opts = { decidedBy: currentUser?.id ?? null, reason, adminOverride: isExpired }
       if (action === 'approve') {
-        await approveDispatchRequest(req.id, { decidedBy: currentUser?.id ?? null, reason })
-        toast.success(`${REQUEST_TYPE_LABELS[req.type]} approved`)
+        await approveDispatchRequest(req.id, opts)
+
+        // For late_order requests: create the actual delivery record now that
+        // the admin has approved it, then bust the caches so the dashboard
+        // KPIs and orders list reflect the new delivery immediately.
+        if (req.type === 'late_order' && req.payload) {
+          const p = req.payload as Record<string, unknown>
+          try {
+            const manifest: Array<{ type: 'small_package' | 'big_package' | 'out_of_town' | 'rush'; quantity: number }> = []
+            if (Number(p.smallPackages) > 0) manifest.push({ type: 'small_package', quantity: Number(p.smallPackages) })
+            if (Number(p.bigPackages) > 0) manifest.push({ type: 'big_package', quantity: Number(p.bigPackages) })
+            if (p.isRush) manifest.push({ type: 'rush', quantity: 1 })
+            if (p.isOutOfTown) manifest.push({ type: 'out_of_town', quantity: 1 })
+
+            // Look up the business's default location (first active location)
+            const { createClient } = await import('@/lib/supabase/client')
+            const sb = createClient()
+            const { data: loc } = await sb
+              .from('business_locations')
+              .select('id')
+              .eq('business_id', req.businessId)
+              .eq('is_active', true)
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .single()
+
+            const businessId = req.businessId!
+            await createDeliveryInDb({
+              businessId,
+              locationId: loc?.id ?? businessId,
+              pickupAddress: String(p.pickupAddress ?? ''),
+              pickupArea: String(p.pickupArea ?? p.pickupAddress ?? ''),
+              dropoffAddress: String(p.dropoffAddress ?? ''),
+              dropoffArea: String(p.dropoffArea ?? p.dropoffAddress ?? ''),
+              recipientName: p.recipientName ? String(p.recipientName) : null,
+              recipientPhone: p.recipientPhone ? String(p.recipientPhone) : null,
+              isRush: Boolean(p.isRush),
+              isOutOfTown: Boolean(p.isOutOfTown),
+              manifest: manifest.length > 0 ? manifest : [{ type: 'small_package', quantity: 1 }],
+            })
+
+            // Bust SWR caches so orders page + dashboard KPIs refresh
+            await Promise.all([
+              globalMutate('all-deliveries'),
+              globalMutate('dashboard-stats'),
+            ])
+
+            toast.success(isExpired ? 'After-hours delivery force-approved and posted' : 'After-hours delivery approved and posted')
+          } catch (deliveryErr) {
+            // Approval succeeded but delivery creation failed — warn but don't throw
+            console.error('[v0] Failed to create delivery from approved late_order:', deliveryErr)
+            toast.warning('Request approved, but delivery post failed — create it manually in Orders.')
+          }
+        } else {
+          toast.success(isExpired ? `${REQUEST_TYPE_LABELS[req.type]} force-approved` : `${REQUEST_TYPE_LABELS[req.type]} approved`)
+          await globalMutate('all-deliveries')
+          await globalMutate('dashboard-stats')
+        }
       } else {
-        await rejectDispatchRequest(req.id, { decidedBy: currentUser?.id ?? null, reason })
+        await rejectDispatchRequest(req.id, opts)
         toast.success(`${REQUEST_TYPE_LABELS[req.type]} rejected`)
       }
       setReasons((prev) => {
@@ -124,9 +197,17 @@ export function ApprovalQueue() {
           <div className="flex rounded-md border border-border overflow-hidden">
             <button
               onClick={() => setTab('pending')}
-              className={`px-3 py-1.5 text-sm ${tab === 'pending' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+              className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${tab === 'pending' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
             >
               Pending
+              {pendingCount > 0 && <span className="text-xs bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 leading-none">{pendingCount}</span>}
+            </button>
+            <button
+              onClick={() => setTab('expired')}
+              className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${tab === 'expired' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+            >
+              Expired
+              {expiredCount > 0 && <span className="text-xs bg-yellow-500/20 text-yellow-500 rounded-full px-1.5 py-0.5 leading-none">{expiredCount}</span>}
             </button>
             <button
               onClick={() => setTab('all')}
@@ -142,20 +223,40 @@ export function ApprovalQueue() {
       </div>
 
       {loading ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">Loading requests…</CardContent>
-        </Card>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-md bg-muted animate-pulse" />
+                    <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+                  </div>
+                  <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="h-3 w-full rounded bg-muted animate-pulse" />
+                  <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : requests.length === 0 ? (
         <Card>
           <CardContent className="p-10 flex flex-col items-center justify-center text-center gap-2">
             <Inbox className="w-8 h-8 text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">
-              {tab === 'pending' ? 'No pending requests' : 'No requests yet'}
+              {tab === 'pending' ? 'No pending requests' : tab === 'expired' ? 'No expired requests' : 'No requests yet'}
             </p>
             <p className="text-sm text-muted-foreground">
               {tab === 'pending'
                 ? 'New late orders and change requests will show up here.'
-                : 'Requests will appear here as they are created.'}
+                : tab === 'expired'
+                  ? 'Expired after-hours requests that were not decided in time appear here for admin override.'
+                  : 'Requests will appear here as they are created.'}
             </p>
           </CardContent>
         </Card>
@@ -164,6 +265,8 @@ export function ApprovalQueue() {
           {requests.map((req) => {
             const Icon = TYPE_ICON[req.type]
             const isPending = req.status === 'pending'
+            const isExpired = req.status === 'expired'
+            const canAct = isPending || isExpired
             const expiresSoon =
               isPending && req.expiresAt && new Date(req.expiresAt).getTime() - Date.now() < 15 * 60_000
             return (
@@ -202,23 +305,30 @@ export function ApprovalQueue() {
                     </div>
                   )}
 
-                  {isPending && (
+                  {canAct && (
                     <div className="space-y-2">
+                      {isExpired && (
+                        <div className="flex items-center gap-2 rounded-md bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 text-xs text-yellow-500">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          This request expired. You can still force-approve or reject it as an admin override.
+                        </div>
+                      )}
                       <Textarea
                         value={reasons[req.id] ?? ''}
                         onChange={(e) => setReasons((p) => ({ ...p, [req.id]: e.target.value }))}
-                        placeholder="Optional note for this decision…"
+                        placeholder={isExpired ? 'Reason for override (recommended)…' : 'Optional note for this decision…'}
                         rows={2}
                         className="text-sm"
                       />
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           size="sm"
                           onClick={() => decide(req, 'approve')}
                           disabled={busyId === req.id}
+                          className={isExpired ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : ''}
                         >
                           <Check className="w-4 h-4 mr-1.5" />
-                          Approve
+                          {isExpired ? 'Force Approve' : 'Approve'}
                         </Button>
                         <Button
                           size="sm"
@@ -230,9 +340,14 @@ export function ApprovalQueue() {
                           <X className="w-4 h-4 mr-1.5" />
                           Reject
                         </Button>
-                        {req.expiresAt && (
+                        {req.expiresAt && isPending && (
                           <span className="text-xs text-muted-foreground ml-auto">
                             Expires {new Date(req.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                        {req.expiresAt && isExpired && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            Expired {new Date(req.expiresAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                           </span>
                         )}
                       </div>

@@ -1,14 +1,17 @@
 'use client'
 
 import { useState } from 'react'
+import useSWR from 'swr'
 import { useApp } from '@/lib/context'
+import { getAllDriverLocations, type DbDriverLocation } from '@/lib/db'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
   MapPin, 
   Battery, 
   Clock,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 
 interface DriverTooltip {
@@ -18,7 +21,30 @@ interface DriverTooltip {
 }
 
 export function LiveDriversMap() {
-  const { drivers, driverGPS, deliveries } = useApp()
+  const { drivers, deliveries } = useApp()
+
+  // Poll DB every 15 s for live GPS positions
+  const { data: locationRows = [], isValidating } = useSWR<DbDriverLocation[]>(
+    'all-driver-locations',
+    getAllDriverLocations,
+    { refreshInterval: 15_000, revalidateOnFocus: true }
+  )
+
+  // Build a lookup map keyed by driver_id → latest DB row
+  const locationByDriver = Object.fromEntries(
+    locationRows.map(r => [r.driver_id, r])
+  )
+
+  // Map DbDriverLocation rows to the DriverGPS shape the rest of the component expects
+  const driverGPS = locationRows.map(r => ({
+    driverId: r.driver_id,
+    lat: r.lat,
+    lng: r.lng,
+    heading: r.heading ?? 0,
+    speed: r.speed ?? 0,
+    battery: (r as any).battery ?? 100,
+    lastUpdate: r.recorded_at,
+  }))
   const [selectedDriver, setSelectedDriver] = useState<DriverTooltip | null>(null)
 
   // Get driver info with GPS
@@ -113,6 +139,10 @@ export function LiveDriversMap() {
         <CardTitle className="text-base font-medium flex items-center gap-2">
           <MapPin className="w-4 h-4 text-primary" />
           Live Drivers
+          <span className="ml-auto flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+            <RefreshCw className={`w-3 h-3 ${isValidating ? 'animate-spin' : ''}`} />
+            Updates every 15s
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-2 sm:p-4">

@@ -207,8 +207,36 @@ function TripJobCard({
   canMoveUp: boolean
   canMoveDown: boolean
 }) {
+  const { failDelivery, escalateDelivery, retryDelivery } = useApp()
+  const [showFailSheet, setShowFailSheet] = useState(false)
+  const [failReason, setFailReason] = useState<FailReason | ''>('')
+  const [failNotes, setFailNotes] = useState('')
+
   const isCompleted = delivery.status === 'delivered'
   const isRetryPending = delivery.status === 'failed_retry'
+  const isFinalAttempt = (delivery.retryCount ?? 0) >= 1
+
+  const resetFailForm = () => {
+    setFailReason('')
+    setFailNotes('')
+  }
+
+  const handleMarkFailed = () => {
+    if (!failReason) return
+    setShowFailSheet(false)
+    if (isFinalAttempt) {
+      escalateDelivery(delivery.id)
+      toast.error('Delivery escalated to dispatch after 2 failed attempts', {
+        description: 'You can move on to your next job.',
+      })
+    } else {
+      failDelivery(delivery.id, failReason, failNotes)
+      toast.warning('Delivery flagged for retry', {
+        description: 'Try again when you can, or release it to dispatch.',
+      })
+    }
+    resetFailForm()
+  }
   
   const getStatusLabel = () => {
     switch (delivery.status) {
@@ -255,18 +283,72 @@ function TripJobCard({
       </Card>
     )
   }
+
+  // Retry-pending inline state: driver can retry or release to dispatch
+  if (isRetryPending) {
+    const lastFailure = [...delivery.statusHistory].reverse().find(h => h.status === 'failed_retry')
+    return (
+      <Card className="bg-yellow-500/10 border-yellow-500/30">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm text-yellow-400">{delivery.businessName} — Retry Needed</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{delivery.dropoffArea}</p>
+              {lastFailure?.note && (
+                <p className="text-xs text-muted-foreground mt-1 italic">{lastFailure.note}</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                disabled={!canMoveUp}
+                className="p-1.5 rounded-lg bg-[var(--bg-card-2)] disabled:opacity-30 tap-target"
+              >
+                <ArrowUp className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                disabled={!canMoveDown}
+                className="p-1.5 rounded-lg bg-[var(--bg-card-2)] disabled:opacity-30 tap-target"
+              >
+                <ArrowDown className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => { retryDelivery(delivery.id); toast.success('Resuming delivery') }}
+              className="flex-1 h-9 rounded-lg bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white text-xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+              Retry
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { escalateDelivery(delivery.id); toast.info('Released to dispatch') }}
+              className="flex-1 h-9 rounded-lg border-[var(--border-color)] text-xs"
+            >
+              Release
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
   
   return (
-    <Card className={`bg-[var(--bg-card)] border-[var(--border-color)] ${isRetryPending ? 'border-yellow-500/50' : ''}`}>
+    <>
+    <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           {/* Index number */}
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-            isRetryPending ? 'bg-yellow-500/20' : 'bg-[var(--accent-orange)]'
-          }`}>
-            <span className={`text-sm font-medium ${isRetryPending ? 'text-yellow-400' : 'text-white'}`}>
-              {index + 1}
-            </span>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[var(--accent-orange)]">
+            <span className="text-sm font-medium text-white">{index + 1}</span>
           </div>
           
           <div className="flex-1 min-w-0">
@@ -308,10 +390,7 @@ function TripJobCard({
             </div>
             
             {/* Status */}
-            <p className={`text-xs ${isRetryPending ? 'text-yellow-400' : 'text-[var(--accent-orange)]'}`}>
-              {isRetryPending && <Clock className="w-3 h-3 inline mr-1" />}
-              {getStatusLabel()}
-            </p>
+            <p className="text-xs text-[var(--accent-orange)]">{getStatusLabel()}</p>
           </div>
           
           {/* Reorder buttons */}
@@ -347,25 +426,69 @@ function TripJobCard({
           <div className="mt-4 pt-4 border-t border-[var(--border-color)] space-y-4">
             {/* Addresses */}
             <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 text-[var(--accent-blue)] shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pickup</p>
-                  <p className="text-sm text-foreground">{delivery.pickupAddress}</p>
+              {getDriverRole(delivery) !== 'hub_to_dropoff' && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-[var(--accent-blue)] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Pickup</p>
+                    <p className="text-sm text-foreground">{delivery.pickupAddress}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 text-[var(--accent-green)] shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Drop-off</p>
-                  <p className="text-sm text-foreground">{delivery.dropoffAddress}</p>
+              )}
+              {getDriverRole(delivery) !== 'pickup_to_hub' && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-[var(--accent-green)] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Drop-off</p>
+                    <p className="text-sm text-foreground">{delivery.dropoffAddress}</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
+
+            {/* Recipient contact info */}
+            {getDriverRole(delivery) !== 'pickup_to_hub' && (delivery.recipientName || delivery.recipientPhone || delivery.buzzCode) && (
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)] border border-[var(--border-color)]">
+                <div className="w-8 h-8 rounded-full bg-[var(--accent-green)]/15 text-[var(--accent-green)] flex items-center justify-center shrink-0">
+                  <UserRound className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  {delivery.recipientName && (
+                    <p className="text-sm font-medium text-foreground truncate">{delivery.recipientName}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {delivery.recipientPhone && (
+                      <a
+                        href={`tel:${delivery.recipientPhone}`}
+                        className="flex items-center gap-1 text-[var(--accent-orange)] hover:underline"
+                      >
+                        <Phone className="w-3 h-3" />
+                        {delivery.recipientPhone}
+                      </a>
+                    )}
+                    {delivery.buzzCode && (
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <KeyRound className="w-3 h-3" />
+                        Buzz {delivery.buzzCode}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Status stepper */}
             <div className="p-3 rounded-lg bg-[var(--bg-card-2)]">
-              <StatusStepper currentStatus={delivery.status} />
+              <StatusStepper
+                currentStatus={delivery.status}
+                steps={
+                  getDriverRole(delivery) === 'pickup_to_hub'
+                    ? HUB_PICKUP_STEPS
+                    : getDriverRole(delivery) === 'hub_to_dropoff'
+                    ? HUB_DROPOFF_STEPS
+                    : STATUS_STEPS
+                }
+              />
             </div>
             
             {/* Action button */}
@@ -377,10 +500,100 @@ function TripJobCard({
                 {getActionLabel()}
               </Button>
             )}
+
+            {/* Cannot complete link — only shown when en route to dropoff */}
+            {delivery.status === 'en_route_dropoff' && (
+              <button
+                onClick={() => setShowFailSheet(true)}
+                className="w-full text-center text-sm text-[var(--accent-red)] hover:underline"
+              >
+                Cannot Complete Delivery
+              </button>
+            )}
           </div>
         )}
       </CardContent>
     </Card>
+
+    {/* Fail delivery sheet */}
+    <Sheet open={showFailSheet} onOpenChange={(open) => { setShowFailSheet(open); if (!open) resetFailForm() }}>
+      <SheetContent side="bottom" className="bg-[var(--bg-card)] border-t border-[var(--border-color)] rounded-t-3xl max-h-[90vh] overflow-y-auto">
+        <SheetHeader className="mb-4">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-foreground flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-[var(--accent-red)]" />
+              Can&apos;t Complete Delivery
+            </SheetTitle>
+            <button onClick={() => { setShowFailSheet(false); resetFailForm() }} className="tap-target" aria-label="Close">
+              <X className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
+        </SheetHeader>
+        <div className="space-y-4">
+          {/* Attempt warning */}
+          <div className={`p-3 rounded-xl border ${isFinalAttempt ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}>
+            <div className="flex items-start gap-2">
+              <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${isFinalAttempt ? 'text-red-400' : 'text-yellow-400'}`} />
+              <div className="text-xs">
+                <p className={`font-medium ${isFinalAttempt ? 'text-red-400' : 'text-yellow-400'}`}>
+                  {isFinalAttempt ? 'Final attempt — will escalate to dispatch' : 'Attempt 1 of 2'}
+                </p>
+                <p className="text-muted-foreground mt-0.5">
+                  {isFinalAttempt
+                    ? 'This delivery has already failed once. Confirming sends it to dispatch.'
+                    : "You'll get one more chance to retry before this escalates."}
+                </p>
+              </div>
+            </div>
+          </div>
+          {/* Reason */}
+          <div className="space-y-2">
+            <Label htmlFor={`fail-reason-${delivery.id}`} className="text-sm text-foreground">
+              Reason <span className="text-red-400">*</span>
+            </Label>
+            <Select value={failReason} onValueChange={(v) => setFailReason(v as FailReason)}>
+              <SelectTrigger id={`fail-reason-${delivery.id}`} className="h-12 bg-[var(--bg-card-2)] border-[var(--border-color)] text-foreground rounded-xl">
+                <SelectValue placeholder="Select a reason..." />
+              </SelectTrigger>
+              <SelectContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+                {FAIL_REASONS.map((reason) => (
+                  <SelectItem key={reason} value={reason} className="text-foreground focus:bg-[var(--bg-card-2)] focus:text-foreground">
+                    {FAIL_REASON_LABELS[reason]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label className="text-sm text-foreground">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              placeholder="Add details to help dispatch — e.g. building locked, customer unreachable"
+              value={failNotes}
+              onChange={(e) => setFailNotes(e.target.value)}
+              rows={3}
+              maxLength={300}
+              className="bg-[var(--bg-card-2)] border-[var(--border-color)] rounded-xl resize-none"
+            />
+            <p className="text-xs text-muted-foreground text-right">{failNotes.length}/300</p>
+          </div>
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <Button onClick={() => { setShowFailSheet(false); resetFailForm() }} variant="outline" className="flex-1 h-12 rounded-xl border-[var(--border-color)] tap-target">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMarkFailed}
+              disabled={!failReason}
+              className={`flex-1 h-12 rounded-xl text-white tap-target disabled:opacity-50 ${isFinalAttempt ? 'bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90' : 'bg-yellow-500 hover:bg-yellow-500/90'}`}
+            >
+              {isFinalAttempt ? 'Escalate to Dispatch' : 'Flag for Retry'}
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+    </>
   )
 }
 
@@ -601,11 +814,6 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   const openInAppleMaps = (address: string) => {
     const encoded = encodeURIComponent(address)
     window.open(`https://maps.apple.com/?q=${encoded}`, '_blank')
-  }
-
-  const openInMaps = (address: string) => {
-    // Default to Google Maps, but we now have dropdown options
-    openInGoogleMaps(address)
   }
 
   const handleAction = () => {
@@ -1204,7 +1412,11 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   )
 }
 
-export function ActiveDelivery() {
+interface ActiveDeliveryProps {
+  onNavigateToAvailable?: () => void
+}
+
+export function ActiveDelivery({ onNavigateToAvailable }: ActiveDeliveryProps) {
   const { currentUser, deliveries, trips, getDriverActiveJobs, getDriverMaxJobs } = useApp()
   const driverId = currentUser?.driverId || ''
   
@@ -1247,8 +1459,11 @@ export function ActiveDelivery() {
         trip={tripToShow} 
         deliveries={activeDeliveries}
         onAddJob={() => {
-          // Switch to Available tab - handled by parent
-          toast.info('Go to Available tab to add more jobs')
+          if (onNavigateToAvailable) {
+            onNavigateToAvailable()
+          } else {
+            toast.info('Go to Available tab to add more jobs')
+          }
         }}
       />
     )

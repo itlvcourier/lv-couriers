@@ -127,6 +127,40 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const [distanceKm, setDistanceKm] = useState<number | null>(null)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
 
+  // Read sessionStorage pre-fill from a "Reorder" action in BusinessOrders
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('duplicateOrder')
+      if (!raw) return
+      sessionStorage.removeItem('duplicateOrder')
+      const data = JSON.parse(raw) as {
+        pickupAddress?: string
+        dropoffAddress?: string
+        recipientName?: string
+        recipientPhone?: string
+        buzzCode?: string
+        specialInstructions?: string
+        isRush?: boolean
+        isUrgent?: boolean
+      }
+      setForm(prev => ({
+        ...prev,
+        // Keep the location's pickup address; only override if data has a different one
+        pickupAddress: data.pickupAddress || prev.pickupAddress,
+        dropoffAddress: data.dropoffAddress || '',
+        recipientName: data.recipientName || '',
+        dropoffContact: data.recipientPhone || '',
+        buzzCode: data.buzzCode || '',
+        specialInstructions: data.specialInstructions || '',
+        isRush: data.isRush ?? false,
+        saveContact: false, // sourced from existing order, don't re-save
+      }))
+    } catch {
+      // ignore parse errors
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Live billing preview — uses postedQty (not yet picked up) and recalculates
   // every time the manifest or rush/OOT flags change.
   const rateCard = effectiveLocationId ? getRateCardForLocation(effectiveLocationId) : null
@@ -430,7 +464,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
 
     const saved = await postDelivery({
       businessId,
-      locationId: currentUser?.locationId || '',
+      locationId: effectiveLocationId || '',
       businessName: business?.name || '',
       pickupAddress: form.pickupAddress,
       pickupArea: location?.name || '',
@@ -765,9 +799,10 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   id="smallPackages"
                   type="number"
                   min="0"
+                  max="99"
                   value={form.smallPackages}
                   onChange={e =>
-                    setForm({ ...form, smallPackages: parseInt(e.target.value) || 0 })
+                    setForm({ ...form, smallPackages: Math.min(99, parseInt(e.target.value) || 0) })
                   }
                   className="h-9"
                 />
@@ -778,9 +813,10 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   id="bigPackages"
                   type="number"
                   min="0"
+                  max="99"
                   value={form.bigPackages}
                   onChange={e =>
-                    setForm({ ...form, bigPackages: parseInt(e.target.value) || 0 })
+                    setForm({ ...form, bigPackages: Math.min(99, parseInt(e.target.value) || 0) })
                   }
                   className="h-9"
                 />
@@ -826,9 +862,16 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               <div className="space-y-2 pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm text-foreground">Estimated cost</Label>
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Confirmed at pickup
-                  </span>
+                  {isCalculatingDistance ? (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Calculating distance…
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {isDistanceBased && distanceKm ? `${distanceKm.toFixed(1)} km · ` : ''}Confirmed at pickup
+                    </span>
+                  )}
                 </div>
                 {rateCard ? (
                   <BillingBreakdownCard
@@ -841,6 +884,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                     total={previewBreakdown.total}
                     gstApplicable={previewBreakdown.gstApplicable}
                     hasRateCard={true}
+                    distanceKm={isDistanceBased ? distanceKm : null}
+                    zoneTier={previewBreakdown.zoneTier}
                   />
                 ) : (
                   <p className="text-xs text-yellow-500 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">

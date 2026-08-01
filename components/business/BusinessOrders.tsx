@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useApp } from '@/lib/context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { Search } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -46,10 +47,15 @@ import { editDeliveryDetails } from '@/lib/db'
 import { LabelPrintButton } from '@/components/shared/LabelPrintButton'
 import { CheckCircle2 } from 'lucide-react'
 
-export function BusinessOrders() {
-  const { deliveries, currentUser, drivers, cancelOrderByBusiness, getRateCardForLocation, activeLocationId } = useApp()
+interface BusinessOrdersProps {
+  onNavigate?: (tab: string) => void
+}
+
+export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
+  const { deliveries, currentUser, drivers, cancelOrderByBusiness, patchDelivery, getRateCardForLocation, activeLocationId } = useApp()
   const [selectedOrder, setSelectedOrder] = useState<OrderLike | null>(null)
   const [filter, setFilter] = useState<'all' | 'active' | 'delivered' | 'cancelled'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [cancelTarget, setCancelTarget] = useState<Delivery | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
@@ -131,7 +137,7 @@ export function BusinessOrders() {
     ['cancelled', 'failed_permanent'].includes(o.status),
   )
 
-  const filteredOrders =
+  const baseFiltered =
     filter === 'all'
       ? businessOrders
       : filter === 'active'
@@ -139,6 +145,21 @@ export function BusinessOrders() {
         : filter === 'delivered'
           ? deliveredOrders
           : cancelledOrders
+
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return baseFiltered
+    return baseFiltered.filter(o => {
+      const delivery = businessDeliveries.find(d => d.id === o.id)
+      return (
+        o.id.toLowerCase().includes(q) ||
+        o.pickupAddress.toLowerCase().includes(q) ||
+        o.dropoffAddress.toLowerCase().includes(q) ||
+        (o.recipientName?.toLowerCase().includes(q) ?? false) ||
+        (delivery?.recipientPhone?.includes(q) ?? false)
+      )
+    })
+  }, [baseFiltered, searchQuery, businessDeliveries])
 
   const getDriver = (driverId?: string | null) => {
     if (!driverId) return null
@@ -200,9 +221,17 @@ export function BusinessOrders() {
       })
       
       toast.success('Delivery updated successfully')
+      // Optimistically update local state — no reload needed
+      patchDelivery(editTarget.id, {
+        dropoffAddress: editForm.dropoff_address,
+        recipientName: editForm.recipient_name || null,
+        recipientPhone: editForm.recipient_phone || null,
+        buzzCode: editForm.buzz_code || null,
+        recipientNote: editForm.special_instructions || null,
+        isRush: editForm.is_rush,
+        isUrgent: editForm.is_urgent,
+      })
       setEditTarget(null)
-      // Page will reload/re-fetch data on next render cycle
-      window.location.reload()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update delivery')
     } finally {
@@ -261,6 +290,17 @@ export function BusinessOrders() {
             <p className="text-[10px] sm:text-xs text-muted-foreground">Cancel</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search orders, addresses, recipients..."
+          className="pl-9 h-9 text-sm"
+        />
       </div>
 
       {/* Filter Tabs */}
@@ -690,9 +730,8 @@ export function BusinessOrders() {
             <Button variant="outline" onClick={() => setDuplicateTarget(null)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={() => {
-                // Store duplicate data and navigate to create order
                 if (duplicateTarget) {
                   sessionStorage.setItem('duplicateOrder', JSON.stringify({
                     pickupAddress: duplicateTarget.pickupAddress,
@@ -704,8 +743,8 @@ export function BusinessOrders() {
                     isRush: duplicateTarget.isRush,
                     isUrgent: duplicateTarget.isUrgent,
                   }))
-                  toast.success('Order details copied! Go to New Order to complete.')
                   setDuplicateTarget(null)
+                  onNavigate?.('create')
                 }
               }}
             >

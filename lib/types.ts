@@ -783,14 +783,16 @@ export interface DriverRatingsSummary {
 }
 
 export interface BusinessRatingsSummary {
-  id: string
+  id?: string
   businessId: string
   locationId: string
   avgOverallRating: number | null
+  avgDriverRating?: number | null
+  avgBusinessRating?: number | null
   totalRatings: number
-  avgPackaging: number | null
-  avgAccuracy: number | null
+  avgPackaging?: number | null
+  avgAccuracy?: number | null
   totalFeedback: number
   feedbackReceivedCount: number
-  updatedAt: string
+  updatedAt?: string
 }

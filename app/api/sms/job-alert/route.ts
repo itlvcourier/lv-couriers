@@ -1,17 +1,29 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
+
+const jobAlertLimiter = rateLimit({ max: 20, windowMs: 60 * 60 * 1000 })
 
 /**
  * Broadcast a "new job available" SMS to every on-duty driver.
  * Called from the business client right after a delivery is posted.
- *
- * Auth: matches the rest of the app's demo-mode posture — server-side
- * validation is the gate (delivery must exist and be in 'posted' state).
- * RLS-safe lookups use the admin client because we need to read driver
- * phones regardless of the caller's role.
+ * Requires any authenticated user — the DB join verifies the delivery
+ * exists and is in 'posted' state before any SMS is sent.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req)
+  if (isAuthError(auth)) return auth
+
+  const ip = getClientIp(req)
+  const limit = jobAlertLimiter.check(ip)
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
+    )
+  }
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -66,16 +78,11 @@ export async function POST(req: Request) {
   }
 
   const recipients = (drivers || []).filter(d => !!d.phone)
-  console.log('[v0] sms.job-alert candidates', {
-    deliveryId,
-    totalActiveDrivers: drivers?.length ?? 0,
-    withPhone: recipients.length,
-  })
   if (recipients.length === 0) {
     return NextResponse.json({ ok: true, sent: 0, failed: 0, note: 'no on-duty drivers' })
   }
 
-  const businessName = delivery.businesses?.name || 'Lv Couriers'
+  const businessName = delivery.businesses?.name || 'LV Couriers'
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
   const message =
     `${urgencyTag}New job from ${businessName}: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}. ` +

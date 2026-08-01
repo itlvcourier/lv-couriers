@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -6,7 +7,10 @@ const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
  * Calculate driving distance between two points using Google Distance Matrix API.
  * Returns distance in kilometers and duration in minutes.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request)
+  if (isAuthError(auth)) return auth
+
   const { searchParams } = new URL(request.url)
   const originLat = searchParams.get('originLat')
   const originLng = searchParams.get('originLng')

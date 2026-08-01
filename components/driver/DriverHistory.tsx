@@ -1,7 +1,11 @@
 'use client'
 
+import useSWR from 'swr'
 import { useApp } from '@/lib/context'
+import { getDriverDeliveries, type DbDelivery } from '@/lib/db'
+import { getSystemSettings, calculateDriverPay } from '@/lib/settings'
 import { Card, CardContent } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { 
   Calendar, 
@@ -13,60 +17,48 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 
-// Calculate driver pay for a delivery based on settings
-function calculateDriverPay(
-  settings: { 
-    driverPayEnabled?: boolean
-    driverBaseRate?: number
-    driverRushBonus?: number
-    driverUrgentBonus?: number
-    driverDistanceRate?: number
-  },
-  delivery: {
-    isRush?: boolean
-    isUrgent?: boolean
-    distanceKm?: number | null
-  }
-): number {
-  // Use default rates if not set
-  const baseRate = settings.driverBaseRate ?? 5.00
-  const rushBonus = settings.driverRushBonus ?? 2.00
-  const urgentBonus = settings.driverUrgentBonus ?? 5.00
-  const distanceRate = settings.driverDistanceRate ?? 0.50
-  
-  let total = baseRate
-  
-  if (delivery.isRush) {
-    total += rushBonus
-  }
-  
-  if (delivery.isUrgent) {
-    total += urgentBonus
-  }
-  
-  if (delivery.distanceKm && distanceRate > 0) {
-    total += delivery.distanceKm * distanceRate
-  }
-  
-  return Math.round(total * 100) / 100
-}
-
 export function DriverHistory() {
-  const { deliveries, currentUser, settings } = useApp()
+  const { currentUser, settings: appSettings } = useApp()
   const driverId = currentUser?.driverId || ''
-  
+
   // Check if driver pay tracking is enabled
-  const showEarnings = settings.driverPayEnabled ?? false
-  
-  // Get completed/cancelled deliveries for this driver
-  const historyDeliveries = deliveries.filter(
-    d => d.driverId === driverId && 
-    (d.status === 'delivered' || d.status === 'cancelled' || d.status === 'failed_permanent')
-  ).sort((a, b) => {
-    const aTime = new Date(a.deliveredAt || a.cancelledAt || a.updatedAt || a.postedAt).getTime()
-    const bTime = new Date(b.deliveredAt || b.cancelledAt || b.updatedAt || b.postedAt).getTime()
-    return bTime - aTime
-  })
+  const showEarnings = appSettings.driverPayEnabled ?? false
+
+  // Fetch full delivery history from DB (not just in-memory context slice)
+  const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR(
+    driverId ? `driver-history-${driverId}` : null,
+    () => getDriverDeliveries(driverId),
+    { refreshInterval: 60_000 },
+  )
+
+  // Fetch system settings for pay calculation (uses the same source as DriverEarnings)
+  const { data: settings, isLoading: settingsLoading } = useSWR(
+    'system-settings',
+    getSystemSettings,
+  )
+
+  const isLoading = deliveriesLoading || (showEarnings && settingsLoading)
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spinner className="w-8 h-8" />
+      </div>
+    )
+  }
+
+  // Get completed/cancelled deliveries sorted newest first
+  const historyDeliveries = (deliveries as DbDelivery[])
+    .filter(d =>
+      d.status === 'delivered' ||
+      d.status === 'cancelled' ||
+      d.status === 'failed_permanent',
+    )
+    .sort((a, b) => {
+      const aTime = new Date(a.delivered_at || a.cancelled_at || a.updated_at || a.created_at).getTime()
+      const bTime = new Date(b.delivered_at || b.cancelled_at || b.updated_at || b.created_at).getTime()
+      return bTime - aTime
+    })
 
   if (historyDeliveries.length === 0) {
     return (
@@ -85,13 +77,23 @@ export function DriverHistory() {
   // Calculate stats
   const totalDelivered = historyDeliveries.filter(d => d.status === 'delivered').length
   const totalCancelled = historyDeliveries.filter(d => d.status === 'cancelled').length
-  
-  // Calculate total earnings using driver pay calculation (not business charge)
-  const totalEarnings = showEarnings 
-    ? historyDeliveries
-        .filter(d => d.status === 'delivered')
-        .reduce((sum, d) => sum + calculateDriverPay(settings, d), 0)
-    : 0
+
+  // Use the shared calculateDriverPay from lib/settings (same as DriverEarnings)
+  const totalEarnings =
+    showEarnings && settings
+      ? historyDeliveries
+          .filter(d => d.status === 'delivered')
+          .reduce(
+            (sum, d) =>
+              sum +
+              calculateDriverPay(settings, {
+                is_rush: d.is_rush,
+                is_urgent: d.is_urgent,
+                distance_km: (d as DbDelivery & { distance_km?: number }).distance_km ?? undefined,
+              }),
+            0,
+          )
+      : 0
 
   return (
     <div className="space-y-6">
@@ -124,11 +126,21 @@ export function DriverHistory() {
 
       {/* History List */}
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground px-1">Recent Deliveries</h3>
+        <h3 className="text-sm font-medium text-muted-foreground px-1">
+          Delivery History ({historyDeliveries.length})
+        </h3>
         {historyDeliveries.map((delivery) => {
-          const timestamp = delivery.deliveredAt || delivery.cancelledAt || delivery.postedAt
-          const driverPay = showEarnings ? calculateDriverPay(settings, delivery) : 0
-          
+          const timestamp = delivery.delivered_at || delivery.cancelled_at || delivery.created_at
+          const driverPay =
+            showEarnings && settings
+              ? calculateDriverPay(settings, {
+                  is_rush: delivery.is_rush,
+                  is_urgent: delivery.is_urgent,
+                  distance_km:
+                    (delivery as DbDelivery & { distance_km?: number }).distance_km ?? undefined,
+                })
+              : 0
+
           return (
             <Card key={delivery.id} className="overflow-hidden">
               <CardContent className="p-4">
@@ -145,11 +157,11 @@ export function DriverHistory() {
                 <div className="space-y-2 mb-3">
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                    <p className="text-sm text-foreground line-clamp-1">{delivery.pickupAddress}</p>
+                    <p className="text-sm text-foreground line-clamp-1">{delivery.pickup_address}</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-success mt-1.5 shrink-0" />
-                    <p className="text-sm text-foreground line-clamp-1">{delivery.dropoffAddress}</p>
+                    <p className="text-sm text-foreground line-clamp-1">{delivery.dropoff_address}</p>
                   </div>
                 </div>
 

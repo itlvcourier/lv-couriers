@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -8,7 +9,10 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * Recipients: recipient (retry info) + business (status update)
  * Setting gate: sms_notify_failed_attempt
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { deliveryId?: string; reason?: string; retryCount?: number }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

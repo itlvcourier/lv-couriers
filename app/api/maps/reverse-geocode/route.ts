@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -7,7 +8,10 @@ const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
  * Server-side proxy for Google Reverse Geocoding API.
  * Converts lat/lng to a street name.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request)
+  if (isAuthError(auth)) return auth
+
   const { searchParams } = new URL(request.url)
   const lat = searchParams.get('lat')
   const lng = searchParams.get('lng')
@@ -50,7 +54,7 @@ export async function GET(request: Request) {
       full: result.formatted_address,
     })
   } catch (error) {
-    console.error('[v0] Reverse geocode error:', error)
+    console.error('maps/reverse-geocode error:', error instanceof Error ? error.message : error)
     return NextResponse.json({ error: 'Failed to reverse geocode' }, { status: 500 })
   }
 }

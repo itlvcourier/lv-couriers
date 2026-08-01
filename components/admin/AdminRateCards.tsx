@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import useSWR from 'swr'
 import { useApp } from '@/lib/context'
 import type { RateCard, Business, BusinessLocation, RadiusPricingTier } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -274,29 +275,29 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
     radiusFallbackRate: existingRateCard?.radiusFallbackRate ?? 15,
   })
   
-  // Radius pricing tiers
+  // Radius pricing tiers — fetched via SWR when radius pricing is enabled
+  const { data: fetchedTiers, isLoading: loadingTiers } = useSWR(
+    existingRateCard?.useRadiusPricing ? ['radius-tiers', location.id] : null,
+    ([, locId]) => getRadiusTiers(locId)
+  )
+
   const [radiusTiers, setRadiusTiers] = useState<RadiusTierInput[]>([])
-  const [loadingTiers, setLoadingTiers] = useState(false)
-  
-  // Load existing tiers when opening editor
+
+  // Populate editable local state when SWR resolves (only on first load —
+  // user edits should not be overwritten by background revalidation)
   useEffect(() => {
-    if (existingRateCard?.useRadiusPricing) {
-      setLoadingTiers(true)
-      getRadiusTiers(location.id).then(tiers => {
-        if (tiers.length > 0) {
-          setRadiusTiers(tiers.map(t => ({
-            maxDistanceKm: t.maxDistanceKm,
-            rateRegular: t.rateRegular,
-            rateRush: t.rateRush,
-            rateBigParcel: t.rateBigParcel,
-            rateRushBig: t.rateRushBig,
-            label: t.label || '',
-          })))
-        }
-        setLoadingTiers(false)
-      })
+    if (fetchedTiers && fetchedTiers.length > 0 && radiusTiers.length === 0) {
+      setRadiusTiers(fetchedTiers.map(t => ({
+        maxDistanceKm: t.maxDistanceKm,
+        rateRegular: t.rateRegular,
+        rateRush: t.rateRush,
+        rateBigParcel: t.rateBigParcel,
+        rateRushBig: t.rateRushBig,
+        label: t.label || '',
+      })))
     }
-  }, [existingRateCard?.useRadiusPricing, location.id])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchedTiers])
   
   // Billing emails (stored in business_locations table, not rate_cards)
   const [billingEmail, setBillingEmail] = useState(location.billingEmail || '')

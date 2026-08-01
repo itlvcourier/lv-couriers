@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -7,7 +8,10 @@ const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
  * Server-side proxy for Google Geocoding API.
  * Converts an address string to lat/lng coordinates.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request)
+  if (isAuthError(auth)) return auth
+
   const { searchParams } = new URL(request.url)
   const address = searchParams.get('address')
 
@@ -40,7 +44,7 @@ export async function GET(request: Request) {
     const data = await response.json()
 
     if (data.status !== 'OK' || !data.results?.[0]) {
-      console.warn('[v0] Geocode failed:', data.status, address)
+      console.warn('maps/geocode: failed:', data.status)
       return NextResponse.json({ lat: null, lng: null, formattedAddress: null })
     }
 
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
       placeId: result.place_id,
     })
   } catch (error) {
-    console.error('[v0] Geocode error:', error)
+    console.error('maps/geocode error:', error instanceof Error ? error.message : error)
     return NextResponse.json({ error: 'Failed to geocode address' }, { status: 500 })
   }
 }

@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -12,7 +13,10 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * - Status must be 'en_route_dropoff' (we won't blast SMS for other states)
  * - Recipient phone must be present
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -46,12 +50,6 @@ export async function POST(req: Request) {
       { status: 404 },
     )
   }
-  console.log('[v0] sms.pickup-ready loaded', {
-    deliveryId,
-    status: delivery.status,
-    hasRecipientPhone: !!delivery.recipient_phone,
-    hasBusinessPhone: !!delivery.businesses?.phone,
-  })
   if (delivery.status !== 'en_route_dropoff') {
     return NextResponse.json({
       ok: false,
@@ -59,7 +57,7 @@ export async function POST(req: Request) {
     })
   }
 
-  const businessName = delivery.businesses?.name || 'Lv Couriers'
+  const businessName = delivery.businesses?.name || 'LV Couriers'
   const businessPhone = delivery.businesses?.phone || null
   const recipientName = delivery.recipient_name || 'there'
   const trackingUrl = buildTrackingUrl(deliveryId)
@@ -111,6 +109,5 @@ export async function POST(req: Request) {
   }
 
   const results = await Promise.all(sends)
-  console.log('[v0] sms.pickup-ready results', results)
   return NextResponse.json({ ok: true, results })
 }

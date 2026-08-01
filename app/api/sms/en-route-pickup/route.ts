@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -8,7 +9,10 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * Recipients: business only (recipient doesn't need this notification)
  * Setting gate: sms_notify_en_route_pickup
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { deliveryId?: string }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

@@ -50,16 +50,19 @@ export function AdminDriverReports() {
   const { data: drivers = [], isLoading: driversLoading } = useSWR('all-drivers', getDrivers)
   const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR('all-deliveries', () => getAllDeliveries())
   
-  // Fetch ratings for all drivers
+  // Fetch ratings for all drivers in parallel (was N+1 serial loop)
   const { data: driverRatings = {}, isLoading: ratingsLoading } = useSWR(
     drivers.length > 0 ? ['all-driver-ratings', drivers.map(d => d.id).join(',')] : null,
     async () => {
-      const ratings: Record<string, any> = {}
-      for (const driver of drivers) {
-        const summary = await getDriverRatingsSummary(driver.id)
-        if (summary) ratings[driver.id] = summary
-      }
-      return ratings
+      const results = await Promise.all(
+        drivers.map(async (driver) => {
+          const summary = await getDriverRatingsSummary(driver.id)
+          return { id: driver.id, summary }
+        })
+      )
+      return Object.fromEntries(
+        results.filter(r => r.summary !== null).map(r => [r.id, r.summary])
+      ) as Record<string, NonNullable<Awaited<ReturnType<typeof getDriverRatingsSummary>>>>
     }
   )
   

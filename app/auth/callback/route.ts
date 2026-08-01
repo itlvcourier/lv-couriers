@@ -12,7 +12,9 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error) {
-      // If this is a password recovery flow, redirect to reset-password page
+      // If this is a password recovery flow, always redirect to reset-password.
+      // The `next` param may already say /reset-password but we enforce it here
+      // regardless so the token is live in the session before the page renders.
       if (type === 'recovery') {
         return NextResponse.redirect(`${origin}/reset-password`)
       }

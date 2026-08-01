@@ -30,6 +30,8 @@ export interface FeatureSettings {
   zone_routing_strategy: ZoneRoutingStrategy
   consolidation_enabled: boolean
   route_optimization_enabled: boolean
+  /** Driver to assign when a delivery's address matches no zone (null = leave unassigned). */
+  unzoned_fallback_driver_id: string | null
   // Intake / cutoff
   cutoff_enabled: boolean
   late_requests_enabled: boolean
@@ -55,6 +57,7 @@ export const defaultFeatureSettings: FeatureSettings = {
   zone_routing_strategy: 'balanced',
   consolidation_enabled: true,
   route_optimization_enabled: true,
+  unzoned_fallback_driver_id: null,
   cutoff_enabled: true,
   late_requests_enabled: true,
   driver_transfers_enabled: true,

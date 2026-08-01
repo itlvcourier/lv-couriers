@@ -1,21 +1,17 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
-// Force dynamic - this route requires runtime env vars
 export const dynamic = 'force-dynamic'
 
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
-
-// Fixed UUID for main settings row
+// Fixed UUID for the single settings row
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000001'
 
-export async function GET() {
-  const supabaseAdmin = getSupabaseAdmin()
+export async function GET(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
+  const supabaseAdmin = createAdminClient()
   
   try {
     // Try to get the current settings
@@ -57,18 +53,22 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
-  const supabaseAdmin = getSupabaseAdmin()
-  
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (isAuthError(auth)) return auth
+
+  const supabaseAdmin = createAdminClient()
+
   try {
     const body = await request.json()
-    
+
     const { data, error } = await supabaseAdmin
       .from('system_settings')
       .upsert({
         id: SETTINGS_ID,
         ...body,
         updated_at: new Date().toISOString(),
+        updated_by: auth.user.id,
       })
       .select()
       .single()

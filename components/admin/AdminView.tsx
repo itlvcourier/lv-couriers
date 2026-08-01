@@ -22,6 +22,7 @@ import { ApprovalQueue } from './ApprovalQueue'
 import { getPendingCount } from '@/lib/dispatch-requests'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { NotificationCenter } from './NotificationCenter'
+import { HelpGuide } from '@/components/shared/HelpGuide'
 import { cn } from '@/lib/utils'
 import { 
   LayoutDashboard, 
@@ -134,6 +135,9 @@ export function AdminView() {
     }
   }, [zonesEnabled, consolidationEnabled, transfersEnabled, activePage])
 
+  // Poll pending request count every 60s. Note: getPendingCount() calls
+  // expireStaleRequests() internally — avoid polling too fast to prevent
+  // unnecessary DB writes.
   useEffect(() => {
     let active = true
     const poll = () => {
@@ -144,12 +148,22 @@ export function AdminView() {
         .catch(() => {})
     }
     poll()
-    const id = setInterval(poll, 30_000)
+    const id = setInterval(poll, 60_000)
     return () => {
       active = false
       clearInterval(id)
     }
   }, [activePage])
+
+  // Lock body scroll when mobile sidebar is open.
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [sidebarOpen])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -299,6 +313,7 @@ export function AdminView() {
             <h2 className="text-lg font-semibold truncate">{PAGE_LABELS[activePage]}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <HelpGuide role="admin" />
             <NotificationCenter />
             <Avatar className="w-9 h-9 lg:hidden">
               <AvatarImage src={admin?.avatar} />

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // Force dynamic - this route requires runtime env vars
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,17 @@ function getSupabaseAdmin() {
   )
 }
 
+function productionGuard() {
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  return null
+}
+
 export async function POST() {
+  const guard = productionGuard()
+  if (guard) return guard
+
   const supabaseAdmin = getSupabaseAdmin()
   const results: { table: string; status: string; error?: string }[] = []
 
@@ -124,7 +134,10 @@ export async function POST() {
   return NextResponse.json({ results })
 }
 
-export async function GET() {
+export async function GET(_req: NextRequest) {
+  const guard = productionGuard()
+  if (guard) return guard
+
   const supabaseAdmin = getSupabaseAdmin()
   // Check status of all tables
   const tables = ['system_settings', 'audit_logs', 'store_requests']

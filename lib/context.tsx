@@ -75,6 +75,7 @@ import {
   resolveDisputeInDb,
   updateInvoiceStatusOnly,
   createInvoiceInDb,
+  deleteInvoiceFromDb,
   updateLocationBillingEmails,
   updateLocationCoordinates,
   updateTripOrder,
@@ -189,6 +190,7 @@ interface AppContextType {
   postDelivery: (data: Partial<Delivery>) => Promise<Delivery | null>
   reassignDriver: (deliveryId: string, newDriverId: string) => void
   cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
+  patchDelivery: (deliveryId: string, fields: Partial<Delivery>) => void
   // Admin dispatch assignment (bypasses driver limits, records who assigned)
   assignDelivery: (deliveryId: string, driverId: string, adminUserId: string) => void
 
@@ -265,6 +267,7 @@ interface AppContextType {
   updateInvoiceBillingEmail: (invoiceId: string, email: string) => void
   updateInvoiceBackupEmail: (invoiceId: string, email: string) => void
   resendBouncedInvoice: (invoiceId: string, newEmail: string) => void
+  deleteInvoice: (invoiceId: string) => void
   
   // Phase 3: Tracking & Notifications
   smsLog: SMSLogEntry[]
@@ -482,14 +485,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [hydrateFromDb, mockUserFromAuthUser])
 
-  // Keep the shared data fresh across sessions/devices. Polls every 15s while
-  // logged in, and refreshes immediately when the tab regains focus so a
-  // driver who switches back to the app sees newly posted jobs right away.
+  // Keep the shared data fresh across sessions/devices.
+  // Poll every 60s (was 15s — 4× less Supabase egress). Debounce focus/
+  // visibility events so rapid tab-switches can't stack up multiple fetches;
+  // a refresh is skipped if one ran within the last 20 seconds.
   useEffect(() => {
     if (!currentUser || isHydrating) return
-    const interval = setInterval(() => { void refreshData() }, 15000)
-    const onFocus = () => { void refreshData() }
-    const onVisible = () => { if (document.visibilityState === 'visible') void refreshData() }
+    let lastRefreshAt = 0
+    const DEBOUNCE_MS = 20_000
+    const maybeFetch = () => {
+      const now = Date.now()
+      if (now - lastRefreshAt >= DEBOUNCE_MS) {
+        lastRefreshAt = now
+        void refreshData()
+      }
+    }
+    const interval = setInterval(maybeFetch, 60_000)
+    const onFocus = () => maybeFetch()
+    const onVisible = () => { if (document.visibilityState === 'visible') maybeFetch() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -1314,6 +1327,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [deliveries],
   )
 
+  // Optimistic patch: merge partial fields into a delivery in local state.
+  // Use after a successful DB write (e.g. editDeliveryDetails) to avoid a
+  // full page reload while keeping UI in sync.
+  const patchDelivery = useCallback((deliveryId: string, fields: Partial<Delivery>) => {
+    setDeliveries(prev =>
+      prev.map(d => (d.id === deliveryId ? { ...d, ...fields } : d)),
+    )
+  }, [])
+
   // Admin dispatch: assign a delivery to a driver (bypasses slot limits)
   const assignDelivery = useCallback(
     (deliveryId: string, driverId: string, adminUserId: string) => {
@@ -2022,6 +2044,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const location = business?.locations.find(l => l.id === locationId)
     if (!business || !location) return null
 
+    // Duplicate guard: block if an invoice already exists for this location + period
+    const duplicate = invoices.find(
+      inv =>
+        inv.locationId === locationId &&
+        inv.periodStart === periodStart &&
+        inv.periodEnd === periodEnd
+    )
+    if (duplicate) {
+      // Return the existing one so callers can highlight it
+      return { ...duplicate, _duplicate: true } as Invoice
+    }
+
     // Get deliveries for this location in the period. Compare on the date
     // portion only: deliveredAt is a full ISO timestamp while periodEnd is a
     // date-only string, so a raw string compare would drop deliveries that
@@ -2487,6 +2521,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ],
       }
     }))
+  }, [])
+
+  const deleteInvoice = useCallback((invoiceId: string) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== invoiceId))
+    persist(deleteInvoiceFromDb(invoiceId), 'deleteInvoice')
   }, [])
 
   const disputeLineItem = useCallback((
@@ -3032,6 +3071,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         postDelivery,
         reassignDriver,
         cancelOrderByBusiness,
+        patchDelivery,
       assignDelivery,
         savedContacts,
         getSavedContactsForBusiness,
@@ -3082,6 +3122,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         updateInvoiceBillingEmail,
         updateInvoiceBackupEmail,
         resendBouncedInvoice,
+        deleteInvoice,
         smsLog,
         adminNotifications,
         driverGPS,

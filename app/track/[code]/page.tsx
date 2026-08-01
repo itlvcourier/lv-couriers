@@ -91,7 +91,7 @@ export default function TrackingPage() {
            proof_photo_url, signature_url, recipient_note, tracking_expires_at,
            business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name, phone)`,
         )
-        .eq('id', code)
+        .eq('tracking_code', code)
         .maybeSingle()
 
       if (cancelled) return
@@ -119,7 +119,7 @@ export default function TrackingPage() {
     void load()
 
     // Subscribe to real-time updates on this specific delivery
-    const channel = supabase
+      const channel = supabase
       .channel(`delivery-track-${code}`)
       .on(
         'postgres_changes',
@@ -127,7 +127,7 @@ export default function TrackingPage() {
           event: 'UPDATE',
           schema: 'public',
           table: 'deliveries',
-          filter: `id=eq.${code}`,
+          filter: `tracking_code=eq.${code}`,
         },
         (payload: unknown) => {
           if (cancelled) return
@@ -639,7 +639,9 @@ export default function TrackingPage() {
                   )}
                 </div>
               </div>
-              {delivery.driver.phone && (
+              {/* Hide driver phone once delivered — the driver is no longer en-route
+                  and the tracking link may be forwarded or left in SMS history. */}
+              {delivery.driver.phone && delivery.status !== 'delivered' && (
                 <a
                   href={`tel:${delivery.driver.phone.replace(/[^\d+]/g, '')}`}
                   className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"

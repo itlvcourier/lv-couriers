@@ -149,6 +149,8 @@ export function AdminZones() {
   // Multi-driver routing strategy (org-wide setting).
   const [routingStrategy, setRoutingStrategy] =
     useState<ZoneRoutingStrategy>('balanced')
+  // Catch-all driver for deliveries that resolve to no zone.
+  const [fallbackDriverId, setFallbackDriverId] = useState<string | null>(null)
 
   // New-zone dialog
   const [newOpen, setNewOpen] = useState(false)
@@ -174,6 +176,7 @@ export function AdminZones() {
       setAssignments(a)
       setParcelCounts(counts)
       setRoutingStrategy(settings.zone_routing_strategy)
+      setFallbackDriverId(settings.unzoned_fallback_driver_id ?? null)
     } catch (err) {
       console.log('[v0] AdminZones load failed:', (err as Error).message)
       toast.error('Failed to load zones')
@@ -310,6 +313,19 @@ export function AdminZones() {
       setAssignments(await getZoneAssignments())
     } catch {
       toast.error('Failed to set primary driver')
+    }
+  }
+
+  const handleFallbackDriverChange = async (driverId: string) => {
+    const next = driverId === '__none__' ? null : driverId
+    const prev = fallbackDriverId
+    setFallbackDriverId(next) // optimistic
+    const res = await updateFeatureSettings({ unzoned_fallback_driver_id: next })
+    if (!res.success) {
+      setFallbackDriverId(prev)
+      toast.error('Failed to update fallback driver')
+    } else {
+      toast.success(next ? 'Unzoned fallback driver set' : 'Fallback driver cleared')
     }
   }
 
@@ -475,6 +491,35 @@ export function AdminZones() {
         </div>
       </div>
 
+      {/* Unzoned catch-all: driver to receive deliveries that match no zone. */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <MapPin className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">Unzoned fallback driver</span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          When a delivery address matches no zone (no polygon or FSA code), it is assigned to this driver instead of being left unassigned.
+        </p>
+        <Select
+          value={fallbackDriverId ?? '__none__'}
+          onValueChange={handleFallbackDriverChange}
+        >
+          <SelectTrigger className="h-9 text-sm">
+            {fallbackDriverId
+              ? (drivers.find((d) => d.id === fallbackDriverId)?.name ?? 'Unknown driver')
+              : 'No fallback — leave unassigned'}
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">No fallback — leave unassigned</SelectItem>
+            {drivers.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* Map */}
         <div className="relative h-[420px] lg:h-[640px] rounded-xl overflow-hidden border border-border">
@@ -578,9 +623,16 @@ export function AdminZones() {
                 <div className="flex items-center gap-2">
                   <span
                     className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10"
-                    style={{ backgroundColor: zone.color }}
+                    style={{ backgroundColor: zone.isActive ? zone.color : '#94a3b8' }}
                   />
-                  <span className="font-medium truncate flex-1">{zone.name}</span>
+                  <span className={`font-medium truncate flex-1 ${!zone.isActive ? 'text-muted-foreground' : ''}`}>
+                    {zone.name}
+                  </span>
+                  {!zone.isActive && (
+                    <Badge variant="outline" className="text-muted-foreground shrink-0">
+                      Inactive
+                    </Badge>
+                  )}
                   <Badge variant="outline" className="gap-1 shrink-0">
                     <Package className="w-3 h-3" />
                     {count}

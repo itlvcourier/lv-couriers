@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import useSWR from 'swr'
 import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,11 +8,19 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   getDashboardStats,
   getAllDeliveries,
   getDrivers,
   getBusinesses,
   getAdminNotifications,
+  getAdminRatingsSummary,
   type DbDelivery,
   type DbDriver,
 } from '@/lib/db'
@@ -30,10 +39,16 @@ import {
   AlertOctagon,
   MailWarning,
   ChevronRight,
+  Star,
+  MessageCircle,
+  Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function AdminDashboard() {
+  // Business filter — 'all' = platform-wide, any other value = single business
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>('all')
+
   // Invoice context (mock state)
   const { invoices, settings } = useApp()
 
@@ -73,30 +88,43 @@ export function AdminDashboard() {
       ? 0
       : undefined
 
-  // Fetch dashboard stats
-  const { data: stats, isLoading: statsLoading } = useSWR('dashboard-stats', getDashboardStats, {
-    refreshInterval: 30000, // Refresh every 30 seconds
-  })
-  
-  // Fetch deliveries
-  const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR('all-deliveries', () => getAllDeliveries(), {
-    refreshInterval: 15000,
-  })
-  
-  // Fetch drivers
+  const bizFilter = selectedBusinessId !== 'all' ? selectedBusinessId : undefined
+
+  // Fetch dashboard stats — scoped to business filter
+  const { data: stats, isLoading: statsLoading } = useSWR(
+    ['dashboard-stats', selectedBusinessId],
+    () => getDashboardStats(bizFilter),
+    { refreshInterval: 30000 },
+  )
+
+  // Fetch deliveries — scoped to business filter
+  const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR(
+    ['all-deliveries', selectedBusinessId],
+    () => getAllDeliveries(undefined, bizFilter),
+    { refreshInterval: 15000 },
+  )
+
+  // Fetch drivers — always platform-wide (drivers work across businesses)
   const { data: drivers = [], isLoading: driversLoading } = useSWR('all-drivers', getDrivers, {
     refreshInterval: 30000,
   })
-  
-  // Fetch businesses
+
+  // Fetch businesses — always all (used to populate the filter dropdown)
   const { data: businesses = [], isLoading: businessesLoading } = useSWR('all-businesses', getBusinesses, {
     refreshInterval: 60000,
   })
-  
+
   // Fetch admin notifications
   const { data: notifications = [] } = useSWR('admin-notifications', () => getAdminNotifications(10), {
     refreshInterval: 15000,
   })
+
+  // Fetch ratings summary — scoped to business filter
+  const { data: ratings } = useSWR(
+    ['admin-ratings-summary', selectedBusinessId],
+    () => getAdminRatingsSummary(bizFilter),
+    { refreshInterval: 120000 },
+  )
 
   const isLoading = statsLoading || deliveriesLoading || driversLoading || businessesLoading
 
@@ -123,7 +151,12 @@ export function AdminDashboard() {
   const recentNotifications = notifications.slice(0, 8)
   
   const handleCallDriver = (phone: string, name: string) => {
-    toast.info(`Call ${name}: ${phone}`)
+    const cleaned = phone.replace(/\s/g, "")
+    if (cleaned) {
+      window.open("tel:" + cleaned)
+    } else {
+      toast.error("No phone number on file for " + name)
+    }
   }
 
 return (
@@ -261,7 +294,7 @@ return (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => toast.info('Select a driver to reassign')}
+                      onClick={() => window.dispatchEvent(new CustomEvent('doms:navigate-admin', { detail: 'dispatch' }))}
                       className="h-8"
                     >
                       <RefreshCw className="w-3 h-3 mr-1" />
@@ -275,8 +308,36 @@ return (
         </Card>
       )}
 
+      {/* Business Filter */}
+      <div className="flex items-center gap-3 py-1">
+        <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+        <Select value={selectedBusinessId} onValueChange={setSelectedBusinessId}>
+          <SelectTrigger className="w-56 h-9 text-sm">
+            <SelectValue placeholder="All businesses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All businesses</SelectItem>
+            {businesses.map(b => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedBusinessId !== 'all' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-xs text-muted-foreground"
+            onClick={() => setSelectedBusinessId('all')}
+          >
+            Clear filter
+          </Button>
+        )}
+      </div>
+
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -340,6 +401,31 @@ return (
               </div>
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                 <Building2 className="w-6 h-6 text-blue-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-yellow-500/5 border-yellow-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Avg Rating</p>
+                <p className="text-2xl font-bold text-yellow-400 flex items-center gap-1">
+                  {ratings?.avgOverallRating != null
+                    ? ratings.avgOverallRating.toFixed(1)
+                    : '—'}
+                  {ratings?.avgOverallRating != null && (
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <MessageCircle className="w-3 h-3 inline mr-0.5" />
+                  {ratings?.totalFeedback ?? 0} reviews · {ratings?.last30Days ?? 0} this month
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                <Star className="w-6 h-6 text-yellow-400" />
               </div>
             </div>
           </CardContent>

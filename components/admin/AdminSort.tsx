@@ -6,13 +6,22 @@ import {
   getHubBoardParcels,
   groupIntoBins,
   getActiveHubCheckins,
+  retargetHubParcel,
   type HubBoardParcel,
   type HubCheckin,
 } from '@/lib/consolidation'
+import { loadAllDrivers } from '@/lib/db-extended'
+import type { Driver } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Separator } from '@/components/ui/separator'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import {
   Boxes,
   PackageCheck,
@@ -21,6 +30,7 @@ import {
   RefreshCw,
   MapPin,
   UserCheck,
+  ArrowRightLeft,
 } from 'lucide-react'
 
 function initials(name: string | null): string {
@@ -35,12 +45,16 @@ function initials(name: string | null): string {
 // Read-only hub oversight (§6). The driver scan is the source of truth: a
 // parcel appears here once a pickup driver scans it INTO the hub, and it
 // leaves once the destination driver scans it OUT (hub accept). Admins
-// monitor — they do not record custody here.
+// monitor and can re-target diverged parcels.
 export function AdminSort() {
   const [parcels, setParcels] = useState<HubBoardParcel[]>([])
   const [checkins, setCheckins] = useState<HubCheckin[]>([])
+  const [drivers, setDrivers] = useState<Driver[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  // deliveryId -> driverId being selected for re-target
+  const [retargetSelections, setRetargetSelections] = useState<Record<string, string>>({})
+  const [retargeting, setRetargeting] = useState<Record<string, boolean>>({})
 
   const refresh = useCallback(async () => {
     const [board, present] = await Promise.all([
@@ -53,7 +67,12 @@ export function AdminSort() {
 
   const loadAll = useCallback(async () => {
     try {
-      await refresh()
+      const [, , driversData] = await Promise.all([
+        refresh(),
+        Promise.resolve(),
+        loadAllDrivers(),
+      ])
+      setDrivers(driversData)
     } catch (err) {
       console.log('[v0] AdminSort load failed:', (err as Error).message)
       toast.error('Failed to load the sort board')
@@ -93,6 +112,34 @@ export function AdminSort() {
     }
   }
 
+  async function handleRetarget(parcel: HubBoardParcel) {
+    const driverId = retargetSelections[parcel.deliveryId]
+    if (!driverId) return
+    const driver = drivers.find((d) => d.id === driverId)
+    if (!driver) return
+    setRetargeting((r) => ({ ...r, [parcel.deliveryId]: true }))
+    try {
+      await retargetHubParcel({
+        deliveryId: parcel.deliveryId,
+        driverId,
+        driverName: driver.name,
+      })
+      toast.success(`Parcel re-targeted to ${driver.name}`)
+      // Clear the selection and refresh the board.
+      setRetargetSelections((s) => {
+        const next = { ...s }
+        delete next[parcel.deliveryId]
+        return next
+      })
+      await refresh()
+    } catch (err) {
+      toast.error('Failed to re-target parcel')
+      console.log('[v0] retarget failed:', (err as Error).message)
+    } finally {
+      setRetargeting((r) => ({ ...r, [parcel.deliveryId]: false }))
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -111,7 +158,7 @@ export function AdminSort() {
             Hub Sort
           </h1>
           <p className="text-sm text-muted-foreground">
-            Live oversight of parcels waiting at the hub. Drivers scan parcels in and out — this board is read-only.
+            Live oversight of parcels waiting at the hub. Drivers scan parcels in and out. Re-target diverged parcels using the action below each row.
           </p>
         </div>
         <Button
@@ -132,9 +179,20 @@ export function AdminSort() {
         <SummaryStat label="Destination bins" value={bins.length} />
         <SummaryStat label="Drivers present" value={checkins.length} tone="text-green-600" />
         {divergedCount > 0 && (
-          <SummaryStat label="Reassigned" value={divergedCount} tone="text-amber-600" />
+          <SummaryStat label="Need re-target" value={divergedCount} tone="text-amber-600" />
         )}
       </div>
+
+      {/* Diverged parcels banner */}
+      {divergedCount > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+          <span>
+            <strong>{divergedCount} parcel{divergedCount !== 1 ? 's were' : ' was'} sorted for a driver whose zone has since been reassigned.</strong>{' '}
+            Use the &ldquo;Re-target&rdquo; control on each affected row to move them to the correct driver&apos;s bin.
+          </span>
+        </div>
+      )}
 
       {/* Drivers checked in at the hub */}
       {checkins.length > 0 && (
@@ -178,6 +236,7 @@ export function AdminSort() {
                 key={bin.zoneId ?? 'unzoned'}
                 className="flex flex-col rounded-lg border border-border bg-card"
               >
+                {/* Bin header */}
                 <div
                   className="flex items-center justify-between gap-2 rounded-t-lg px-4 py-3"
                   style={{ backgroundColor: `${bin.zoneColor}1a` }}
@@ -218,29 +277,113 @@ export function AdminSort() {
                 <Separator />
 
                 <ul className="flex flex-1 flex-col divide-y divide-border">
-                  {bin.parcels.map((p) => (
-                    <li key={p.deliveryId} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-card-foreground">
-                          {p.recipientName ?? 'Recipient'}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {p.scanToken ? `${p.scanToken} · ` : ''}
-                          {p.dropoffArea ?? p.dropoffAddress ?? '—'}
-                        </p>
-                        {p.assignmentDiverged && (
-                          <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-600">
-                            <AlertTriangle className="size-3 shrink-0" />
-                            Sorted for {p.sortedForDriverName ?? 'another driver'} — zone since reassigned
-                          </p>
+                  {bin.parcels.map((p) => {
+                    const isRetargeting = retargeting[p.deliveryId] ?? false
+                    const selectedDriverId = retargetSelections[p.deliveryId]
+                    return (
+                      <li key={p.deliveryId} className="flex flex-col gap-2 px-4 py-2.5">
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-card-foreground">
+                              {p.recipientName ?? 'Recipient'}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {p.scanToken ? `${p.scanToken} · ` : ''}
+                              {p.dropoffArea ?? p.dropoffAddress ?? '—'}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="gap-1 shrink-0 text-muted-foreground">
+                            <MapPin className="size-3" />
+                            Waiting
+                          </Badge>
+                        </div>
+
+                        {/* Re-target control: shown for ALL parcels (expanded by default for diverged) */}
+                        {p.assignmentDiverged ? (
+                          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 space-y-1.5">
+                            <p className="flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+                              <AlertTriangle className="size-3 shrink-0" />
+                              Sorted for {p.sortedForDriverName ?? 'another driver'} — zone since reassigned
+                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <Select
+                                value={selectedDriverId ?? '__none__'}
+                                onValueChange={(v) =>
+                                  setRetargetSelections((s) => ({ ...s, [p.deliveryId]: v }))
+                                }
+                              >
+                                <SelectTrigger className="h-7 flex-1 text-xs">
+                                  {selectedDriverId
+                                    ? (drivers.find((d) => d.id === selectedDriverId)?.name ?? 'Driver')
+                                    : 'Select new driver'}
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__" disabled>Select new driver</SelectItem>
+                                  {drivers.map((d) => (
+                                    <SelectItem key={d.id} value={d.id}>
+                                      {d.name}
+                                      {presentDriverIds.has(d.id) ? ' · Here' : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 gap-1 text-xs shrink-0 border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+                                disabled={!selectedDriverId || selectedDriverId === '__none__' || isRetargeting}
+                                onClick={() => handleRetarget(p)}
+                              >
+                                {isRetargeting
+                                  ? <Spinner className="size-3" />
+                                  : <ArrowRightLeft className="size-3" />}
+                                Re-target
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Manual re-assign for non-diverged parcels */
+                          <div className="flex items-center gap-1.5">
+                            <Select
+                              value={selectedDriverId ?? '__none__'}
+                              onValueChange={(v) =>
+                                setRetargetSelections((s) => ({ ...s, [p.deliveryId]: v }))
+                              }
+                            >
+                              <SelectTrigger className="h-6 flex-1 text-[11px] border-dashed bg-transparent text-muted-foreground">
+                                {selectedDriverId
+                                  ? (drivers.find((d) => d.id === selectedDriverId)?.name ?? 'Driver')
+                                  : 'Re-assign to...'}
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__" disabled>Select driver</SelectItem>
+                                {drivers.map((d) => (
+                                  <SelectItem key={d.id} value={d.id}>
+                                    {d.name}
+                                    {presentDriverIds.has(d.id) ? ' · Here' : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {selectedDriverId && selectedDriverId !== '__none__' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 gap-1 text-[11px] shrink-0"
+                                disabled={isRetargeting}
+                                onClick={() => handleRetarget(p)}
+                              >
+                                {isRetargeting
+                                  ? <Spinner className="size-3" />
+                                  : <ArrowRightLeft className="size-3" />}
+                                Move
+                              </Button>
+                            )}
+                          </div>
                         )}
-                      </div>
-                      <Badge variant="outline" className="gap-1 text-muted-foreground">
-                        <MapPin className="size-3" />
-                        Waiting
-                      </Badge>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )
