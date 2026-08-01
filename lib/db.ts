@@ -46,6 +46,7 @@ export interface DbDriver {
   phone: string
   status: 'available' | 'on_delivery' | 'off_duty'
   max_jobs_override: number | null
+  monthly_adjustments: number | null
   total_deliveries: number
   today_deliveries: number
   month_deliveries: number
@@ -96,6 +97,8 @@ export interface DbDelivery {
   cancellation_stage: string | null
   cancellation_fee: number | null
   cancellation_reason: string | null
+  pickup_pay: number | null
+  delivery_pay: number | null
   retry_count: number
   trip_order: number | null
   // Cross-dock foundations (Phase 0/2)
