@@ -515,7 +515,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Auth functions — real Supabase Auth.
   const login = useCallback(async (email: string, password: string) => {
     const supabase = createSupabaseClient()
+    const t0 = Date.now()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('[v0] signInWithPassword took', Date.now() - t0, 'ms')
     if (error || !data.user) {
       return { success: false, error: 'Incorrect email or password. Please try again.' }
     }
@@ -525,10 +527,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) {
       return { success: false, error: 'Account is missing a role assignment. Contact admin.' }
     }
+    console.log('[v0] login total before redirect', Date.now() - t0, 'ms')
     setCurrentUser(user)
     setActiveRole(user.role)
     if (user.locationId) setActiveLocationId(user.locationId)
-    await hydrateFromDb(user)
+    // Clear the hydrating flag immediately so the page guards don't block the
+    // redirect while data loads. We already have the role from metadata so the
+    // guard check is satisfied. The dashboard renders with loading skeletons
+    // while hydrateFromDb completes in the background.
+    setIsHydrating(false)
+    void hydrateFromDb(user)
     return { success: true, role: user.role }
   }, [hydrateFromDb, mockUserFromAuthUser])
 
