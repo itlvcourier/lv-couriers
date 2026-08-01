@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { useApp } from '@/lib/context'
 import { createClient } from '@/lib/supabase/client'
-import { getSystemSettings } from '@/lib/settings'
+import { getSystemSettings, calculateDriverPay } from '@/lib/settings'
 import { getDriverRatingsSummary } from '@/lib/db-extended'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -48,8 +48,25 @@ export function DriverSettings() {
   const { currentUser, drivers, deliveries, logout } = useApp()
   const [isEditing, setIsEditing] = useState(false)
   const [editedPhone, setEditedPhone] = useState('')
-  const [notifications, setNotifications] = useState(true)
-  const [locationSharing, setLocationSharing] = useState(true)
+  const [notifications, setNotifications] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('driver_notifications') !== 'false'
+  })
+  const [locationSharing, setLocationSharing] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('driver_location_sharing') !== 'false'
+  })
+
+  const handleNotificationsChange = (val: boolean) => {
+    setNotifications(val)
+    localStorage.setItem('driver_notifications', String(val))
+  }
+
+  const handleLocationSharingChange = (val: boolean) => {
+    setLocationSharing(val)
+    // Persisted key read by useDriverLocationTracking to decide whether to push GPS
+    localStorage.setItem('driver_location_sharing', String(val))
+  }
   
   // Password change state
   const [showPasswordSheet, setShowPasswordSheet] = useState(false)
@@ -80,12 +97,17 @@ export function DriverSettings() {
   )
   const totalDeliveries = completedDeliveries.length
   
-  // Calculate estimated earnings (based on completed deliveries with fixed rate)
-  const baseRate = 8 // Base rate per delivery (in dollars)
-  const rushBonus = 5 // Extra bonus for rush/urgent deliveries
-  const totalEarnings = completedDeliveries.reduce((sum, d) => {
-    return sum + baseRate + (d.isUrgent ? rushBonus : 0)
-  }, 0)
+  // Calculate earnings using the same calculateDriverPay from lib/settings so
+  // the number here stays consistent with what DriverEarnings shows.
+  const totalEarnings = settings
+    ? completedDeliveries.reduce((sum, d) => {
+        return sum + calculateDriverPay(settings, {
+          is_rush: d.isRush,
+          is_urgent: d.isUrgent,
+          distance_km: d.distanceKm ?? null,
+        })
+      }, 0)
+    : 0
 
   const handleSignOut = async () => {
     await logout()
@@ -97,8 +119,20 @@ export function DriverSettings() {
     setIsEditing(true)
   }
 
-  const handleSaveProfile = () => {
-    // In a real app, this would save to database
+  const handleSaveProfile = async () => {
+    if (!driverId || !editedPhone.trim()) {
+      setIsEditing(false)
+      return
+    }
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('drivers')
+      .update({ phone: editedPhone.trim() })
+      .eq('id', driverId)
+    if (error) {
+      toast.error('Could not save: ' + error.message)
+      return
+    }
     toast.success('Profile updated')
     setIsEditing(false)
   }
@@ -236,7 +270,7 @@ export function DriverSettings() {
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  onClick={handleSaveProfile}
+                  onClick={() => void handleSaveProfile()}
                   className="h-8 px-2 text-[var(--accent-green)]"
                 >
                   <Check className="w-4 h-4" />
@@ -312,7 +346,7 @@ export function DriverSettings() {
             </div>
             <Switch 
               checked={notifications} 
-              onCheckedChange={setNotifications}
+              onCheckedChange={handleNotificationsChange}
               className="data-[state=checked]:bg-[var(--accent-orange)]"
             />
           </div>
@@ -327,7 +361,7 @@ export function DriverSettings() {
             </div>
             <Switch 
               checked={locationSharing} 
-              onCheckedChange={setLocationSharing}
+              onCheckedChange={handleLocationSharingChange}
               className="data-[state=checked]:bg-[var(--accent-orange)]"
             />
           </div>

@@ -603,11 +603,6 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
     window.open(`https://maps.apple.com/?q=${encoded}`, '_blank')
   }
 
-  const openInMaps = (address: string) => {
-    // Default to Google Maps, but we now have dropdown options
-    openInGoogleMaps(address)
-  }
-
   const handleAction = () => {
     switch (delivery.status) {
       case 'claimed':
@@ -1204,7 +1199,11 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   )
 }
 
-export function ActiveDelivery() {
+interface ActiveDeliveryProps {
+  onNavigateToAvailable?: () => void
+}
+
+export function ActiveDelivery({ onNavigateToAvailable }: ActiveDeliveryProps) {
   const { currentUser, deliveries, trips, getDriverActiveJobs, getDriverMaxJobs } = useApp()
   const driverId = currentUser?.driverId || ''
   
@@ -1247,8 +1246,11 @@ export function ActiveDelivery() {
         trip={tripToShow} 
         deliveries={activeDeliveries}
         onAddJob={() => {
-          // Switch to Available tab - handled by parent
-          toast.info('Go to Available tab to add more jobs')
+          if (onNavigateToAvailable) {
+            onNavigateToAvailable()
+          } else {
+            toast.info('Go to Available tab to add more jobs')
+          }
         }}
       />
     )

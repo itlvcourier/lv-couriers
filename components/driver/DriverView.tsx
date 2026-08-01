@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/context'
 import { useDriverLocationTracking } from '@/lib/hooks/useDriverLocationTracking'
@@ -60,10 +60,17 @@ export function DriverView() {
   const inTransitDelivery = activeJobs.find(d =>
     ['en_route_pickup', 'picked_up', 'en_route_dropoff'].includes(d.status)
   )
+  // Respect the driver's location-sharing preference (persisted to localStorage
+  // by DriverSettings). Default true so first-run behaviour is unaffected.
+  const locationSharingEnabled =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('driver_location_sharing') !== 'false'
+      : true
+
   useDriverLocationTracking({
     driverId,
     deliveryId: inTransitDelivery?.id,
-    enabled: Boolean(driverId && inTransitDelivery),
+    enabled: Boolean(driverId && inTransitDelivery && locationSharingEnabled),
   })
 
   // When dispatch mode is active, hide the Available tab
@@ -103,25 +110,30 @@ export function DriverView() {
   
   const navItems = baseNavItems
 
-  // If dispatch mode just turned on and user is on 'available' tab, redirect to 'active'
-  if (isDispatchMode && activeTab === 'available') {
-    setActiveTab('active')
-  }
-  
-  // If earnings is disabled and user is on 'earnings' tab, redirect to 'history'
-  if (!showEarnings && activeTab === 'earnings') {
-    setActiveTab('history')
-  }
+  // Redirect guards — run in effects to avoid setState during render
+  useEffect(() => {
+    if (isDispatchMode && activeTab === 'available') {
+      setActiveTab('active')
+    }
+  }, [isDispatchMode, activeTab])
 
-  // If the scan tab is hidden but selected, fall back to a safe tab.
-  if (!showScan && activeTab === 'scan') {
-    setActiveTab(isDispatchMode ? 'active' : 'available')
-  }
+  useEffect(() => {
+    if (!showEarnings && activeTab === 'earnings') {
+      setActiveTab('history')
+    }
+  }, [showEarnings, activeTab])
 
-  // If the transfers tab is hidden but selected, fall back to a safe tab.
-  if (!showTransfers && activeTab === 'transfers') {
-    setActiveTab(isDispatchMode ? 'active' : 'available')
-  }
+  useEffect(() => {
+    if (!showScan && activeTab === 'scan') {
+      setActiveTab(isDispatchMode ? 'active' : 'available')
+    }
+  }, [showScan, activeTab, isDispatchMode])
+
+  useEffect(() => {
+    if (!showTransfers && activeTab === 'transfers') {
+      setActiveTab(isDispatchMode ? 'active' : 'available')
+    }
+  }, [showTransfers, activeTab, isDispatchMode])
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col overflow-x-hidden">
@@ -179,7 +191,7 @@ export function DriverView() {
           <AvailableJobs onJobClaimed={() => setActiveTab('active')} />
         )}
         {activeTab === 'active' && (
-          <ActiveDelivery />
+          <ActiveDelivery onNavigateToAvailable={() => setActiveTab('available')} />
         )}
         {activeTab === 'scan' && showScan && (
           <DriverScanScreen />

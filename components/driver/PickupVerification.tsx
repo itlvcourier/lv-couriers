@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
-import { X, Package, AlertCircle, CheckCircle, Navigation, Zap, Camera, Ruler } from 'lucide-react'
+import { X, Package, AlertCircle, CheckCircle, Navigation, Zap, Camera, Ruler, Loader2 } from 'lucide-react'
 import type { Delivery, PickupVerification as VerificationType, ManifestItem } from '@/lib/types'
 import { calculateBreakdown, findMatchingTier } from '@/lib/billing'
 import { RuleBadge } from '@/components/shared/CostCalculator'
@@ -22,6 +22,7 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
   const { verifyPickup, advanceStatus, getRateCardForLocation } = useApp()
   const rateCard = getRateCardForLocation(delivery.locationId)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [pickupPhoto, setPickupPhoto] = useState<string | null>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [verifications, setVerifications] = useState<Record<string, { qty: number; photo: string | null; outOfTown: boolean }>>(
@@ -133,16 +134,22 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
       toast.error('Please take a pickup photo first')
       return
     }
+    if (confirming) return
 
-    const pickupVerifications: VerificationType[] = delivery.manifest.map(item => ({
-      itemId: item.id,
-      confirmedQty: verifications[item.id]?.qty ?? item.postedQty,
-      photoUrl: verifications[item.id]?.photo ?? null,
-      outOfTown: verifications[item.id]?.outOfTown ?? false,
-    }))
+    setConfirming(true)
+    try {
+      const pickupVerifications: VerificationType[] = delivery.manifest.map(item => ({
+        itemId: item.id,
+        confirmedQty: verifications[item.id]?.qty ?? item.postedQty,
+        photoUrl: verifications[item.id]?.photo ?? null,
+        outOfTown: verifications[item.id]?.outOfTown ?? false,
+      }))
 
-    verifyPickup(delivery.id, pickupVerifications)
-    setShowConfirmation(true)
+      verifyPickup(delivery.id, pickupVerifications)
+      setShowConfirmation(true)
+    } finally {
+      setConfirming(false)
+    }
   }
 
   // Start the delivery run and open turn-by-turn directions in one tap.
@@ -409,10 +416,17 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
           {/* Confirm button */}
           <Button
             onClick={handleConfirm}
-            disabled={!allItemsVerified || !pickupPhoto}
+            disabled={!allItemsVerified || !pickupPhoto || confirming}
             className="w-full h-12 rounded-xl tap-target bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white font-medium disabled:opacity-50"
           >
-            Confirm Pickup
+            {confirming ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Confirming...
+              </>
+            ) : (
+              'Confirm Pickup'
+            )}
           </Button>
         </div>
       </SheetContent>
