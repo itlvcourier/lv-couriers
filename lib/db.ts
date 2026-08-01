@@ -290,7 +290,7 @@ export async function getLocationDeliveries(locationId: string) {
   return data as DbDelivery[]
 }
 
-export async function getAllDeliveries(status?: DeliveryStatus) {
+export async function getAllDeliveries(status?: DeliveryStatus, businessId?: string) {
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
@@ -305,6 +305,9 @@ export async function getAllDeliveries(status?: DeliveryStatus) {
 
   if (status) {
     query = query.eq('status', status)
+  }
+  if (businessId) {
+    query = query.eq('business_id', businessId)
   }
 
   const { data, error } = await query
@@ -850,10 +853,16 @@ export async function getLiveLocationForDelivery(
 
 // ============ DASHBOARD STATS ============
 
-export async function getDashboardStats() {
+export async function getDashboardStats(businessId?: string) {
   const supabase = createClient()
   const today = new Date().toISOString().split('T')[0]
-  
+
+  // Helper: start a delivery query optionally scoped to one business
+  const deliveryQ = () => {
+    const q = supabase.from('deliveries').select('*', { count: 'exact', head: true })
+    return businessId ? q.eq('business_id', businessId) : q
+  }
+
   const [
     { count: totalDeliveries },
     { count: activeDeliveries },
@@ -864,14 +873,14 @@ export async function getDashboardStats() {
     { count: totalBusinesses },
     { count: flaggedDeliveries },
   ] = await Promise.all([
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).in('status', ['posted', 'claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff']),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).eq('status', 'delivered').gte('delivered_at', today),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).eq('status', 'posted'),
+    deliveryQ(),
+    deliveryQ().in('status', ['posted', 'claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff']),
+    deliveryQ().eq('status', 'delivered').gte('delivered_at', today),
+    deliveryQ().eq('status', 'posted'),
     supabase.from('drivers').select('*', { count: 'exact', head: true }),
     supabase.from('drivers').select('*', { count: 'exact', head: true }).in('status', ['available', 'on_delivery']).eq('invite_status', 'active'),
     supabase.from('businesses').select('*', { count: 'exact', head: true }),
-    supabase.from('deliveries').select('*', { count: 'exact', head: true }).eq('status', 'flagged'),
+    deliveryQ().eq('status', 'flagged'),
   ])
 
   return {
@@ -901,19 +910,22 @@ export interface AdminRatingsSummary {
  * Reads directly from customer_feedback so it stays in sync with
  * the same data that populates business-level reports.
  */
-export async function getAdminRatingsSummary(): Promise<AdminRatingsSummary> {
+export async function getAdminRatingsSummary(businessId?: string): Promise<AdminRatingsSummary> {
   const supabase = createClient()
   const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
+  const baseQ = () => {
+    const q = supabase.from('customer_feedback').select('overall_rating, driver_rating, business_rating').not('overall_rating', 'is', null)
+    return businessId ? q.eq('business_id', businessId) : q
+  }
+  const recentQ = () => {
+    const q = supabase.from('customer_feedback').select('*', { count: 'exact', head: true }).gte('created_at', since30)
+    return businessId ? q.eq('business_id', businessId) : q
+  }
+
   const [allRows, recentCount] = await Promise.all([
-    supabase
-      .from('customer_feedback')
-      .select('overall_rating, driver_rating, business_rating')
-      .not('overall_rating', 'is', null),
-    supabase
-      .from('customer_feedback')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', since30),
+    baseQ(),
+    recentQ(),
   ])
 
   const rows = allRows.data ?? []

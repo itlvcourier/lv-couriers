@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Package } from 'lucide-react'
@@ -11,36 +12,36 @@ interface MyDeliveriesProps {
   businessId: string
 }
 
+interface DeliveryRow {
+  id: string
+  pickup_address: string | null
+  dropoff_address: string | null
+  status: string | null
+  posted_at: string | null
+  recipient_name: string | null
+}
+
+async function fetchBusinessDeliveries(businessId: string): Promise<DeliveryRow[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select('id, pickup_address, dropoff_address, status, posted_at, recipient_name')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DeliveryRow[]
+}
+
 export function MyDeliveries({ businessId }: MyDeliveriesProps) {
-  const [deliveries, setDeliveries] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: deliveries, isLoading, error } = useSWR(
+    businessId ? ['my-deliveries', businessId] : null,
+    () => fetchBusinessDeliveries(businessId),
+    { refreshInterval: 15000 },
+  )
 
-  useEffect(() => {
-    const loadDeliveries = async () => {
-      try {
-        const supabase = createClient()
-        const { data, error: err } = await supabase
-          .from('deliveries')
-          .select('id, pickup_address, dropoff_address, status, posted_at')
-          .limit(20)
-
-        if (err) {
-          setError(err.message)
-        } else {
-          setDeliveries(data || [])
-        }
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadDeliveries()
-  }, [])
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Spinner />
@@ -55,12 +56,12 @@ export function MyDeliveries({ businessId }: MyDeliveriesProps) {
           <Package className="w-10 h-10" />
         </EmptyMedia>
         <EmptyTitle>Error loading deliveries</EmptyTitle>
-        <EmptyDescription>{error}</EmptyDescription>
+        <EmptyDescription>{error.message}</EmptyDescription>
       </Empty>
     )
   }
 
-  if (deliveries.length === 0) {
+  if (!deliveries || deliveries.length === 0) {
     return (
       <Empty>
         <EmptyMedia>
@@ -76,19 +77,20 @@ export function MyDeliveries({ businessId }: MyDeliveriesProps) {
     <div className="space-y-4">
       {deliveries.map((delivery) => (
         <Card key={delivery.id}>
-          <CardHeader>
-            <CardTitle className="text-base">{delivery.pickup_address}</CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between gap-2">
+              <CardTitle className="text-base">{delivery.pickup_address}</CardTitle>
+              <Badge variant="outline" className="capitalize shrink-0">
+                {delivery.status?.replace(/_/g, ' ')}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div>
-                <p className="text-sm font-medium mb-1">Dropoff</p>
-                <p className="text-sm text-muted-foreground">{delivery.dropoff_address}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium mb-1">Status</p>
-                <p className="text-sm text-muted-foreground capitalize">{delivery.status}</p>
-              </div>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p><span className="font-medium text-foreground">Dropoff:</span> {delivery.dropoff_address}</p>
+              {delivery.recipient_name && (
+                <p><span className="font-medium text-foreground">Recipient:</span> {delivery.recipient_name}</p>
+              )}
             </div>
           </CardContent>
         </Card>

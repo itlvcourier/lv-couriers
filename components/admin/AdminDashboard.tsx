@@ -1,11 +1,19 @@
 'use client'
 
+import { useState } from 'react'
 import useSWR from 'swr'
 import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   getDashboardStats,
   getAllDeliveries,
@@ -33,10 +41,14 @@ import {
   ChevronRight,
   Star,
   MessageCircle,
+  Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function AdminDashboard() {
+  // Business filter — 'all' = platform-wide, any other value = single business
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>('all')
+
   // Invoice context (mock state)
   const { invoices, settings } = useApp()
 
@@ -76,35 +88,43 @@ export function AdminDashboard() {
       ? 0
       : undefined
 
-  // Fetch dashboard stats
-  const { data: stats, isLoading: statsLoading } = useSWR('dashboard-stats', getDashboardStats, {
-    refreshInterval: 30000, // Refresh every 30 seconds
-  })
-  
-  // Fetch deliveries
-  const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR('all-deliveries', () => getAllDeliveries(), {
-    refreshInterval: 15000,
-  })
-  
-  // Fetch drivers
+  const bizFilter = selectedBusinessId !== 'all' ? selectedBusinessId : undefined
+
+  // Fetch dashboard stats — scoped to business filter
+  const { data: stats, isLoading: statsLoading } = useSWR(
+    ['dashboard-stats', selectedBusinessId],
+    () => getDashboardStats(bizFilter),
+    { refreshInterval: 30000 },
+  )
+
+  // Fetch deliveries — scoped to business filter
+  const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR(
+    ['all-deliveries', selectedBusinessId],
+    () => getAllDeliveries(undefined, bizFilter),
+    { refreshInterval: 15000 },
+  )
+
+  // Fetch drivers — always platform-wide (drivers work across businesses)
   const { data: drivers = [], isLoading: driversLoading } = useSWR('all-drivers', getDrivers, {
     refreshInterval: 30000,
   })
-  
-  // Fetch businesses
+
+  // Fetch businesses — always all (used to populate the filter dropdown)
   const { data: businesses = [], isLoading: businessesLoading } = useSWR('all-businesses', getBusinesses, {
     refreshInterval: 60000,
   })
-  
+
   // Fetch admin notifications
   const { data: notifications = [] } = useSWR('admin-notifications', () => getAdminNotifications(10), {
     refreshInterval: 15000,
   })
 
-  // Fetch platform-wide ratings summary
-  const { data: ratings } = useSWR('admin-ratings-summary', getAdminRatingsSummary, {
-    refreshInterval: 120000,
-  })
+  // Fetch ratings summary — scoped to business filter
+  const { data: ratings } = useSWR(
+    ['admin-ratings-summary', selectedBusinessId],
+    () => getAdminRatingsSummary(bizFilter),
+    { refreshInterval: 120000 },
+  )
 
   const isLoading = statsLoading || deliveriesLoading || driversLoading || businessesLoading
 
@@ -287,6 +307,34 @@ return (
           </CardContent>
         </Card>
       )}
+
+      {/* Business Filter */}
+      <div className="flex items-center gap-3 py-1">
+        <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+        <Select value={selectedBusinessId} onValueChange={setSelectedBusinessId}>
+          <SelectTrigger className="w-56 h-9 text-sm">
+            <SelectValue placeholder="All businesses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All businesses</SelectItem>
+            {businesses.map(b => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedBusinessId !== 'all' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-xs text-muted-foreground"
+            onClick={() => setSelectedBusinessId('all')}
+          >
+            Clear filter
+          </Button>
+        )}
+      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">

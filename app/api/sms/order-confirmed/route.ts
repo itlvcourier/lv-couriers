@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -6,7 +7,10 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * Send confirmation to the business when their order is successfully posted.
  * Also sends tracking link to the recipient if phone is provided.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   let body: { deliveryId?: string }
   try {
     body = await req.json()

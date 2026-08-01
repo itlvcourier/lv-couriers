@@ -1,14 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/google-maps'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
 
 /**
  * POST /api/delivery/geocode
  * Fire-and-forget geocoding: looks up a delivery's pickup/dropoff addresses,
- * converts them to lat/lng via Nominatim, and updates the row.
+ * converts them to lat/lng and updates the row.
  * Called after a delivery is created so the track page can show map pins.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request)
+  if (isAuthError(auth)) return auth
+
   try {
     const { deliveryId } = await request.json()
     if (!deliveryId) {
@@ -25,7 +29,6 @@ export async function POST(request: Request) {
       .single()
 
     if (fetchErr || !delivery) {
-      console.error('[v0] Geocode: delivery not found', deliveryId)
       return NextResponse.json({ error: 'Delivery not found' }, { status: 404 })
     }
 
@@ -66,7 +69,6 @@ export async function POST(request: Request) {
       .eq('id', deliveryId)
 
     if (updateErr) {
-      console.error('[v0] Geocode update failed:', updateErr.message)
       return NextResponse.json({ error: 'Update failed' }, { status: 500 })
     }
 
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (err) {
-    console.error('[v0] Geocode route error:', err)
+    console.error('delivery/geocode error:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

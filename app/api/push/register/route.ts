@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     )
 
   if (error) {
-    console.error('[v0] push register error:', error.message)
+    console.error('push/register error:', error.message)
     return NextResponse.json({ ok: false, error: 'Failed to register device' }, { status: 500 })
   }
 
@@ -74,7 +74,7 @@ export async function DELETE(request: Request) {
     .eq('token', token)
 
   if (error) {
-    console.error('[v0] push unregister error:', error.message)
+    console.error('push/unregister error:', error.message)
     return NextResponse.json({ ok: false, error: 'Failed to unregister device' }, { status: 500 })
   }
 

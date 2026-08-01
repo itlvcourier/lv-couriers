@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, isAuthError } from '@/lib/auth-guard'
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req)
+  if (isAuthError(auth)) return auth
+
   try {
     const supabase = await createClient()
     const { status, deliveryId, driverId } = await req.json()
@@ -37,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data })
   } catch (error) {
-    console.error('[v0] API error:', error)
+    console.error('deliveries POST error:', error instanceof Error ? error.message : error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

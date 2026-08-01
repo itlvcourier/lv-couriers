@@ -1,43 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   try {
-    // Verify requester is admin
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    
-    const { data: userData } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    
-    if (userData?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-    
     const { userId } = await req.json()
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Missing user ID' }, { status: 400 })
     }
-    
+
     // Prevent self-deletion
-    if (userId === user.id) {
+    if (userId === auth.user.id) {
       return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 })
     }
-    
+
     const adminClient = createAdminClient()
-    
-    // Delete from users table first
+
+    // Delete from profiles table first (role source of truth)
     const { error: dbError } = await adminClient
-      .from('users')
+      .from('profiles')
       .delete()
       .eq('id', userId)
     
