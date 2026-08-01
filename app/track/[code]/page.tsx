@@ -639,7 +639,9 @@ export default function TrackingPage() {
                   )}
                 </div>
               </div>
-              {delivery.driver.phone && (
+              {/* Hide driver phone once delivered — the driver is no longer en-route
+                  and the tracking link may be forwarded or left in SMS history. */}
+              {delivery.driver.phone && delivery.status !== 'delivered' && (
                 <a
                   href={`tel:${delivery.driver.phone.replace(/[^\d+]/g, '')}`}
                   className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
