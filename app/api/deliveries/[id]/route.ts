@@ -1,10 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, requireAdmin, isAuthError } from '@/lib/auth-guard'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(req)
+  if (isAuthError(auth)) return auth
+
   try {
     const supabase = await createClient()
     const { id: deliveryId } = await params
@@ -38,6 +42,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAdmin(req)
+  if (isAuthError(auth)) return auth
+
   try {
     const supabase = await createClient()
     const { id: deliveryId } = await params
