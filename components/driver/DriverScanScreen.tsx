@@ -83,7 +83,13 @@ export function DriverScanScreen() {
             d.routingMode === 'cross_dock',
         )
       case 'hub_accept':
-        return deliveries.filter((d) => (d.legStatus ?? 'created') === 'at_hub')
+        // Only show at-hub parcels where this driver is the assigned destination
+        // driver — prevents drivers from accidentally accepting each other's bins.
+        return deliveries.filter(
+          (d) =>
+            (d.legStatus ?? 'created') === 'at_hub' &&
+            (d.driverId === driverId || d.driverId == null),
+        )
       case 'delivery':
         return deliveries.filter(
           (d) =>

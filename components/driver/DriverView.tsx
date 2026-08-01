@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { FolderOpen, Package, Clock, Settings, LogOut, DollarSign, ScanLine, ArrowLeftRight, RefreshCw } from 'lucide-react'
+import { HelpGuide } from '@/components/shared/HelpGuide'
 
 export function DriverView() {
   const [activeTab, setActiveTab] = useState('available')
@@ -132,6 +133,7 @@ export function DriverView() {
           </div>
 
           <div className="flex items-center gap-1">
+            <HelpGuide role="driver" />
             <button
               onClick={handleRefresh}
               disabled={refreshing}

@@ -22,6 +22,7 @@ import { ApprovalQueue } from './ApprovalQueue'
 import { getPendingCount } from '@/lib/dispatch-requests'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { NotificationCenter } from './NotificationCenter'
+import { HelpGuide } from '@/components/shared/HelpGuide'
 import { cn } from '@/lib/utils'
 import { 
   LayoutDashboard, 
@@ -312,6 +313,7 @@ export function AdminView() {
             <h2 className="text-lg font-semibold truncate">{PAGE_LABELS[activePage]}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <HelpGuide role="admin" />
             <NotificationCenter />
             <Avatar className="w-9 h-9 lg:hidden">
               <AvatarImage src={admin?.avatar} />

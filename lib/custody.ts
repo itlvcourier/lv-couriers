@@ -465,7 +465,11 @@ export async function assignZonesForDelivery(input: {
     // strategy, multi-driver zones intentionally resolve to null so the
     // delivery stays claimable. Single-driver zones resolve to that driver
     // under every strategy.
-    const strategy = (await getFeatureSettings()).zone_routing_strategy
+    const featureSettings = await getFeatureSettings()
+    const strategy = featureSettings.zone_routing_strategy
+    // Catch-all driver for addresses that match no zone. When null, unzoned
+    // deliveries are left unassigned and must be manually dispatched.
+    const fallbackDriverId = featureSettings.unzoned_fallback_driver_id ?? null
     ;[pickupDriverId, deliveryDriverId] = await Promise.all([
       pickupZoneId
         ? pickZoneDriver(pickupZoneId, {
@@ -473,14 +477,14 @@ export async function assignZonesForDelivery(input: {
             pickupLat: input.pickupLat,
             pickupLng: input.pickupLng,
           })
-        : Promise.resolve(null),
+        : Promise.resolve(fallbackDriverId),
       dropoffZoneId
         ? pickZoneDriver(dropoffZoneId, {
             strategy,
             pickupLat: input.dropoffLat,
             pickupLng: input.dropoffLng,
           })
-        : Promise.resolve(null),
+        : Promise.resolve(fallbackDriverId),
     ])
   }
 

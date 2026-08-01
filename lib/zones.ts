@@ -355,7 +355,11 @@ async function pickLeastLoadedDriver(driverIds: string[]): Promise<string | null
   return best
 }
 
-/** The candidate driver whose last known location is closest to the pickup. */
+/** The candidate driver whose last known location is closest to the pickup.
+ *  Locations older than LOCATION_STALE_MINS are treated as missing to prevent
+ *  stale pings from routing parcels to off-duty drivers. */
+const LOCATION_STALE_MINS = 30
+
 async function pickNearestDriver(
   driverIds: string[],
   lat: number | null,
@@ -365,11 +369,14 @@ async function pickNearestDriver(
   if (lat == null || lng == null) return null
   const supabase = createClient()
   if (!supabase) return null
+  // Only consider locations updated within the staleness window.
+  const staleThreshold = new Date(Date.now() - LOCATION_STALE_MINS * 60 * 1000).toISOString()
   // Latest location per driver among the candidates.
   const { data, error } = await supabase
     .from('driver_locations')
     .select('driver_id, lat, lng, recorded_at')
     .in('driver_id', driverIds)
+    .gte('recorded_at', staleThreshold)
     .order('recorded_at', { ascending: false })
   if (error || !data || data.length === 0) return null
   const latest = new Map<string, { lat: number; lng: number }>()
@@ -377,6 +384,7 @@ async function pickNearestDriver(
     driver_id: string
     lat: number
     lng: number
+    recorded_at: string
   }>) {
     if (!latest.has(row.driver_id)) {
       latest.set(row.driver_id, { lat: row.lat, lng: row.lng })

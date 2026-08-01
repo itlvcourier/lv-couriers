@@ -357,6 +357,31 @@ export function groupIntoBins(parcels: HubBoardParcel[]): HubBin[] {
   })
 }
 
+/**
+ * Admin action: re-target a diverged at-hub parcel to a specific driver.
+ * Updates sorted_for_driver_id/name (so the board shows the new bin) and
+ * driver_id (so the parcel appears in the new driver's Accept list).
+ * Only valid while leg_status = 'at_hub'.
+ */
+export async function retargetHubParcel(input: {
+  deliveryId: string
+  driverId: string
+  driverName: string
+}): Promise<void> {
+  const supabase = createClient()
+  if (!supabase) throw new Error('Supabase client unavailable')
+  const { error } = await supabase
+    .from('deliveries')
+    .update({
+      sorted_for_driver_id: input.driverId,
+      sorted_for_driver_name: input.driverName,
+      driver_id: input.driverId,
+    })
+    .eq('id', input.deliveryId)
+    .eq('leg_status', 'at_hub')
+  if (error) throw error
+}
+
 export async function reconcileRun(runId: string): Promise<RunReconciliation> {
   const supabase = createClient()
   if (!supabase) return { expected: 0, checkedIn: 0, sorted: 0, handedOff: 0, exceptions: 0 }
