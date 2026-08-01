@@ -1305,6 +1305,15 @@ export async function createInvoiceInDb(invoice: Invoice): Promise<void> {
   if (eventError) console.error('[v0] Failed to log invoice generated event:', eventError)
 }
 
+export async function deleteInvoiceFromDb(invoiceId: string): Promise<void> {
+  const supabase = createClient()
+  // Delete line items first (FK constraint)
+  await supabase.from('invoice_line_items').delete().eq('invoice_id', invoiceId)
+  await supabase.from('invoice_events').delete().eq('invoice_id', invoiceId)
+  const { error } = await supabase.from('invoices').delete().eq('id', invoiceId)
+  if (error) throw new Error(`deleteInvoiceFromDb: ${error.message}`)
+}
+
 // ============================================================================
 // CUSTOMER FEEDBACK
 // ============================================================================

@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -37,6 +38,7 @@ import {
   Zap,
   AlertCircle,
   Pencil,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -124,6 +126,7 @@ export function AdminInvoices() {
     resendBouncedInvoice,
     updateInvoiceBillingEmail,
     updateInvoiceBackupEmail,
+    deleteInvoice,
   } = useApp()
 
   const [filter, setFilter] = useState<InvoiceFilter>(() => {
@@ -146,6 +149,7 @@ export function AdminInvoices() {
   const [showSendModal, setShowSendModal] = useState<{ invoiceIds: string[] } | null>(null)
   const [showUnmatchedPayments, setShowUnmatchedPayments] = useState(true)
   const [showAutoSendStatus, setShowAutoSendStatus] = useState(true)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
 
   // Always derive the current invoice from context - preserves updates when actions fire
   const selectedInvoice = useMemo(
@@ -456,6 +460,7 @@ export function AdminInvoices() {
                     resumeReminders(invoice.id)
                     toast.success('Reminders resumed')
                   }}
+                  onDelete={() => setShowDeleteConfirm(invoice.id)}
                 />
               </div>
             </div>
@@ -537,6 +542,35 @@ export function AdminInvoices() {
           onSendAll={handleSendAll}
         />
       )}
+
+      {/* Delete Invoice Confirmation */}
+      <AlertDialog open={!!showDeleteConfirm} onOpenChange={(open) => !open && setShowDeleteConfirm(null)}>
+        <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border-color)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the draft invoice and all its line items from the database. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (showDeleteConfirm) {
+                  const inv = invoices.find(i => i.id === showDeleteConfirm)
+                  deleteInvoice(showDeleteConfirm)
+                  toast.success(`Invoice ${inv?.invoiceNumber || ''} deleted`)
+                  setShowDeleteConfirm(null)
+                  if (selectedInvoiceId === showDeleteConfirm) setSelectedInvoiceId(null)
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -677,6 +711,7 @@ function InvoiceCard({
   onResendBounced,
   onPauseReminders,
   onResumeReminders,
+  onDelete,
 }: {
   invoice: Invoice
   dispute?: Dispute
@@ -686,6 +721,7 @@ function InvoiceCard({
   onResendBounced: (newEmail: string) => void
   onPauseReminders: () => void
   onResumeReminders: () => void
+  onDelete?: () => void
 }) {
   const meta = buildInvoiceMeta(invoice)
   const status = invoice.status
@@ -794,6 +830,16 @@ function InvoiceCard({
             <Eye className="h-3.5 w-3.5 mr-1.5" />
             View
           </Button>
+          {onDelete && (status === 'draft') && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onDelete}
+              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -1406,14 +1452,18 @@ function GenerateInvoiceModal({
     
     if (generateMode === 'all' && hasMultipleLocations && onGenerateBusiness) {
       // Generate for all locations with the selected format
-      const invoices = onGenerateBusiness(selectedBusiness, periodStart, periodEnd, invoiceFormat)
-      if (invoices.length > 0) {
+      const generatedInvoices = onGenerateBusiness(selectedBusiness, periodStart, periodEnd, invoiceFormat)
+      const realNew = generatedInvoices.filter(i => !(i as any)._duplicate)
+      const dupeCount = generatedInvoices.length - realNew.length
+      if (realNew.length > 0) {
         if (invoiceFormat === 'separate') {
-          toast.success(`Generated ${invoices.length} invoices (one per location)`)
+          toast.success(`Generated ${realNew.length} invoice${realNew.length > 1 ? 's' : ''}${dupeCount > 0 ? ` (${dupeCount} skipped — already exist)` : ''}`)
         } else {
           toast.success(`Generated combined invoice for ${locations.length} locations`)
         }
         onClose()
+      } else if (dupeCount > 0) {
+        toast.warning(`Invoice${dupeCount > 1 ? 's' : ''} for this period already exist${dupeCount > 1 ? '' : 's'} — delete the existing one first`)
       } else {
         toast.error('No invoices generated — check deliveries exist for this period')
       }
@@ -1424,12 +1474,16 @@ function GenerateInvoiceModal({
         return
       }
       const invoice = onGenerate(selectedBusiness, selectedLocation, periodStart, periodEnd)
-      if (invoice) {
-        toast.success(`Invoice ${invoice.invoiceNumber} generated`)
-        onClose()
-      } else {
+      if (!invoice) {
         toast.error('Failed to generate invoice — check rate card exists')
+        return
       }
+      if ((invoice as any)._duplicate) {
+        toast.warning(`An invoice for this location and period already exists (${invoice.invoiceNumber}). Delete it first if you want to regenerate.`)
+        return
+      }
+      toast.success(`Invoice ${invoice.invoiceNumber} generated`)
+      onClose()
     }
   }
 

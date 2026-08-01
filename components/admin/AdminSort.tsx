@@ -298,8 +298,8 @@ export function AdminSort() {
                           </Badge>
                         </div>
 
-                        {/* Diverged row: re-target control */}
-                        {p.assignmentDiverged && (
+                        {/* Re-target control: shown for ALL parcels (expanded by default for diverged) */}
+                        {p.assignmentDiverged ? (
                           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 space-y-1.5">
                             <p className="flex items-center gap-1 text-[11px] text-amber-600 font-medium">
                               <AlertTriangle className="size-3 shrink-0" />
@@ -340,6 +340,45 @@ export function AdminSort() {
                                 Re-target
                               </Button>
                             </div>
+                          </div>
+                        ) : (
+                          /* Manual re-assign for non-diverged parcels */
+                          <div className="flex items-center gap-1.5">
+                            <Select
+                              value={selectedDriverId ?? '__none__'}
+                              onValueChange={(v) =>
+                                setRetargetSelections((s) => ({ ...s, [p.deliveryId]: v }))
+                              }
+                            >
+                              <SelectTrigger className="h-6 flex-1 text-[11px] border-dashed bg-transparent text-muted-foreground">
+                                {selectedDriverId
+                                  ? (drivers.find((d) => d.id === selectedDriverId)?.name ?? 'Driver')
+                                  : 'Re-assign to...'}
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__" disabled>Select driver</SelectItem>
+                                {drivers.map((d) => (
+                                  <SelectItem key={d.id} value={d.id}>
+                                    {d.name}
+                                    {presentDriverIds.has(d.id) ? ' · Here' : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {selectedDriverId && selectedDriverId !== '__none__' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 gap-1 text-[11px] shrink-0"
+                                disabled={isRetargeting}
+                                onClick={() => handleRetarget(p)}
+                              >
+                                {isRetargeting
+                                  ? <Spinner className="size-3" />
+                                  : <ArrowRightLeft className="size-3" />}
+                                Move
+                              </Button>
+                            )}
                           </div>
                         )}
                       </li>

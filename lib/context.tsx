@@ -75,6 +75,7 @@ import {
   resolveDisputeInDb,
   updateInvoiceStatusOnly,
   createInvoiceInDb,
+  deleteInvoiceFromDb,
   updateLocationBillingEmails,
   updateLocationCoordinates,
   updateTripOrder,
@@ -265,6 +266,7 @@ interface AppContextType {
   updateInvoiceBillingEmail: (invoiceId: string, email: string) => void
   updateInvoiceBackupEmail: (invoiceId: string, email: string) => void
   resendBouncedInvoice: (invoiceId: string, newEmail: string) => void
+  deleteInvoice: (invoiceId: string) => void
   
   // Phase 3: Tracking & Notifications
   smsLog: SMSLogEntry[]
@@ -2032,6 +2034,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const location = business?.locations.find(l => l.id === locationId)
     if (!business || !location) return null
 
+    // Duplicate guard: block if an invoice already exists for this location + period
+    const duplicate = invoices.find(
+      inv =>
+        inv.locationId === locationId &&
+        inv.periodStart === periodStart &&
+        inv.periodEnd === periodEnd
+    )
+    if (duplicate) {
+      // Return the existing one so callers can highlight it
+      return { ...duplicate, _duplicate: true } as Invoice
+    }
+
     // Get deliveries for this location in the period. Compare on the date
     // portion only: deliveredAt is a full ISO timestamp while periodEnd is a
     // date-only string, so a raw string compare would drop deliveries that
@@ -2497,6 +2511,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ],
       }
     }))
+  }, [])
+
+  const deleteInvoice = useCallback((invoiceId: string) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== invoiceId))
+    persist(deleteInvoiceFromDb(invoiceId), 'deleteInvoice')
   }, [])
 
   const disputeLineItem = useCallback((
@@ -3092,6 +3111,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         updateInvoiceBillingEmail,
         updateInvoiceBackupEmail,
         resendBouncedInvoice,
+        deleteInvoice,
         smsLog,
         adminNotifications,
         driverGPS,
