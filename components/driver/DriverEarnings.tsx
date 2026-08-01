@@ -74,7 +74,7 @@ export function DriverEarnings() {
       calculatedPay: calculateDriverPay(settings, {
         is_rush: d.is_rush,
         is_urgent: d.is_urgent,
-        distance_km: (d as DbDelivery & { distance_km?: number }).distance_km ?? null,
+        distance_km: (d as DbDelivery & { distance_km?: number }).distance_km ?? undefined,
       })
     }))
     

@@ -1609,8 +1609,12 @@ export async function getBusinessRatingsSummary(
   if (rows.length === 0) return null
 
   const avg = (key: 'overall_rating' | 'driver_rating' | 'business_rating') => {
-    const vals = rows.map(r => Number(r[key])).filter(v => !isNaN(v) && v > 0)
-    return vals.length ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10 : null
+    const vals = rows
+      .map((r: Record<string, unknown>) => Number(r[key]))
+      .filter((v: number) => !isNaN(v) && v > 0)
+    return vals.length
+      ? Math.round((vals.reduce((s: number, v: number) => s + v, 0) / vals.length) * 10) / 10
+      : null
   }
 
   return {

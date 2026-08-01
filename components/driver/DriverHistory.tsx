@@ -89,7 +89,7 @@ export function DriverHistory() {
               calculateDriverPay(settings, {
                 is_rush: d.is_rush,
                 is_urgent: d.is_urgent,
-                distance_km: (d as DbDelivery & { distance_km?: number }).distance_km ?? null,
+                distance_km: (d as DbDelivery & { distance_km?: number }).distance_km ?? undefined,
               }),
             0,
           )
@@ -137,7 +137,7 @@ export function DriverHistory() {
                   is_rush: delivery.is_rush,
                   is_urgent: delivery.is_urgent,
                   distance_km:
-                    (delivery as DbDelivery & { distance_km?: number }).distance_km ?? null,
+                    (delivery as DbDelivery & { distance_km?: number }).distance_km ?? undefined,
                 })
               : 0
 

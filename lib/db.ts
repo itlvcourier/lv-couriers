@@ -920,9 +920,11 @@ export async function getAdminRatingsSummary(): Promise<AdminRatingsSummary> {
   const total = rows.length
 
   const avg = (key: 'overall_rating' | 'driver_rating' | 'business_rating') => {
-    const vals = rows.map(r => Number(r[key])).filter(v => !isNaN(v) && v > 0)
+    const vals = rows
+      .map((r: Record<string, unknown>) => Number(r[key]))
+      .filter((v: number) => !isNaN(v) && v > 0)
     if (vals.length === 0) return null
-    return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10
+    return Math.round((vals.reduce((s: number, v: number) => s + v, 0) / vals.length) * 10) / 10
   }
 
   return {

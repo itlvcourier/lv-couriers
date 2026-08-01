@@ -104,7 +104,7 @@ export function DriverSettings() {
         return sum + calculateDriverPay(settings, {
           is_rush: d.isRush,
           is_urgent: d.isUrgent,
-          distance_km: d.distanceKm ?? null,
+          distance_km: d.distanceKm ?? undefined,
         })
       }, 0)
     : 0
