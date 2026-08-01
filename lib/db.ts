@@ -798,6 +798,32 @@ export async function getDriverLocation(driverId: string) {
 }
 
 /**
+ * Bulk fetch the latest location row for every driver in one query.
+ * Uses a DISTINCT ON equivalent via order+limit-per-driver served by
+ * the unique constraint (driver_id is UNIQUE on driver_locations).
+ */
+export async function getAllDriverLocations(): Promise<DbDriverLocation[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('driver_locations')
+    .select('*')
+    .order('driver_id')
+    .order('recorded_at', { ascending: false })
+
+  if (error || !data) return []
+  // Keep only the first (most recent) row per driver_id
+  const seen = new Set<string>()
+  const latest: DbDriverLocation[] = []
+  for (const row of data as DbDriverLocation[]) {
+    if (!seen.has(row.driver_id)) {
+      seen.add(row.driver_id)
+      latest.push(row)
+    }
+  }
+  return latest
+}
+
+/**
  * Public live location for a tracking page: returns the assigned driver's
  * latest GPS fix for a given delivery, but only while the delivery is actively
  * in transit (so we don't leak a driver's position before/after the job).

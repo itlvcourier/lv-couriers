@@ -123,7 +123,12 @@ export function AdminDashboard() {
   const recentNotifications = notifications.slice(0, 8)
   
   const handleCallDriver = (phone: string, name: string) => {
-    toast.info(`Call ${name}: ${phone}`)
+    const cleaned = phone.replace(/\s/g, "")
+    if (cleaned) {
+      window.open("tel:" + cleaned)
+    } else {
+      toast.error("No phone number on file for " + name)
+    }
   }
 
 return (
@@ -261,7 +266,7 @@ return (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => toast.info('Select a driver to reassign')}
+                      onClick={() => window.dispatchEvent(new CustomEvent('doms:navigate-admin', { detail: 'dispatch' }))}
                       className="h-8"
                     >
                       <RefreshCw className="w-3 h-3 mr-1" />
