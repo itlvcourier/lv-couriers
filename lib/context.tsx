@@ -482,14 +482,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [hydrateFromDb, mockUserFromAuthUser])
 
-  // Keep the shared data fresh across sessions/devices. Polls every 15s while
-  // logged in, and refreshes immediately when the tab regains focus so a
-  // driver who switches back to the app sees newly posted jobs right away.
+  // Keep the shared data fresh across sessions/devices.
+  // Poll every 60s (was 15s — 4× less Supabase egress). Debounce focus/
+  // visibility events so rapid tab-switches can't stack up multiple fetches;
+  // a refresh is skipped if one ran within the last 20 seconds.
   useEffect(() => {
     if (!currentUser || isHydrating) return
-    const interval = setInterval(() => { void refreshData() }, 15000)
-    const onFocus = () => { void refreshData() }
-    const onVisible = () => { if (document.visibilityState === 'visible') void refreshData() }
+    let lastRefreshAt = 0
+    const DEBOUNCE_MS = 20_000
+    const maybeFetch = () => {
+      const now = Date.now()
+      if (now - lastRefreshAt >= DEBOUNCE_MS) {
+        lastRefreshAt = now
+        void refreshData()
+      }
+    }
+    const interval = setInterval(maybeFetch, 60_000)
+    const onFocus = () => maybeFetch()
+    const onVisible = () => { if (document.visibilityState === 'visible') maybeFetch() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisible)
     return () => {

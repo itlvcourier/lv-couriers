@@ -923,7 +923,7 @@ export async function loadSavedContacts(profile: {
   if (profile.role === 'driver') return []
   let query = supabase
     .from('saved_contacts')
-    .select('*')
+    .select('id, business_id, name, phone, address, area, buzz_code, notes, use_count, last_used_at')
     .order('last_used_at', { ascending: false, nullsFirst: false })
     .limit(500)
   if (profile.role === 'business' && profile.businessId) {
@@ -994,7 +994,7 @@ export async function loadAdminNotifications(profile: {
   if (profile.role !== 'admin') return []
   const { data, error } = await supabase
     .from('admin_notifications')
-    .select('*')
+    .select('id, notification_type, title, message, delivery_id, driver_id, business_id, invoice_id, priority, is_read, created_at')
     .order('created_at', { ascending: false })
     .limit(200)
   if (error) throw error
@@ -1059,7 +1059,7 @@ export async function loadSMSLog(profile: {
   if (profile.role === 'driver') return [] // drivers don't view SMS log
   const { data, error } = await supabase
     .from('sms_log')
-    .select('*')
+    .select('id, delivery_id, invoice_id, recipient_phone, sms_type, message_body, status, error_message, sent_at, is_retried')
     .order('sent_at', { ascending: false })
     .limit(200)
   if (error) throw error
@@ -1149,7 +1149,7 @@ export async function loadDisputes(
   const supabase = createClient()
   const { data, error } = await supabase
     .from('invoice_disputes')
-    .select('*')
+    .select('id, invoice_id, line_item_id, reason, photo_url, status, resolution_notes, credit_amount, created_at, resolved_at')
     .order('created_at', { ascending: false })
     .limit(200)
   if (error) throw error

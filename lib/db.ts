@@ -244,7 +244,7 @@ export async function getDriverDeliveries(driverId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
-    .select('*')
+    .select('id, driver_id, business_id, location_id, status, pickup_address, pickup_area, dropoff_address, dropoff_area, recipient_name, recipient_phone, is_rush, is_out_of_town, is_urgent, calculated_rate, gst_amount, total_amount, delivered_at, posted_at, claimed_at, picked_up_at, distance_km, tracking_code, pickup_pay, delivery_pay, created_at')
     .eq('driver_id', driverId)
     .eq('status', 'delivered')
     .order('delivered_at', { ascending: false })
@@ -259,9 +259,9 @@ export async function getBusinessDeliveries(businessId: string) {
     .from('deliveries')
     .select(`
       *,
-      driver:drivers!deliveries_driver_id_fkey(*),
-      location:business_locations(*),
-      manifest_items(*)
+      driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+      location:business_locations(id, name, address),
+      manifest_items(id, delivery_id, type, quantity, notes)
     `)
     .eq('business_id', businessId)
     .order('created_at', { ascending: false })
@@ -293,10 +293,10 @@ export async function getAllDeliveries(status?: DeliveryStatus) {
     .from('deliveries')
     .select(`
       *,
-      business:businesses(*),
-      location:business_locations(*),
-      driver:drivers!deliveries_driver_id_fkey(*),
-      manifest_items(*)
+      business:businesses(id, name, email, phone),
+      location:business_locations(id, name, address),
+      driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+      manifest_items(id, delivery_id, type, quantity, notes)
     `)
     .order('created_at', { ascending: false })
 
