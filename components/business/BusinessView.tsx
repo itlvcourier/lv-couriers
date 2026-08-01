@@ -64,7 +64,7 @@ export function BusinessView() {
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="max-w-7xl mx-auto px-4 py-4 pb-24">
             <TabsContent value="orders" className="mt-0 m-0">
-              <BusinessOrders />
+              <BusinessOrders onNavigate={setActiveTab} />
             </TabsContent>
 
             <TabsContent value="live" className="mt-0 m-0">

@@ -59,15 +59,30 @@ export function BusinessInvoices() {
     return d.locationId === activeLocationId && d.status === 'delivered' && d.deliveredAt && new Date(d.deliveredAt) >= monthStart
   })
 
-  const rateCard = rateCards.find(rc => rc.locationId === activeLocationId)
-  
+  // When "all locations" is selected, sum each delivery using its own location's
+  // rate card. When a specific location is selected, use that card for all.
+  const getRateCardForDelivery = (locationId: string) =>
+    rateCards.find(rc => rc.locationId === locationId) ?? null
+
+  const isAllLocations = !activeLocationId || activeLocationId === 'all'
+
+  const rateCard = isAllLocations
+    ? null
+    : rateCards.find(rc => rc.locationId === activeLocationId) ?? null
+
   // Running total — use the locked calculatedRate when set, otherwise compute
-  // the correct rule-based rate from the current rate card. No hardcoded fallbacks.
-  const runningTotal = monthDeliveries.reduce(
-    (sum, d) => sum + estimateDeliveryPrice(d, rateCard || null),
-    0,
-  )
-  const runningGst = rateCard?.gstApplicable ? runningTotal * 0.05 : 0
+  // the correct rule-based rate from each delivery's own rate card.
+  const runningTotal = monthDeliveries.reduce((sum, d) => {
+    const card = isAllLocations ? getRateCardForDelivery(d.locationId) : rateCard
+    return sum + estimateDeliveryPrice(d, card)
+  }, 0)
+  // For GST: if any rate card in scope has GST applicable, include it.
+  // For all-locations view, derive per-delivery GST from stored gst_amount.
+  const runningGst = isAllLocations
+    ? monthDeliveries.reduce((sum, d) => sum + (d.gstAmount ?? 0), 0)
+    : rateCard?.gstApplicable
+      ? runningTotal * 0.05
+      : 0
   const runningTotalWithGst = runningTotal + runningGst
 
   const handleStartDispute = (lineId: string) => {

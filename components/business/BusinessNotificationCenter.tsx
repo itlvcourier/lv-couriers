@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import useSWR from 'swr'
+import { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { 
   Popover, 
@@ -55,7 +54,25 @@ const NOTIFICATION_COLORS: Record<BusinessNotification['type'], string> = {
 export function BusinessNotificationCenter() {
   const { deliveries, currentUser } = useApp()
   const [open, setOpen] = useState(false)
-  const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  const STORAGE_KEY = `biz_notif_read_${currentUser?.businessId ?? 'unknown'}`
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>()
+    } catch {
+      return new Set<string>()
+    }
+  })
+
+  // Persist readIds to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...readIds]))
+    } catch {
+      // storage quota exceeded or private mode — fail silently
+    }
+  }, [readIds, STORAGE_KEY])
   
   // Generate notifications from delivery status changes
   const notifications = useMemo(() => {

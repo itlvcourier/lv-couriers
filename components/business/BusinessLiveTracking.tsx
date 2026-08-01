@@ -1,7 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import useSWR from 'swr'
+import { createClient } from '@/lib/supabase/client'
 import { useApp } from '@/lib/context'
+import type { DriverGPS } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -80,9 +83,52 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
+async function fetchDriverGPS(driverIds: string[]): Promise<DriverGPS[]> {
+  if (driverIds.length === 0) return []
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('driver_gps')
+    .select('driver_id, lat, lng, heading, speed, battery, updated_at')
+    .in('driver_id', driverIds)
+  if (!data) return []
+  return data.map((row: {
+    driver_id: string; lat: number; lng: number
+    heading: number; speed: number; battery: number; updated_at: string
+  }) => ({
+    driverId: row.driver_id,
+    lat: row.lat,
+    lng: row.lng,
+    heading: row.heading ?? 0,
+    speed: row.speed ?? 0,
+    battery: row.battery ?? 100,
+    lastUpdate: row.updated_at,
+  }))
+}
+
 export function BusinessLiveTracking() {
-  const { currentUser, deliveries, drivers, driverGPS, activeLocationId } = useApp()
+  const { currentUser, deliveries, drivers, driverGPS: contextGPS, activeLocationId } = useApp()
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
+
+  // SWR-backed GPS poll: refreshes every 30s while this tab is visible.
+  // Falls back to context GPS if the poll hasn't returned yet.
+  const activeDriverIds = useMemo(() => {
+    if (!currentUser?.businessId) return []
+    return deliveries
+      .filter(d =>
+        d.businessId === currentUser.businessId &&
+        IN_TRANSIT_STATUSES.includes(d.status) &&
+        d.driverId,
+      )
+      .map(d => d.driverId as string)
+  }, [deliveries, currentUser?.businessId])
+
+  const { data: polledGPS } = useSWR(
+    activeDriverIds.length > 0 ? ['driver-gps', ...activeDriverIds] : null,
+    () => fetchDriverGPS(activeDriverIds),
+    { refreshInterval: 30_000, revalidateOnFocus: true },
+  )
+
+  const driverGPS = polledGPS ?? contextGPS
 
   const active = useMemo(() => {
     if (!currentUser?.businessId) return []

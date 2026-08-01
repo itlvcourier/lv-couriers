@@ -190,6 +190,7 @@ interface AppContextType {
   postDelivery: (data: Partial<Delivery>) => Promise<Delivery | null>
   reassignDriver: (deliveryId: string, newDriverId: string) => void
   cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
+  patchDelivery: (deliveryId: string, fields: Partial<Delivery>) => void
   // Admin dispatch assignment (bypasses driver limits, records who assigned)
   assignDelivery: (deliveryId: string, driverId: string, adminUserId: string) => void
 
@@ -1325,6 +1326,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [deliveries],
   )
+
+  // Optimistic patch: merge partial fields into a delivery in local state.
+  // Use after a successful DB write (e.g. editDeliveryDetails) to avoid a
+  // full page reload while keeping UI in sync.
+  const patchDelivery = useCallback((deliveryId: string, fields: Partial<Delivery>) => {
+    setDeliveries(prev =>
+      prev.map(d => (d.id === deliveryId ? { ...d, ...fields } : d)),
+    )
+  }, [])
 
   // Admin dispatch: assign a delivery to a driver (bypasses slot limits)
   const assignDelivery = useCallback(
@@ -3061,6 +3071,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         postDelivery,
         reassignDriver,
         cancelOrderByBusiness,
+        patchDelivery,
       assignDelivery,
         savedContacts,
         getSavedContactsForBusiness,
