@@ -53,8 +53,6 @@ import {
   Package,
   Trash2,
   Users,
-  BarChart3,
-  ChevronRight,
   ArrowLeft,
   UserPlus,
   FileText,
@@ -63,9 +61,20 @@ import {
   Check,
   X,
   Clock,
+  AlarmClock,
+  Save,
+  ChevronRight,
 } from 'lucide-react'
+import { Separator } from '@/components/ui/separator'
 import { getBusinesses, getAllDeliveries, type DbBusiness, type DbLocation, type DbDelivery } from '@/lib/db'
 import { createClient } from '@/lib/supabase/client'
+import {
+  type BusinessCutoff,
+  getBusinessCutoffs,
+  setDefaultCutoff,
+  setDayOverride,
+  evaluateCutoff,
+} from '@/lib/cutoffs'
 
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
@@ -148,6 +157,9 @@ export function AdminBusinesses() {
     created_at: string
   }>>([])
   const [loadingTeam, setLoadingTeam] = useState(false)
+  // Cutoffs for the currently-open detail view
+  const [detailCutoffs, setDetailCutoffs] = useState<BusinessCutoff[]>([])
+  const [loadingCutoffs, setLoadingCutoffs] = useState(false)
 
   // Fetch team members when viewing a business
   const fetchTeamMembers = async (businessId: string) => {
@@ -208,10 +220,23 @@ export function AdminBusinesses() {
     setLoadingTeam(false)
   }
 
-  // When detailBusiness changes, fetch team members
+  const fetchCutoffs = async (businessId: string) => {
+    setLoadingCutoffs(true)
+    try {
+      const rows = await getBusinessCutoffs(businessId)
+      setDetailCutoffs(rows)
+    } catch {
+      toast.error('Failed to load cutoffs')
+    } finally {
+      setLoadingCutoffs(false)
+    }
+  }
+
+  // When detailBusiness changes, fetch team members and cutoffs
   const handleOpenBusinessDetail = (business: BusinessWithLocations) => {
     setDetailBusiness(business)
     fetchTeamMembers(business.id)
+    fetchCutoffs(business.id)
   }
 
   // Filter businesses
@@ -762,84 +787,135 @@ export function AdminBusinesses() {
 
         {/* Tabs */}
         <Tabs defaultValue="locations" className="space-y-4">
-          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)] w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
-            <TabsTrigger value="locations" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <MapPin className="w-4 h-4" />
-              <span className="hidden sm:inline">Locations</span>
+          <TabsList className="bg-[var(--bg-card)] border border-[var(--border-color)] w-full grid grid-cols-5">
+            <TabsTrigger value="locations" className="gap-1 text-xs">
+              <MapPin className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Stores</span>
               <span className="sm:hidden">Loc</span>
             </TabsTrigger>
-            <TabsTrigger value="team" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Users className="w-4 h-4" />
+            <TabsTrigger value="team" className="gap-1 text-xs">
+              <Users className="w-3.5 h-3.5" />
               Team
             </TabsTrigger>
-            <TabsTrigger value="billing" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <FileText className="w-4 h-4" />
+            <TabsTrigger value="billing" className="gap-1 text-xs">
+              <FileText className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Billing</span>
               <span className="sm:hidden">Bill</span>
             </TabsTrigger>
+            <TabsTrigger value="cutoffs" className="gap-1 text-xs">
+              <AlarmClock className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cutoffs</span>
+              <span className="sm:hidden">Cut</span>
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1 text-xs">
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+              <span className="sm:hidden">Set</span>
+            </TabsTrigger>
           </TabsList>
 
-          {/* Locations Tab */}
+          {/* Locations / Stores Tab */}
           <TabsContent value="locations" className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">Locations</h3>
+              <div>
+                <h3 className="text-lg font-medium">Store Locations</h3>
+                <p className="text-sm text-muted-foreground">{detailBusiness.locations.length} location(s) registered</p>
+              </div>
               <Button 
                 size="sm" 
                 onClick={() => setShowAddLocationSheet(true)}
                 className="gap-2 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
               >
                 <Plus className="w-4 h-4" />
-                Add Location
+                Add Store
               </Button>
             </div>
             
-            <div className="space-y-3">
-              {detailBusiness.locations.map((location) => (
-                <Card key={location.id} className="bg-[var(--bg-card)] border-[var(--border-color)]">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-foreground">{location.name}</h4>
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {location.address}
-                        </p>
-                        {location.contact_phone && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {location.contact_phone}
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {location.billing_email}
-                        </p>
+            {detailBusiness.locations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Store className="w-10 h-10 text-muted-foreground mb-3" />
+                <p className="text-sm font-medium">No store locations yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Add the first store to get started</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {detailBusiness.locations.map((location, idx) => (
+                  <Card key={location.id} className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden">
+                    <CardContent className="p-0">
+                      {/* Header row */}
+                      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-[var(--accent-orange)]/10 flex items-center justify-center shrink-0">
+                            <Store className="w-4 h-4 text-[var(--accent-orange)]" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium text-foreground">{location.name}</h4>
+                              {idx === 0 && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5 bg-primary/10 text-primary border-primary/20">
+                                  Primary
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditingLocation(location)}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit Location
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => setLocationToDelete(location)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete Location
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditingLocation(location)}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit Location
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => setLocationToDelete(location)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete Location
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+
+                      {/* Details grid */}
+                      <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                        <div className="flex items-start gap-2 text-muted-foreground col-span-full">
+                          <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span className="leading-tight">{location.address}</span>
+                        </div>
+                        {location.contact_phone && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                            <span>{location.contact_phone}</span>
+                          </div>
+                        )}
+                        {location.billing_email && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{location.billing_email}</span>
+                          </div>
+                        )}
+                        {location.backup_email && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="w-3.5 h-3.5 shrink-0 opacity-50" />
+                            <span className="truncate text-xs">{location.backup_email} <span className="text-muted-foreground/60">(backup)</span></span>
+                          </div>
+                        )}
+                        {(location as DbLocation & { notes?: string }).notes && (
+                          <div className="col-span-full mt-1 text-xs text-muted-foreground italic border-t border-[var(--border-color)] pt-2">
+                            {(location as DbLocation & { notes?: string }).notes}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* Team Tab */}
@@ -953,9 +1029,7 @@ export function AdminBusinesses() {
 
           {/* Billing Tab */}
           <TabsContent value="billing" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">Billing Settings</h3>
-            </div>
+            <h3 className="text-lg font-medium">Billing Settings</h3>
             
             <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
               <CardContent className="p-4 space-y-4">
@@ -999,29 +1073,226 @@ export function AdminBusinesses() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    This determines how invoices are generated for multi-location businesses.
+                    Determines how invoices are generated for this multi-location business.
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-[var(--border-color)]">
+                <Separator />
+
+                <div>
                   <h4 className="font-medium text-foreground mb-3">Location Billing Emails</h4>
                   <div className="space-y-2">
                     {detailBusiness.locations.map((location) => (
-                      <div key={location.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-card-2)]">
+                      <div key={location.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-card-2)]">
                         <div>
                           <div className="text-sm font-medium text-foreground">{location.name}</div>
-                          <div className="text-xs text-muted-foreground">{location.billing_email}</div>
+                          <div className="text-xs text-muted-foreground">{location.billing_email || <span className="italic">using business default</span>}</div>
                         </div>
                         <Button 
                           variant="ghost" 
                           size="sm"
                           onClick={() => setEditingLocation(location)}
                         >
-                          <Edit className="w-3 h-3" />
+                          <Edit className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     ))}
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Cutoffs Tab */}
+          <TabsContent value="cutoffs" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium">Daily Cutoffs</h3>
+                <p className="text-sm text-muted-foreground">
+                  Orders submitted after the cutoff go to the approval queue as late requests.
+                </p>
+              </div>
+              {loadingCutoffs && <Spinner className="w-4 h-4" />}
+            </div>
+
+            <InlineCutoffEditor
+              businessId={detailBusiness.id}
+              cutoffs={detailCutoffs}
+              onChanged={() => fetchCutoffs(detailBusiness.id)}
+            />
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-4">
+            <h3 className="text-lg font-medium">Business Settings</h3>
+
+            {/* Contact info */}
+            <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+              <CardContent className="p-4 space-y-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Contact Information</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Business Name</Label>
+                    <Input
+                      value={detailBusiness.name}
+                      onChange={(e) => setDetailBusiness({ ...detailBusiness, name: e.target.value })}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Billing Email</Label>
+                    <Input
+                      type="email"
+                      value={detailBusiness.billing_email}
+                      onChange={(e) => setDetailBusiness({ ...detailBusiness, billing_email: e.target.value })}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Contact Name</Label>
+                    <Input
+                      value={detailBusiness.contact_name || ''}
+                      onChange={(e) => setDetailBusiness({ ...detailBusiness, contact_name: e.target.value })}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Contact Phone</Label>
+                    <Input
+                      value={detailBusiness.contact_phone || ''}
+                      onChange={(e) => setDetailBusiness({ ...detailBusiness, contact_phone: e.target.value })}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* SLA & timeout overrides */}
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">SLA &amp; Timeout Overrides</p>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Leave blank to inherit the system default shown in the placeholder.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Rush SLA (mins)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      placeholder={`Default ${settings.rushSlaMins}`}
+                      value={detailBusiness.rush_sla_mins ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim()
+                        const val = raw === '' ? null : Math.max(1, parseInt(raw, 10) || 0) || null
+                        setDetailBusiness({ ...detailBusiness, rush_sla_mins: val })
+                      }}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">In-Town Timeout (mins)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      placeholder={`Default ${settings.intownTimeoutMins}`}
+                      value={detailBusiness.intown_timeout_mins ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim()
+                        const val = raw === '' ? null : Math.max(1, parseInt(raw, 10) || 0) || null
+                        setDetailBusiness({ ...detailBusiness, intown_timeout_mins: val })
+                      }}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Out-of-Town Timeout (mins)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      placeholder={`Default ${settings.outOfTownTimeoutMins}`}
+                      value={detailBusiness.out_of_town_timeout_mins ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim()
+                        const val = raw === '' ? null : Math.max(1, parseInt(raw, 10) || 0) || null
+                        setDetailBusiness({ ...detailBusiness, out_of_town_timeout_mins: val })
+                      }}
+                      className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={async () => {
+                    const supabase = createClient()
+                    const { error } = await supabase
+                      .from('businesses')
+                      .update({
+                        name: detailBusiness.name,
+                        billing_email: detailBusiness.billing_email,
+                        contact_name: detailBusiness.contact_name,
+                        contact_phone: detailBusiness.contact_phone,
+                        rush_sla_mins: detailBusiness.rush_sla_mins,
+                        intown_timeout_mins: detailBusiness.intown_timeout_mins,
+                        out_of_town_timeout_mins: detailBusiness.out_of_town_timeout_mins,
+                      })
+                      .eq('id', detailBusiness.id)
+                    if (error) { toast.error('Failed to save settings'); return }
+                    mutate('all-businesses')
+                    toast.success('Settings saved')
+                  }}
+                  className="bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Settings
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Status + danger zone */}
+            <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+              <CardContent className="p-4 space-y-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Account Status</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {detailBusiness.invite_status === 'active' ? 'Active' : detailBusiness.invite_status === 'deactivated' ? 'Deactivated' : 'Status: ' + detailBusiness.invite_status}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {detailBusiness.invite_status === 'active' ? 'This business can log in and place orders.' : 'Access is restricted.'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleStatus(detailBusiness)}
+                    className={detailBusiness.invite_status === 'active' ? 'text-destructive border-destructive/30' : 'text-green-500 border-green-500/30'}
+                  >
+                    <Ban className="w-4 h-4 mr-2" />
+                    {detailBusiness.invite_status === 'active' ? 'Suspend' : 'Activate'}
+                  </Button>
+                </div>
+
+                <Separator />
+
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-destructive">Danger Zone</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    Permanently delete this business. Only allowed if no deliveries or invoices exist.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedBusiness(detailBusiness)
+                      setShowDeleteConfirm(true)
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1716,37 +1987,38 @@ export function AdminBusinesses() {
                     </DropdownMenu>
                   </div>
 
-                  <div className="space-y-2 text-sm mb-4">
+                  <div className="space-y-1.5 text-sm mb-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Mail className="w-4 h-4" />
+                      <Mail className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">{business.billing_email}</span>
                     </div>
                     {business.contact_phone && (
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="w-4 h-4" />
+                        <Phone className="w-3.5 h-3.5 shrink-0" />
                         <span>{business.contact_phone}</span>
                       </div>
                     )}
                     {business.locations.length > 0 && (
                       <div className="flex items-start gap-2 text-muted-foreground">
-                        <MapPin className="w-4 h-4 mt-0.5" />
-                        <span className="line-clamp-2">{business.locations[0].address}</span>
+                        <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span className="line-clamp-1">{business.locations[0].address}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Building2 className="w-4 h-4" />
-                      <span>{business.locations.length} location(s)</span>
-                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-[var(--border-color)]">
-                    <div className="flex items-center gap-1">
-                      <Package className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm text-foreground">{stats.total} deliveries</span>
+                  {/* Stores + stats row */}
+                  <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-[var(--border-color)]">
+                    <div className="flex items-center gap-1.5 rounded-md bg-[var(--bg-card-2)] px-2 py-1">
+                      <Store className="w-3.5 h-3.5 text-[var(--accent-orange)]" />
+                      <span className="text-xs font-medium">{business.locations.length} {business.locations.length === 1 ? 'store' : 'stores'}</span>
                     </div>
-                    <span className="text-sm font-medium text-primary">
-                      ${stats.totalSpent.toFixed(0)} billed
-                    </span>
+                    <div className="flex items-center gap-1.5 rounded-md bg-[var(--bg-card-2)] px-2 py-1">
+                      <Package className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs">{stats.total} orders</span>
+                    </div>
+                    <div className="ml-auto">
+                      <span className="text-xs font-medium text-primary">${stats.totalSpent.toFixed(0)} billed</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1939,5 +2211,204 @@ export function AdminBusinesses() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// InlineCutoffEditor — self-contained cutoff UI for a single business,
+// embedded in the Cutoffs tab of the detail view.
+// ---------------------------------------------------------------------------
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const TZ = 'America/Edmonton'
+
+function timeToHHMM(t: string | null | undefined): string {
+  if (!t) return ''
+  return t.split(':').slice(0, 2).join(':')
+}
+
+function InlineCutoffEditor({
+  businessId,
+  cutoffs,
+  onChanged,
+}: {
+  businessId: string
+  cutoffs: BusinessCutoff[]
+  onChanged: () => void
+}) {
+  const defaultRow = cutoffs.find((c) => c.dayOfWeek === null) ?? null
+  const overrides = cutoffs.filter((c) => c.dayOfWeek !== null)
+
+  const [defaultTime, setDefaultTime] = useState(timeToHHMM(defaultRow?.cutoffTime))
+  const [savingDefault, setSavingDefault] = useState(false)
+  const [newDay, setNewDay] = useState<number>(1)
+  const [newTime, setNewTime] = useState('')
+  const [addingOverride, setAddingOverride] = useState(false)
+
+  // Keep local default time in sync when cutoffs reload
+  useState(() => {
+    setDefaultTime(timeToHHMM(defaultRow?.cutoffTime))
+  })
+
+  const status = cutoffs.length ? evaluateCutoff(cutoffs) : null
+
+  const saveDefault = async () => {
+    setSavingDefault(true)
+    try {
+      await setDefaultCutoff(businessId, defaultTime || null, TZ)
+      toast.success(defaultTime ? 'Default cutoff saved' : 'Default cutoff cleared')
+      onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save cutoff')
+    } finally {
+      setSavingDefault(false)
+    }
+  }
+
+  const addOverride = async () => {
+    if (!newTime) { toast.error('Pick a time for the override'); return }
+    setAddingOverride(true)
+    try {
+      await setDayOverride(businessId, newDay, newTime, TZ)
+      toast.success(`${DAYS[newDay]} override saved`)
+      setNewTime('')
+      onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save override')
+    } finally {
+      setAddingOverride(false)
+    }
+  }
+
+  const removeOverride = async (dow: number) => {
+    try {
+      await setDayOverride(businessId, dow, null, TZ)
+      toast.success(`${DAYS[dow]} override removed`)
+      onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to remove override')
+    }
+  }
+
+  const usedDays = new Set(overrides.map((o) => o.dayOfWeek as number))
+  const availableDays = DAYS.map((_, i) => i).filter((i) => !usedDays.has(i))
+
+  return (
+    <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
+      <CardContent className="p-4 space-y-5">
+
+        {/* Status banner */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlarmClock className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Cutoff schedule</span>
+          </div>
+          {status?.hasCutoff ? (
+            <Badge variant={status.isPastCutoff ? 'destructive' : 'outline'} className={!status.isPastCutoff ? 'bg-green-500/10 text-green-500 border-green-500/30' : ''}>
+              {status.isPastCutoff ? 'Past cutoff' : 'Open'} — {status.cutoffTime}
+            </Badge>
+          ) : (
+            <Badge variant="secondary">No cutoff set</Badge>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          All times are {TZ.replace('_', ' ')}. The default applies every day unless a weekday override exists.
+        </p>
+
+        {/* Default cutoff row */}
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">Default cutoff (all days)</Label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Input
+              type="time"
+              value={defaultTime}
+              onChange={(e) => setDefaultTime(e.target.value)}
+              className="h-9 w-36 bg-[var(--bg-card-2)] border-[var(--border-color)]"
+            />
+            <Button onClick={saveDefault} disabled={savingDefault} size="sm" className="h-9 bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
+              <Save className="w-3.5 h-3.5 mr-1.5" />
+              {savingDefault ? 'Saving…' : 'Save'}
+            </Button>
+            {defaultRow && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-destructive hover:text-destructive"
+                onClick={() => {
+                  setDefaultTime('')
+                  void setDefaultCutoff(businessId, null, TZ).then(() => {
+                    toast.success('Default cutoff cleared')
+                    onChanged()
+                  })
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {(overrides.length > 0 || availableDays.length > 0) && <Separator />}
+
+        {/* Existing overrides */}
+        {overrides.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Weekday overrides</Label>
+            <div className="flex flex-wrap gap-2">
+              {overrides
+                .slice()
+                .sort((a, b) => (a.dayOfWeek as number) - (b.dayOfWeek as number))
+                .map((o) => (
+                  <div
+                    key={o.id}
+                    className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-card-2)] px-3 py-1.5"
+                  >
+                    <span className="text-sm font-medium">{DAYS[o.dayOfWeek as number]}</span>
+                    <span className="text-sm text-muted-foreground">{timeToHHMM(o.cutoffTime)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeOverride(o.dayOfWeek as number)}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Remove ${DAYS[o.dayOfWeek as number]} override`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Add override */}
+        {availableDays.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Add weekday override</Label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <select
+                value={newDay}
+                onChange={(e) => setNewDay(Number(e.target.value))}
+                className="h-9 rounded-md border border-[var(--border-color)] bg-[var(--bg-card-2)] px-2 text-sm text-foreground"
+              >
+                {availableDays.map((i) => (
+                  <option key={i} value={i}>{DAYS[i]}</option>
+                ))}
+              </select>
+              <Input
+                type="time"
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
+                className="h-9 w-36 bg-[var(--bg-card-2)] border-[var(--border-color)]"
+                aria-label="Override time"
+              />
+              <Button onClick={addOverride} disabled={addingOverride} size="sm" variant="outline" className="h-9">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Add
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

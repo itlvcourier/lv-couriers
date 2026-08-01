@@ -15,7 +15,6 @@ import { AdminUserManagement } from './AdminUserManagement'
 import { DriverPaySettings } from './DriverPaySettings'
 import { FeatureFlagsSettings } from './FeatureFlagsSettings'
 import { HubsSettings } from './HubsSettings'
-import { CutoffManager } from './CutoffManager'
 import {
   Dialog,
   DialogContent,
@@ -372,9 +371,6 @@ export function AdminSettings() {
 
       {/* Cross-dock hub locations (meet/sort points) */}
       <HubsSettings />
-
-      {/* Per-business daily cutoffs */}
-      <CutoffManager />
 
       {/* Dispatch Mode Section */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
