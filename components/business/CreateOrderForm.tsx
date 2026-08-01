@@ -862,9 +862,16 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
               <div className="space-y-2 pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm text-foreground">Estimated cost</Label>
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Confirmed at pickup
-                  </span>
+                  {isCalculatingDistance ? (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Calculating distance…
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {isDistanceBased && distanceKm ? `${distanceKm.toFixed(1)} km · ` : ''}Confirmed at pickup
+                    </span>
+                  )}
                 </div>
                 {rateCard ? (
                   <BillingBreakdownCard
@@ -877,6 +884,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                     total={previewBreakdown.total}
                     gstApplicable={previewBreakdown.gstApplicable}
                     hasRateCard={true}
+                    distanceKm={isDistanceBased ? distanceKm : null}
+                    zoneTier={previewBreakdown.zoneTier}
                   />
                 ) : (
                   <p className="text-xs text-yellow-500 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
