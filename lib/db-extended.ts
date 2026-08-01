@@ -1570,22 +1570,59 @@ export async function getDriverRatingsSummary(driverId: string): Promise<DriverR
 /**
  * Get business ratings summary for a location
  */
-export async function getBusinessRatingsSummary(businessId: string, locationId: string): Promise<BusinessRatingsSummary | null> {
+export async function getBusinessRatingsSummary(
+  businessId: string,
+  locationId: string | null,
+): Promise<BusinessRatingsSummary | null> {
   const supabase = createClient()
-  
+
+  // Single-location path — use the pre-aggregated view
+  if (locationId) {
+    const { data, error } = await supabase
+      .from('business_ratings_summary')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('location_id', locationId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('getBusinessRatingsSummary (single): query failed:', error.message)
+      return null
+    }
+
+    return data ? mapBusinessRatingsSummaryRow(data) : null
+  }
+
+  // All-locations path — aggregate across every location for this business
   const { data, error } = await supabase
-    .from('business_ratings_summary')
-    .select('*')
+    .from('customer_feedback')
+    .select('overall_rating, driver_rating, business_rating')
     .eq('business_id', businessId)
-    .eq('location_id', locationId)
-    .maybeSingle()
-  
+    .not('overall_rating', 'is', null)
+
   if (error) {
-    console.error('[v0] Failed to fetch business ratings summary:', error.message)
+    console.error('getBusinessRatingsSummary (all-locs): query failed:', error.message)
     return null
   }
-  
-  return data ? mapBusinessRatingsSummaryRow(data) : null
+
+  const rows = data ?? []
+  if (rows.length === 0) return null
+
+  const avg = (key: 'overall_rating' | 'driver_rating' | 'business_rating') => {
+    const vals = rows.map(r => Number(r[key])).filter(v => !isNaN(v) && v > 0)
+    return vals.length ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10 : null
+  }
+
+  return {
+    businessId,
+    locationId: 'all',
+    avgOverallRating: avg('overall_rating'),
+    avgDriverRating: avg('driver_rating'),
+    avgBusinessRating: avg('business_rating'),
+    totalRatings: rows.length,
+    totalFeedback: rows.length,
+    feedbackReceivedCount: rows.length,
+  }
 }
 
 // ============================================================================

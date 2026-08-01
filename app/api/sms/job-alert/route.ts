@@ -66,16 +66,11 @@ export async function POST(req: Request) {
   }
 
   const recipients = (drivers || []).filter(d => !!d.phone)
-  console.log('[v0] sms.job-alert candidates', {
-    deliveryId,
-    totalActiveDrivers: drivers?.length ?? 0,
-    withPhone: recipients.length,
-  })
   if (recipients.length === 0) {
     return NextResponse.json({ ok: true, sent: 0, failed: 0, note: 'no on-duty drivers' })
   }
 
-  const businessName = delivery.businesses?.name || 'Lv Couriers'
+  const businessName = delivery.businesses?.name || 'LV Couriers'
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
   const message =
     `${urgencyTag}New job from ${businessName}: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}. ` +

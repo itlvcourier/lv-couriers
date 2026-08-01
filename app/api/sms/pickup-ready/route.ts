@@ -46,12 +46,6 @@ export async function POST(req: Request) {
       { status: 404 },
     )
   }
-  console.log('[v0] sms.pickup-ready loaded', {
-    deliveryId,
-    status: delivery.status,
-    hasRecipientPhone: !!delivery.recipient_phone,
-    hasBusinessPhone: !!delivery.businesses?.phone,
-  })
   if (delivery.status !== 'en_route_dropoff') {
     return NextResponse.json({
       ok: false,
@@ -59,7 +53,7 @@ export async function POST(req: Request) {
     })
   }
 
-  const businessName = delivery.businesses?.name || 'Lv Couriers'
+  const businessName = delivery.businesses?.name || 'LV Couriers'
   const businessPhone = delivery.businesses?.phone || null
   const recipientName = delivery.recipient_name || 'there'
   const trackingUrl = buildTrackingUrl(deliveryId)
@@ -111,6 +105,5 @@ export async function POST(req: Request) {
   }
 
   const results = await Promise.all(sends)
-  console.log('[v0] sms.pickup-ready results', results)
   return NextResponse.json({ ok: true, results })
 }

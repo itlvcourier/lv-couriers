@@ -12,6 +12,7 @@ import {
   getDrivers,
   getBusinesses,
   getAdminNotifications,
+  getAdminRatingsSummary,
   type DbDelivery,
   type DbDriver,
 } from '@/lib/db'
@@ -30,6 +31,8 @@ import {
   AlertOctagon,
   MailWarning,
   ChevronRight,
+  Star,
+  MessageCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -96,6 +99,11 @@ export function AdminDashboard() {
   // Fetch admin notifications
   const { data: notifications = [] } = useSWR('admin-notifications', () => getAdminNotifications(10), {
     refreshInterval: 15000,
+  })
+
+  // Fetch platform-wide ratings summary
+  const { data: ratings } = useSWR('admin-ratings-summary', getAdminRatingsSummary, {
+    refreshInterval: 120000,
   })
 
   const isLoading = statsLoading || deliveriesLoading || driversLoading || businessesLoading
@@ -281,7 +289,7 @@ return (
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -345,6 +353,31 @@ return (
               </div>
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                 <Building2 className="w-6 h-6 text-blue-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-yellow-500/5 border-yellow-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Avg Rating</p>
+                <p className="text-2xl font-bold text-yellow-400 flex items-center gap-1">
+                  {ratings?.avgOverallRating != null
+                    ? ratings.avgOverallRating.toFixed(1)
+                    : '—'}
+                  {ratings?.avgOverallRating != null && (
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <MessageCircle className="w-3 h-3 inline mr-0.5" />
+                  {ratings?.totalFeedback ?? 0} reviews · {ratings?.last30Days ?? 0} this month
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                <Star className="w-6 h-6 text-yellow-400" />
               </div>
             </div>
           </CardContent>

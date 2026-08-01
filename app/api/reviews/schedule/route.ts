@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     .select('id')
 
   if (error) {
-    console.error('[v0] review schedule failed', error.message)
+    console.error('review-schedule: DB update failed:', error.message)
     return NextResponse.json({ ok: false, reason: error.message }, { status: 500 })
   }
 

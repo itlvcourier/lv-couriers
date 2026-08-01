@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms } from '@/lib/twilio'
+import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
 /**
  * Notify the driver when they are assigned to a delivery.
@@ -69,13 +69,6 @@ export async function POST(req: Request) {
     )
   }
 
-  console.log('[v0] sms.driver-assigned', {
-    deliveryId,
-    driverId,
-    driverPhone: driver.phone,
-    businessPhone: delivery.businesses?.phone,
-  })
-
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
   const trackingUrl = buildTrackingUrl(deliveryId)
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
@@ -132,15 +125,5 @@ export async function POST(req: Request) {
   }
 
   const results = await Promise.all(sends)
-  console.log('[v0] sms.driver-assigned results', results)
   return NextResponse.json({ ok: true, results })
-}
-
-function buildTrackingUrl(deliveryId: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    'http://localhost:3000'
-  const normalized = base.startsWith('http') ? base : `https://${base}`
-  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
 }

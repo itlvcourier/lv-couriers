@@ -78,7 +78,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: result.ok, reason: result.ok ? undefined : result.reason })
   } catch (err) {
-    console.error('[v0] Error creating feedback token or sending SMS:', err)
+    console.error('feedback-request: failed to create token or send SMS:', err instanceof Error ? err.message : err)
     return NextResponse.json({ 
       ok: false, 
       reason: err instanceof Error ? err.message : 'Failed to process feedback request' 

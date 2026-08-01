@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendSms } from '@/lib/twilio'
+import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
 /**
  * Send confirmation to the business when their order is successfully posted.
@@ -20,6 +20,17 @@ export async function POST(req: Request) {
   }
 
   const supabase = createAdminClient()
+
+  // Check setting gate (defaults true when column absent — order confirmations
+  // are critical notifications so we only suppress when explicitly disabled)
+  const { data: gateRow } = await supabase
+    .from('system_settings')
+    .select('sms_notify_order_confirmed')
+    .limit(1)
+    .maybeSingle()
+  if (gateRow && (gateRow as Record<string, unknown>).sms_notify_order_confirmed === false) {
+    return NextResponse.json({ ok: false, reason: 'Feature disabled in settings' })
+  }
 
   const { data: delivery, error } = await supabase
     .from('deliveries')
@@ -46,13 +57,6 @@ export async function POST(req: Request) {
       { status: 404 },
     )
   }
-
-  console.log('[v0] sms.order-confirmed', {
-    deliveryId,
-    status: delivery.status,
-    businessPhone: delivery.businesses?.phone,
-    recipientPhone: delivery.recipient_phone,
-  })
 
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
   const trackingUrl = buildTrackingUrl(deliveryId)
@@ -108,15 +112,5 @@ export async function POST(req: Request) {
   }
 
   const results = await Promise.all(sends)
-  console.log('[v0] sms.order-confirmed results', results)
   return NextResponse.json({ ok: true, results })
-}
-
-function buildTrackingUrl(deliveryId: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    'http://localhost:3000'
-  const normalized = base.startsWith('http') ? base : `https://${base}`
-  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
 }

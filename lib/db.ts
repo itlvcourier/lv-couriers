@@ -886,6 +886,54 @@ export async function getDashboardStats() {
   }
 }
 
+// ============ ADMIN RATINGS SUMMARY ============
+
+export interface AdminRatingsSummary {
+  totalFeedback: number
+  avgOverallRating: number | null
+  avgDriverRating: number | null
+  avgBusinessRating: number | null
+  last30Days: number
+}
+
+/**
+ * Platform-wide feedback summary for the admin dashboard.
+ * Reads directly from customer_feedback so it stays in sync with
+ * the same data that populates business-level reports.
+ */
+export async function getAdminRatingsSummary(): Promise<AdminRatingsSummary> {
+  const supabase = createClient()
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  const [allRows, recentCount] = await Promise.all([
+    supabase
+      .from('customer_feedback')
+      .select('overall_rating, driver_rating, business_rating')
+      .not('overall_rating', 'is', null),
+    supabase
+      .from('customer_feedback')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', since30),
+  ])
+
+  const rows = allRows.data ?? []
+  const total = rows.length
+
+  const avg = (key: 'overall_rating' | 'driver_rating' | 'business_rating') => {
+    const vals = rows.map(r => Number(r[key])).filter(v => !isNaN(v) && v > 0)
+    if (vals.length === 0) return null
+    return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10
+  }
+
+  return {
+    totalFeedback: total,
+    avgOverallRating: avg('overall_rating'),
+    avgDriverRating: avg('driver_rating'),
+    avgBusinessRating: avg('business_rating'),
+    last30Days: recentCount.count ?? 0,
+  }
+}
+
 // ============ REALTIME SUBSCRIPTIONS ============
 
 export function subscribeToDeliveries(callback: (payload: unknown) => void) {

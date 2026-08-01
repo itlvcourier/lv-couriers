@@ -40,13 +40,6 @@ export async function POST(req: Request) {
     )
   }
 
-  console.log('[v0] sms.delivered loaded', {
-    deliveryId,
-    status: delivery.status,
-    hasRecipientPhone: !!delivery.recipient_phone,
-    businessId: delivery.business_id,
-  })
-
   if (delivery.status !== 'delivered') {
     return NextResponse.json({
       ok: false,
@@ -65,11 +58,6 @@ export async function POST(req: Request) {
       .maybeSingle<{ name: string; phone: string | null }>()
     if (biz?.name) businessName = biz.name
     if (biz?.phone) businessPhone = biz.phone
-    console.log('[v0] sms.delivered business lookup', {
-      businessId: delivery.business_id,
-      businessName,
-      businessPhone,
-    })
   }
 
   // At least one phone must be present
@@ -121,6 +109,5 @@ export async function POST(req: Request) {
   }
 
   const results = await Promise.all(sends)
-  console.log('[v0] sms.delivered results', results)
   return NextResponse.json({ ok: true, results })
 }
