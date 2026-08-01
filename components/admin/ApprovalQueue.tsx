@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { mutate as globalMutate } from 'swr'
 import { useApp } from '@/lib/context'
+import { createDeliveryInDb } from '@/lib/db-extended'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -100,7 +102,63 @@ export function ApprovalQueue() {
       const opts = { decidedBy: currentUser?.id ?? null, reason, adminOverride: isExpired }
       if (action === 'approve') {
         await approveDispatchRequest(req.id, opts)
-        toast.success(isExpired ? `${REQUEST_TYPE_LABELS[req.type]} force-approved` : `${REQUEST_TYPE_LABELS[req.type]} approved`)
+
+        // For late_order requests: create the actual delivery record now that
+        // the admin has approved it, then bust the caches so the dashboard
+        // KPIs and orders list reflect the new delivery immediately.
+        if (req.type === 'late_order' && req.payload) {
+          const p = req.payload as Record<string, unknown>
+          try {
+            const manifest: Array<{ type: 'small_package' | 'big_package' | 'out_of_town' | 'rush'; quantity: number }> = []
+            if (Number(p.smallPackages) > 0) manifest.push({ type: 'small_package', quantity: Number(p.smallPackages) })
+            if (Number(p.bigPackages) > 0) manifest.push({ type: 'big_package', quantity: Number(p.bigPackages) })
+            if (p.isRush) manifest.push({ type: 'rush', quantity: 1 })
+            if (p.isOutOfTown) manifest.push({ type: 'out_of_town', quantity: 1 })
+
+            // Look up the business's default location (first active location)
+            const { createClient } = await import('@/lib/supabase/client')
+            const sb = createClient()
+            const { data: loc } = await sb
+              .from('business_locations')
+              .select('id')
+              .eq('business_id', req.businessId)
+              .eq('is_active', true)
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .single()
+
+            const businessId = req.businessId!
+            await createDeliveryInDb({
+              businessId,
+              locationId: loc?.id ?? businessId,
+              pickupAddress: String(p.pickupAddress ?? ''),
+              pickupArea: String(p.pickupArea ?? p.pickupAddress ?? ''),
+              dropoffAddress: String(p.dropoffAddress ?? ''),
+              dropoffArea: String(p.dropoffArea ?? p.dropoffAddress ?? ''),
+              recipientName: p.recipientName ? String(p.recipientName) : null,
+              recipientPhone: p.recipientPhone ? String(p.recipientPhone) : null,
+              isRush: Boolean(p.isRush),
+              isOutOfTown: Boolean(p.isOutOfTown),
+              manifest: manifest.length > 0 ? manifest : [{ type: 'small_package', quantity: 1 }],
+            })
+
+            // Bust SWR caches so orders page + dashboard KPIs refresh
+            await Promise.all([
+              globalMutate('all-deliveries'),
+              globalMutate('dashboard-stats'),
+            ])
+
+            toast.success(isExpired ? 'After-hours delivery force-approved and posted' : 'After-hours delivery approved and posted')
+          } catch (deliveryErr) {
+            // Approval succeeded but delivery creation failed — warn but don't throw
+            console.error('[v0] Failed to create delivery from approved late_order:', deliveryErr)
+            toast.warning('Request approved, but delivery post failed — create it manually in Orders.')
+          }
+        } else {
+          toast.success(isExpired ? `${REQUEST_TYPE_LABELS[req.type]} force-approved` : `${REQUEST_TYPE_LABELS[req.type]} approved`)
+          await globalMutate('all-deliveries')
+          await globalMutate('dashboard-stats')
+        }
       } else {
         await rejectDispatchRequest(req.id, opts)
         toast.success(`${REQUEST_TYPE_LABELS[req.type]} rejected`)

@@ -261,7 +261,7 @@ export async function getBusinessDeliveries(businessId: string) {
       *,
       driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
       location:business_locations(id, name, address),
-      manifest_items(id, delivery_id, type, quantity, notes)
+      manifest_items(id, delivery_id, item_type, quantity, notes)
     `)
     .eq('business_id', businessId)
     .order('created_at', { ascending: false })
@@ -296,7 +296,7 @@ export async function getAllDeliveries(status?: DeliveryStatus) {
       business:businesses(id, name, email, phone),
       location:business_locations(id, name, address),
       driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
-      manifest_items(id, delivery_id, type, quantity, notes)
+      manifest_items(id, delivery_id, item_type, quantity, notes)
     `)
     .order('created_at', { ascending: false })
 
