@@ -62,13 +62,13 @@ export const LABEL_SIZE_OPTIONS: { value: LabelSize; label: string; hint: string
   { value: 'halfA4', label: 'Half A4 sheet', hint: 'Standard office printer, 2 per A4 page' },
 ]
 
-/** Mask a phone for privacy on a printed surface: keep last 2 digits only. */
-function maskPhone(phone: string | null | undefined): string | null {
+/**
+ * Format phone for the printed label. We show the full number because this
+ * label is used by the driver who must be able to call the recipient directly.
+ */
+function formatLabelPhone(phone: string | null | undefined): string | null {
   if (!phone) return null
-  const digits = phone.replace(/\D/g, '')
-  if (digits.length < 4) return phone
-  const last = digits.slice(-2)
-  return `(•••) •••-••${last}`
+  return phone
 }
 
 /** Encode a scan token as a QR data URL (PNG). */
@@ -198,7 +198,7 @@ function fmtDate(iso: string | null): string {
 function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
   const color = d.zoneColor || '#64748b'
   const zoneName = d.zoneName ? escapeHtml(d.zoneName) : 'Unzoned'
-  const maskedPhone = maskPhone(d.recipientPhone)
+  const displayPhone = formatLabelPhone(d.recipientPhone)
   const created = fmtDate(d.createdAt)
 
   const captureFlags: string[] = []
@@ -207,7 +207,7 @@ function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
 
   const detailRows: string[] = []
   if (d.buzzCode) detailRows.push(`<div class="row"><span>Buzz/Unit</span><b>${escapeHtml(d.buzzCode)}</b></div>`)
-  if (maskedPhone) detailRows.push(`<div class="row"><span>Contact</span><b>${escapeHtml(maskedPhone)}</b></div>`)
+  if (displayPhone) detailRows.push(`<div class="row"><span>Contact</span><b>${escapeHtml(displayPhone)}</b></div>`)
   if (d.distanceKm != null) detailRows.push(`<div class="row"><span>Distance</span><b>${d.distanceKm.toFixed(1)} km</b></div>`)
   detailRows.push(`<div class="row"><span>Pieces</span><b>${d.pieces}</b></div>`)
   if (captureFlags.length) detailRows.push(`<div class="row"><span>On delivery</span><b>${captureFlags.join(' + ')}</b></div>`)

@@ -5,6 +5,8 @@ export const ORG_ID = "00000000-0000-0000-0000-000000000001"
 export interface BusinessCutoff {
   id: string
   businessId: string
+  /** null = business-level; set = store-level override for this location */
+  locationId: string | null
   dayOfWeek: number | null // null = default for all days; 0=Sun..6=Sat override
   cutoffTime: string // "HH:MM" or "HH:MM:SS"
   timezone: string
@@ -16,6 +18,7 @@ export interface BusinessCutoff {
 interface CutoffRow {
   id: string
   business_id: string
+  location_id: string | null
   day_of_week: number | null
   cutoff_time: string
   timezone: string
@@ -28,6 +31,7 @@ function mapCutoff(r: CutoffRow): BusinessCutoff {
   return {
     id: r.id,
     businessId: r.business_id,
+    locationId: r.location_id ?? null,
     dayOfWeek: r.day_of_week,
     cutoffTime: r.cutoff_time,
     timezone: r.timezone,
@@ -37,22 +41,38 @@ function mapCutoff(r: CutoffRow): BusinessCutoff {
   }
 }
 
-/** All cutoff rows for a business (default + any day-of-week overrides). */
+/** All cutoff rows for a business (business-level rows only, no location overrides). */
 export async function getBusinessCutoffs(businessId: string): Promise<BusinessCutoff[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("business_cutoffs")
     .select("*")
     .eq("business_id", businessId)
+    .is("location_id", null)
     .order("day_of_week", { ascending: true, nullsFirst: true })
   if (error) throw error
   return (data as CutoffRow[]).map(mapCutoff)
 }
 
-/** Cutoffs for every business, keyed by businessId. */
+/** All cutoff rows for a specific store location. */
+export async function getLocationCutoffs(locationId: string): Promise<BusinessCutoff[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("business_cutoffs")
+    .select("*")
+    .eq("location_id", locationId)
+    .order("day_of_week", { ascending: true, nullsFirst: true })
+  if (error) throw error
+  return (data as CutoffRow[]).map(mapCutoff)
+}
+
+/** Cutoffs for every business, keyed by businessId (business-level rows only). */
 export async function getAllBusinessCutoffs(): Promise<Record<string, BusinessCutoff[]>> {
   const supabase = createClient()
-  const { data, error } = await supabase.from("business_cutoffs").select("*")
+  const { data, error } = await supabase
+    .from("business_cutoffs")
+    .select("*")
+    .is("location_id", null)
   if (error) throw error
   const out: Record<string, BusinessCutoff[]> = {}
   for (const row of data as CutoffRow[]) {
@@ -63,31 +83,33 @@ export async function getAllBusinessCutoffs(): Promise<Record<string, BusinessCu
 }
 
 /**
- * Upsert the default cutoff (day_of_week = null) for a business.
- * Passing an empty/undefined time removes the default cutoff.
+ * Upsert the default cutoff (day_of_week = null) for a business or store.
+ * Pass locationId to set a store-level cutoff; omit/null for business-level.
+ * Passing an empty/undefined cutoffTime removes the cutoff.
  */
 export async function setDefaultCutoff(
   businessId: string,
   cutoffTime: string | null,
   timezone = "America/Edmonton",
+  locationId: string | null = null,
 ): Promise<void> {
   const supabase = createClient()
+  const baseFilter = locationId
+    ? supabase.from("business_cutoffs").delete().eq("location_id", locationId).is("day_of_week", null)
+    : supabase.from("business_cutoffs").delete().eq("business_id", businessId).is("location_id", null).is("day_of_week", null)
+
   if (!cutoffTime) {
-    const { error } = await supabase
-      .from("business_cutoffs")
-      .delete()
-      .eq("business_id", businessId)
-      .is("day_of_week", null)
+    const { error } = await baseFilter
     if (error) throw error
     return
   }
-  // manual upsert because the uniqueness is enforced by a partial index
-  const { data: existing } = await supabase
-    .from("business_cutoffs")
-    .select("id")
-    .eq("business_id", businessId)
-    .is("day_of_week", null)
-    .maybeSingle()
+
+  // Manual upsert — uniqueness enforced by partial index
+  const selectQ = locationId
+    ? supabase.from("business_cutoffs").select("id").eq("location_id", locationId).is("day_of_week", null).maybeSingle()
+    : supabase.from("business_cutoffs").select("id").eq("business_id", businessId).is("location_id", null).is("day_of_week", null).maybeSingle()
+
+  const { data: existing } = await selectQ
   if (existing) {
     const { error } = await supabase
       .from("business_cutoffs")
@@ -98,6 +120,7 @@ export async function setDefaultCutoff(
     const { error } = await supabase.from("business_cutoffs").insert({
       org_id: ORG_ID,
       business_id: businessId,
+      location_id: locationId ?? null,
       day_of_week: null,
       cutoff_time: cutoffTime,
       timezone,
@@ -106,29 +129,34 @@ export async function setDefaultCutoff(
   }
 }
 
-/** Upsert a per-weekday override (0=Sun..6=Sat). Null time removes the override. */
+/**
+ * Upsert a per-weekday override (0=Sun..6=Sat).
+ * Pass locationId to set a store-level override; omit/null for business-level.
+ * Null cutoffTime removes the override.
+ */
 export async function setDayOverride(
   businessId: string,
   dayOfWeek: number,
   cutoffTime: string | null,
   timezone = "America/Edmonton",
+  locationId: string | null = null,
 ): Promise<void> {
   const supabase = createClient()
+
   if (!cutoffTime) {
-    const { error } = await supabase
-      .from("business_cutoffs")
-      .delete()
-      .eq("business_id", businessId)
-      .eq("day_of_week", dayOfWeek)
+    const delQ = locationId
+      ? supabase.from("business_cutoffs").delete().eq("location_id", locationId).eq("day_of_week", dayOfWeek)
+      : supabase.from("business_cutoffs").delete().eq("business_id", businessId).is("location_id", null).eq("day_of_week", dayOfWeek)
+    const { error } = await delQ
     if (error) throw error
     return
   }
-  const { data: existing } = await supabase
-    .from("business_cutoffs")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("day_of_week", dayOfWeek)
-    .maybeSingle()
+
+  const selectQ = locationId
+    ? supabase.from("business_cutoffs").select("id").eq("location_id", locationId).eq("day_of_week", dayOfWeek).maybeSingle()
+    : supabase.from("business_cutoffs").select("id").eq("business_id", businessId).is("location_id", null).eq("day_of_week", dayOfWeek).maybeSingle()
+
+  const { data: existing } = await selectQ
   if (existing) {
     const { error } = await supabase
       .from("business_cutoffs")
@@ -139,6 +167,7 @@ export async function setDayOverride(
     const { error } = await supabase.from("business_cutoffs").insert({
       org_id: ORG_ID,
       business_id: businessId,
+      location_id: locationId ?? null,
       day_of_week: dayOfWeek,
       cutoff_time: cutoffTime,
       timezone,

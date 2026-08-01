@@ -71,6 +71,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   type BusinessCutoff,
   getBusinessCutoffs,
+  getLocationCutoffs,
   setDefaultCutoff,
   setDayOverride,
   evaluateCutoff,
@@ -159,7 +160,9 @@ export function AdminBusinesses() {
   }>>([])
   const [loadingTeam, setLoadingTeam] = useState(false)
   // Cutoffs for the currently-open detail view
+  // businessCutoffs = business-level fallback rows; locationCutoffs = per-store rows keyed by locationId
   const [detailCutoffs, setDetailCutoffs] = useState<BusinessCutoff[]>([])
+  const [locationCutoffsMap, setLocationCutoffsMap] = useState<Record<string, BusinessCutoff[]>>({})
   const [loadingCutoffs, setLoadingCutoffs] = useState(false)
 
   // Fetch team members when viewing a business
@@ -221,11 +224,24 @@ export function AdminBusinesses() {
     setLoadingTeam(false)
   }
 
-  const fetchCutoffs = async (businessId: string) => {
+  const fetchCutoffs = async (business: BusinessWithLocations) => {
     setLoadingCutoffs(true)
     try {
-      const rows = await getBusinessCutoffs(businessId)
+      // Fetch business-level cutoffs
+      const rows = await getBusinessCutoffs(business.id)
       setDetailCutoffs(rows)
+      // Fetch per-store cutoffs for every location
+      const locMap: Record<string, BusinessCutoff[]> = {}
+      await Promise.all(
+        business.locations.map(async (loc) => {
+          try {
+            locMap[loc.id] = await getLocationCutoffs(loc.id)
+          } catch {
+            locMap[loc.id] = []
+          }
+        })
+      )
+      setLocationCutoffsMap(locMap)
     } catch {
       toast.error('Failed to load cutoffs')
     } finally {
@@ -237,7 +253,7 @@ export function AdminBusinesses() {
   const handleOpenBusinessDetail = (business: BusinessWithLocations) => {
     setDetailBusiness(business)
     fetchTeamMembers(business.id)
-    fetchCutoffs(business.id)
+    fetchCutoffs(business)
   }
 
   // Filter businesses
@@ -1110,17 +1126,51 @@ export function AdminBusinesses() {
               <div>
                 <h3 className="text-lg font-medium">Daily Cutoffs</h3>
                 <p className="text-sm text-muted-foreground">
-                  Orders submitted after the cutoff go to the approval queue as late requests.
+                  Set cutoffs per store. Orders submitted after the cutoff go to the approval queue as late requests.
+                  Store cutoffs override the business-wide fallback.
                 </p>
               </div>
               {loadingCutoffs && <Spinner className="w-4 h-4" />}
             </div>
 
-            <InlineCutoffEditor
-              businessId={detailBusiness.id}
-              cutoffs={detailCutoffs}
-              onChanged={() => fetchCutoffs(detailBusiness.id)}
-            />
+            {/* Per-store cutoff editors */}
+            {detailBusiness.locations.length > 0 ? (
+              <div className="space-y-4">
+                {detailBusiness.locations.map((loc) => (
+                  <InlineCutoffEditor
+                    key={loc.id}
+                    businessId={detailBusiness.id}
+                    locationId={loc.id}
+                    locationName={loc.name}
+                    cutoffs={locationCutoffsMap[loc.id] ?? []}
+                    onChanged={() => fetchCutoffs(detailBusiness)}
+                  />
+                ))}
+                {/* Business-level fallback */}
+                <div className="pt-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                    Business-wide fallback (used when a store has no cutoff set)
+                  </p>
+                  <InlineCutoffEditor
+                    businessId={detailBusiness.id}
+                    locationId={null}
+                    locationName={null}
+                    cutoffs={detailCutoffs}
+                    onChanged={() => fetchCutoffs(detailBusiness)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <InlineCutoffEditor
+                  businessId={detailBusiness.id}
+                  locationId={null}
+                  locationName={null}
+                  cutoffs={detailCutoffs}
+                  onChanged={() => fetchCutoffs(detailBusiness)}
+                />
+              </div>
+            )}
           </TabsContent>
 
           {/* Settings Tab */}
@@ -2230,10 +2280,16 @@ function timeToHHMM(t: string | null | undefined): string {
 
 function InlineCutoffEditor({
   businessId,
+  locationId,
+  locationName,
   cutoffs,
   onChanged,
 }: {
   businessId: string
+  /** null = business-level; set = store-level override */
+  locationId: string | null
+  /** Display name for the store, or null for the business-level fallback */
+  locationName: string | null
   cutoffs: BusinessCutoff[]
   onChanged: () => void
 }) {
@@ -2256,8 +2312,8 @@ function InlineCutoffEditor({
   const saveDefault = async () => {
     setSavingDefault(true)
     try {
-      await setDefaultCutoff(businessId, defaultTime || null, TZ)
-      toast.success(defaultTime ? 'Default cutoff saved' : 'Default cutoff cleared')
+      await setDefaultCutoff(businessId, defaultTime || null, TZ, locationId)
+      toast.success(defaultTime ? 'Cutoff saved' : 'Cutoff cleared')
       onChanged()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save cutoff')
@@ -2270,7 +2326,7 @@ function InlineCutoffEditor({
     if (!newTime) { toast.error('Pick a time for the override'); return }
     setAddingOverride(true)
     try {
-      await setDayOverride(businessId, newDay, newTime, TZ)
+      await setDayOverride(businessId, newDay, newTime, TZ, locationId)
       toast.success(`${DAYS[newDay]} override saved`)
       setNewTime('')
       onChanged()
@@ -2283,7 +2339,7 @@ function InlineCutoffEditor({
 
   const removeOverride = async (dow: number) => {
     try {
-      await setDayOverride(businessId, dow, null, TZ)
+      await setDayOverride(businessId, dow, null, TZ, locationId)
       toast.success(`${DAYS[dow]} override removed`)
       onChanged()
     } catch (e) {
@@ -2298,18 +2354,27 @@ function InlineCutoffEditor({
     <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
       <CardContent className="p-4 space-y-5">
 
-        {/* Status banner */}
-        <div className="flex items-center justify-between">
+        {/* Header: store name + status badge */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <AlarmClock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Cutoff schedule</span>
+            {locationName ? (
+              <>
+                <Store className="w-4 h-4 text-[var(--accent-orange)]" />
+                <span className="text-sm font-semibold text-foreground">{locationName}</span>
+              </>
+            ) : (
+              <>
+                <AlarmClock className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Business-wide fallback</span>
+              </>
+            )}
           </div>
           {status?.hasCutoff ? (
             <Badge variant={status.isPastCutoff ? 'destructive' : 'outline'} className={!status.isPastCutoff ? 'bg-green-500/10 text-green-500 border-green-500/30' : ''}>
               {status.isPastCutoff ? 'Past cutoff' : 'Open'} — {status.cutoffTime}
             </Badge>
           ) : (
-            <Badge variant="secondary">No cutoff set</Badge>
+            <Badge variant="secondary">{locationName ? 'Inherits business default' : 'No cutoff set'}</Badge>
           )}
         </div>
 
@@ -2338,8 +2403,8 @@ function InlineCutoffEditor({
                 className="h-9 text-destructive hover:text-destructive"
                 onClick={() => {
                   setDefaultTime('')
-                  void setDefaultCutoff(businessId, null, TZ).then(() => {
-                    toast.success('Default cutoff cleared')
+                  void setDefaultCutoff(businessId, null, TZ, locationId).then(() => {
+                    toast.success('Cutoff cleared')
                     onChanged()
                   })
                 }}
