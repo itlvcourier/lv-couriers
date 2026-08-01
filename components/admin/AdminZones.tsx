@@ -578,9 +578,16 @@ export function AdminZones() {
                 <div className="flex items-center gap-2">
                   <span
                     className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10"
-                    style={{ backgroundColor: zone.color }}
+                    style={{ backgroundColor: zone.isActive ? zone.color : '#94a3b8' }}
                   />
-                  <span className="font-medium truncate flex-1">{zone.name}</span>
+                  <span className={`font-medium truncate flex-1 ${!zone.isActive ? 'text-muted-foreground' : ''}`}>
+                    {zone.name}
+                  </span>
+                  {!zone.isActive && (
+                    <Badge variant="outline" className="text-muted-foreground shrink-0">
+                      Inactive
+                    </Badge>
+                  )}
                   <Badge variant="outline" className="gap-1 shrink-0">
                     <Package className="w-3 h-3" />
                     {count}

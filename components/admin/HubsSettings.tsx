@@ -32,11 +32,13 @@ function formatSortTime(t: string | null): string | null {
 interface DraftHub {
   name: string
   address: string
+  lat: string
+  lng: string
   sortTime: string
   isDefault: boolean
 }
 
-const EMPTY_DRAFT: DraftHub = { name: '', address: '', sortTime: '', isDefault: false }
+const EMPTY_DRAFT: DraftHub = { name: '', address: '', lat: '', lng: '', sortTime: '', isDefault: false }
 
 export function HubsSettings() {
   const [hubs, setHubs] = useState<Hub[]>([])
@@ -45,7 +47,7 @@ export function HubsSettings() {
   const [draft, setDraft] = useState<DraftHub>(EMPTY_DRAFT)
   const [savingId, setSavingId] = useState<string | null>(null)
   // Per-row local edits keyed by hub id.
-  const [edits, setEdits] = useState<Record<string, { address: string; sortTime: string }>>({})
+  const [edits, setEdits] = useState<Record<string, { address: string; lat: string; lng: string; sortTime: string }>>({})
 
   const load = async () => {
     try {
@@ -53,7 +55,15 @@ export function HubsSettings() {
       setHubs(data)
       setEdits(
         Object.fromEntries(
-          data.map((h) => [h.id, { address: h.address ?? '', sortTime: h.sortTime ?? '' }]),
+          data.map((h) => [
+            h.id,
+            {
+              address: h.address ?? '',
+              lat: h.lat != null ? String(h.lat) : '',
+              lng: h.lng != null ? String(h.lng) : '',
+              sortTime: h.sortTime ?? '',
+            },
+          ]),
         ),
       )
     } catch {
@@ -74,9 +84,13 @@ export function HubsSettings() {
     }
     setAdding(true)
     try {
+      const parsedLat = draft.lat.trim() ? parseFloat(draft.lat.trim()) : null
+      const parsedLng = draft.lng.trim() ? parseFloat(draft.lng.trim()) : null
       await createHub({
         name: draft.name.trim(),
         address: draft.address.trim() || null,
+        lat: isNaN(parsedLat as number) ? null : parsedLat,
+        lng: isNaN(parsedLng as number) ? null : parsedLng,
         sortTime: draft.sortTime || null,
         isDefault: draft.isDefault,
       })
@@ -96,8 +110,12 @@ export function HubsSettings() {
     if (!edit) return
     setSavingId(hub.id)
     try {
+      const parsedLat = edit.lat.trim() ? parseFloat(edit.lat.trim()) : null
+      const parsedLng = edit.lng.trim() ? parseFloat(edit.lng.trim()) : null
       await updateHub(hub.id, {
         address: edit.address.trim() || null,
+        lat: isNaN(parsedLat as number) ? null : parsedLat,
+        lng: isNaN(parsedLng as number) ? null : parsedLng,
         sortTime: edit.sortTime || null,
       })
       invalidateHubs()
@@ -221,8 +239,8 @@ export function HubsSettings() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                    <div className="space-y-1.5">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-xs flex items-center gap-1 text-muted-foreground">
                         <MapPin className="w-3 h-3" /> Address
                       </Label>
@@ -236,6 +254,32 @@ export function HubsSettings() {
                       />
                     </div>
                     <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Lat</Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        value={edit.lat}
+                        onChange={(e) =>
+                          setEdits((p) => ({ ...p, [hub.id]: { ...edit, lat: e.target.value } }))
+                        }
+                        placeholder="51.0447"
+                        className="bg-[var(--bg-card)] border-[var(--border-color)]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Lng</Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        value={edit.lng}
+                        onChange={(e) =>
+                          setEdits((p) => ({ ...p, [hub.id]: { ...edit, lng: e.target.value } }))
+                        }
+                        placeholder="-114.0719"
+                        className="bg-[var(--bg-card)] border-[var(--border-color)]"
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-xs flex items-center gap-1 text-muted-foreground">
                         <Clock className="w-3 h-3" /> Sort time
                       </Label>
@@ -309,6 +353,34 @@ export function HubsSettings() {
                     value={draft.address}
                     onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))}
                     placeholder="123 Hub St, City"
+                    className="bg-[var(--bg-card)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="hub-lat" className="text-xs text-muted-foreground">
+                    Lat (optional)
+                  </Label>
+                  <Input
+                    id="hub-lat"
+                    type="number"
+                    step="any"
+                    value={draft.lat}
+                    onChange={(e) => setDraft((p) => ({ ...p, lat: e.target.value }))}
+                    placeholder="51.0447"
+                    className="bg-[var(--bg-card)] border-[var(--border-color)]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="hub-lng" className="text-xs text-muted-foreground">
+                    Lng (optional)
+                  </Label>
+                  <Input
+                    id="hub-lng"
+                    type="number"
+                    step="any"
+                    value={draft.lng}
+                    onChange={(e) => setDraft((p) => ({ ...p, lng: e.target.value }))}
+                    placeholder="-114.0719"
                     className="bg-[var(--bg-card)] border-[var(--border-color)]"
                   />
                 </div>

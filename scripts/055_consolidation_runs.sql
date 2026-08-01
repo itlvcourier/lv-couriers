@@ -40,6 +40,10 @@ CREATE INDEX IF NOT EXISTS cri_zone_idx ON consolidation_run_items (dropoff_zone
 -- Live hub Sort board: parcels currently at the hub (leg_status='at_hub'),
 -- grouped with destination zone + assigned driver. Intra-zone "direct" parcels
 -- never reach the hub, so they are naturally excluded.
+-- Note: zone_assignments with effective_date IS NULL are STANDING assignments
+-- (no date restriction). The original bug used effective_date = current_date which
+-- never matched. Fixed to prefer the primary standing driver, fall back to the
+-- first standing driver, and include sorted_for_driver + assignment_diverged.
 CREATE OR REPLACE FUNCTION hub_sort_board()
 RETURNS TABLE (
   delivery_id uuid,
@@ -54,17 +58,50 @@ RETURNS TABLE (
   zone_driver_name text,
   leg_status text,
   routing_mode text,
-  updated_at timestamptz
+  updated_at timestamptz,
+  sorted_for_driver_id uuid,
+  sorted_for_driver_name text,
+  assignment_diverged boolean
 ) LANGUAGE sql STABLE AS $$
-  SELECT d.id, d.scan_token, d.recipient_name, d.dropoff_address, d.dropoff_area,
-         d.dropoff_zone_id, z.name, z.color,
-         za.driver_id, dr.name,
-         d.leg_status, d.routing_mode, d.updated_at
+  SELECT
+    d.id,
+    d.scan_token,
+    d.recipient_name,
+    d.dropoff_address,
+    d.dropoff_area,
+    d.dropoff_zone_id,
+    z.name,
+    z.color,
+    COALESCE(
+      (SELECT za2.driver_id FROM zone_assignments za2
+       WHERE za2.zone_id = d.dropoff_zone_id AND za2.effective_date IS NULL AND za2.is_primary = true LIMIT 1),
+      (SELECT za3.driver_id FROM zone_assignments za3
+       WHERE za3.zone_id = d.dropoff_zone_id AND za3.effective_date IS NULL ORDER BY za3.created_at ASC LIMIT 1)
+    ) AS zone_driver_id,
+    COALESCE(
+      (SELECT dr2.name FROM zone_assignments za2 JOIN drivers dr2 ON dr2.id = za2.driver_id
+       WHERE za2.zone_id = d.dropoff_zone_id AND za2.effective_date IS NULL AND za2.is_primary = true LIMIT 1),
+      (SELECT dr3.name FROM zone_assignments za3 JOIN drivers dr3 ON dr3.id = za3.driver_id
+       WHERE za3.zone_id = d.dropoff_zone_id AND za3.effective_date IS NULL ORDER BY za3.created_at ASC LIMIT 1)
+    ) AS zone_driver_name,
+    d.leg_status,
+    d.routing_mode,
+    d.updated_at,
+    d.sorted_for_driver_id,
+    (SELECT dr4.name FROM drivers dr4 WHERE dr4.id = d.sorted_for_driver_id) AS sorted_for_driver_name,
+    CASE
+      WHEN d.sorted_for_driver_id IS NULL THEN false
+      WHEN d.dropoff_zone_id IS NULL THEN false
+      ELSE d.sorted_for_driver_id != COALESCE(
+        (SELECT za5.driver_id FROM zone_assignments za5
+         WHERE za5.zone_id = d.dropoff_zone_id AND za5.effective_date IS NULL AND za5.is_primary = true LIMIT 1),
+        (SELECT za6.driver_id FROM zone_assignments za6
+         WHERE za6.zone_id = d.dropoff_zone_id AND za6.effective_date IS NULL ORDER BY za6.created_at ASC LIMIT 1),
+        d.sorted_for_driver_id
+      )
+    END AS assignment_diverged
   FROM deliveries d
   LEFT JOIN zones z ON z.id = d.dropoff_zone_id
-  LEFT JOIN zone_assignments za
-    ON za.zone_id = d.dropoff_zone_id AND za.effective_date = current_date
-  LEFT JOIN drivers dr ON dr.id = za.driver_id
   WHERE d.leg_status = 'at_hub'
   ORDER BY z.priority DESC NULLS LAST, z.name ASC NULLS LAST, d.updated_at ASC;
 $$;

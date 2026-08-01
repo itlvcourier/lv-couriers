@@ -212,8 +212,9 @@ export async function getZoneAssignments(): Promise<ZoneAssignment[]> {
 }
 
 /**
- * Add a standing driver assignment to a zone. Idempotent: re-adding an existing
- * driver is a no-op (the partial unique index prevents duplicates).
+ * Add a standing driver assignment to a zone. Idempotent: upserting an existing
+ * driver merges the is_primary flag (so the first driver added correctly becomes
+ * primary without a separate setPrimaryZoneDriver call).
  */
 export async function assignDriverToZone(input: {
   zoneId: string
@@ -230,7 +231,9 @@ export async function assignDriverToZone(input: {
       shift: null,
       is_primary: input.isPrimary ?? false,
     },
-    { onConflict: 'org_id,zone_id,driver_id', ignoreDuplicates: true },
+    // Do NOT use ignoreDuplicates here — we want to merge is_primary for the
+    // first-driver-becomes-primary logic in AdminZones to work correctly.
+    { onConflict: 'org_id,zone_id,driver_id' },
   )
   if (error) throw error
 }

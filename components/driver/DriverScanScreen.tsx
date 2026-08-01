@@ -75,7 +75,13 @@ export function DriverScanScreen() {
           (d) => d.driverId === driverId && (d.legStatus ?? 'created') === 'created',
         )
       case 'hub_sort':
-        return deliveries.filter((d) => (d.legStatus ?? 'created') === 'picked_up')
+        // Only show parcels held by THIS driver that are on their way to the hub.
+        return deliveries.filter(
+          (d) =>
+            d.holderDriverId === driverId &&
+            (d.legStatus ?? 'created') === 'picked_up' &&
+            d.routingMode === 'cross_dock',
+        )
       case 'hub_accept':
         return deliveries.filter((d) => (d.legStatus ?? 'created') === 'at_hub')
       case 'delivery':
