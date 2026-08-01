@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '@/lib/context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,18 +25,21 @@ export function CutoffManager() {
   const { businesses } = useApp()
   const [cutoffsByBiz, setCutoffsByBiz] = useState<Record<string, BusinessCutoff[]>>({})
   const [loading, setLoading] = useState(true)
+  const mountedRef = useRef(true)
 
-  const reload = () => {
+  const reload = useCallback(() => {
     setLoading(true)
     getAllBusinessCutoffs()
-      .then(setCutoffsByBiz)
-      .catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to load cutoffs'))
-      .finally(() => setLoading(false))
-  }
+      .then((data) => { if (mountedRef.current) setCutoffsByBiz(data) })
+      .catch((e) => { if (mountedRef.current) toast.error(e instanceof Error ? e.message : 'Failed to load cutoffs') })
+      .finally(() => { if (mountedRef.current) setLoading(false) })
+  }, [])
 
   useEffect(() => {
+    mountedRef.current = true
     reload()
-  }, [])
+    return () => { mountedRef.current = false }
+  }, [reload])
 
   if (loading) {
     return (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import useSWR, { mutate } from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { toast } from 'sonner'
 import { useApp } from '@/lib/context'
 import { Spinner } from '@/components/ui/spinner'
@@ -79,6 +79,7 @@ import {
 type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
+  const { mutate } = useSWRConfig()
   const { refreshRateCards, settings } = useApp()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DbBusiness['invite_status'] | 'all'>('all')

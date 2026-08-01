@@ -61,7 +61,7 @@ export function AdminTransfers() {
     try {
       setTransfers(await listAllTransfers(200))
     } catch (err) {
-      console.error('[v0] load admin transfers error:', err)
+      console.error('Admin transfers load error:', err)
       toast.error('Could not load transfers')
     } finally {
       setLoading(false)
@@ -101,7 +101,7 @@ export function AdminTransfers() {
       toast.success(adminStatus === 'approved' ? 'Transfer approved' : 'Transfer rejected')
       await load()
     } catch (err) {
-      console.error('[v0] decide transfer error:', err)
+      console.error('Admin decide transfer error:', err)
       toast.error('Could not update transfer')
     } finally {
       setBusyId(null)
@@ -115,7 +115,7 @@ export function AdminTransfers() {
       toast.success('Transfer rejected')
       await load()
     } catch (err) {
-      console.error('[v0] reject transfer error:', err)
+      console.error('Admin reject transfer error:', err)
       toast.error('Could not reject transfer')
     } finally {
       setBusyId(null)
@@ -129,7 +129,7 @@ export function AdminTransfers() {
       toast.success('Transfer cancelled')
       await load()
     } catch (err) {
-      console.error('[v0] cancel transfer error:', err)
+      console.error('Admin cancel transfer error:', err)
       toast.error('Could not cancel transfer')
     } finally {
       setBusyId(null)
