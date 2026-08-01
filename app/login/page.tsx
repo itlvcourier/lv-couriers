@@ -90,6 +90,8 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="email"
+                    suppressHydrationWarning
                     className={`h-11 bg-[var(--bg-card-2)] border-[var(--border-color)] text-foreground placeholder:text-muted-foreground ${error ? 'border-[var(--accent-red)]' : ''}`}
                   />
                 </Field>
@@ -104,6 +106,8 @@ export default function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       disabled={isLoading}
+                      autoComplete="current-password"
+                      suppressHydrationWarning
                       className={`h-11 bg-[var(--bg-card-2)] border-[var(--border-color)] text-foreground placeholder:text-muted-foreground pr-10 ${error ? 'border-[var(--accent-red)]' : ''}`}
                     />
                     <button
@@ -125,6 +129,7 @@ export default function LoginPage() {
                   type="submit" 
                   className="w-full h-11 text-base font-medium bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white rounded-xl tap-target" 
                   disabled={isLoading}
+                  suppressHydrationWarning
                 >
                   {isLoading ? (
                     <>
@@ -187,7 +192,7 @@ export default function LoginPage() {
               Terms of Service
             </Link>
           </div>
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-xs text-muted-foreground/70" suppressHydrationWarning>
             &copy; {new Date().getFullYear()} LV Courier. All rights reserved.
           </p>
         </div>
