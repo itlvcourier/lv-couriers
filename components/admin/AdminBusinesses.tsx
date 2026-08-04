@@ -108,14 +108,23 @@ export function AdminBusinesses() {
   // Fetch store requests from businesses
   const fetchStoreRequests = async () => {
     const supabase = createClient()
+    // Name the FK explicitly (store_requests_business_id_fkey) so the embed is
+    // never ambiguous even if a duplicate foreign key gets re-added.
     const { data, error } = await supabase
       .from('store_requests')
-      .select('*, businesses(name)')
+      .select('*, businesses!store_requests_business_id_fkey(name)')
       .order('created_at', { ascending: false })
     
     if (error) {
-      // Table might not exist yet - return empty array
-      return []
+      // Fall back to a plain select (no embed) so requests still show even if
+      // the relationship can't be resolved; only truly return empty if the
+      // table itself is missing.
+      const { data: plain, error: plainError } = await supabase
+        .from('store_requests')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (plainError) return []
+      return plain || []
     }
     return data || []
   }
