@@ -82,3 +82,51 @@ export async function requireAdmin(req: NextRequest): Promise<AuthResult> {
 
   return result
 }
+
+/**
+ * Verify the caller is a party to a specific delivery: an admin, the driver
+ * assigned to it, or the business that owns it. Used by delivery-scoped SMS
+ * routes so drivers/businesses can trigger notifications for their own jobs
+ * without being able to fire texts for anyone else's delivery.
+ */
+export async function requireDeliveryParty(
+  req: NextRequest,
+  deliveryId: string | undefined | null,
+): Promise<AuthResult> {
+  const result = await requireAuth(req)
+  if (isAuthError(result)) return result
+  if (result.profile.role === 'admin') return result
+  if (!deliveryId) {
+    return NextResponse.json({ error: 'deliveryId required' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+  const { data: delivery } = await admin
+    .from('deliveries')
+    .select('driver_id, business_id')
+    .eq('id', deliveryId)
+    .maybeSingle<{ driver_id: string | null; business_id: string | null }>()
+
+  if (!delivery) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  if (
+    result.profile.business_id &&
+    delivery.business_id === result.profile.business_id
+  ) {
+    return result
+  }
+
+  if (delivery.driver_id) {
+    const { data: driver } = await admin
+      .from('drivers')
+      .select('id')
+      .eq('id', delivery.driver_id)
+      .eq('user_id', result.user.id)
+      .maybeSingle()
+    if (driver) return result
+  }
+
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+}

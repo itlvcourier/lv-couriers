@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -10,9 +10,6 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * Also notifies the business that a driver has been assigned.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin(req)
-  if (isAuthError(auth)) return auth
-
   let body: { deliveryId?: string; driverId?: string }
   try {
     body = await req.json()
@@ -21,6 +18,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { deliveryId, driverId } = body
+
+  const auth = await requireDeliveryParty(req, deliveryId)
+  if (isAuthError(auth)) return auth
   if (!deliveryId || !driverId) {
     return NextResponse.json(
       { error: 'deliveryId and driverId required' },
@@ -120,6 +120,28 @@ export async function POST(req: NextRequest) {
         ok: r.ok,
         reason: r.ok ? undefined : r.reason,
         role: 'business',
+      })),
+    )
+  }
+
+  // Notify the customer (recipient) with their live tracking link
+  if (delivery.recipient_phone) {
+    const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
+    const recipMsg =
+      `${greeting}, your delivery from ${businessName} has been assigned to driver ${driver.name}.\n` +
+      `Track it live: ${trackingUrl}\n` +
+      `Reply STOP to opt out.`
+
+    sends.push(
+      sendSms({
+        to: delivery.recipient_phone,
+        body: recipMsg,
+        type: 'tracking_link',
+        deliveryId,
+      }).then(r => ({
+        ok: r.ok,
+        reason: r.ok ? undefined : r.reason,
+        role: 'recipient',
       })),
     )
   }
