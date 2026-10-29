@@ -517,7 +517,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: meta.full_name || authUser.email || '',
       businessId: meta.business_id || undefined,
       locationId: meta.location_id || undefined,
-      driverId: meta.driver_id || undefined,
+      // Invited drivers share their auth id with their drivers row, so fall
+      // back to it for accounts created before driver_id was stored.
+      driverId: meta.driver_id || (role === 'driver' ? authUser.id : undefined),
     }
   }, [])
 
@@ -2943,7 +2945,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             {
               status: 'claimed' as DeliveryStatus,
               timestamp: new Date().toISOString(),
-              note: `Claimed by ${driver.name} (multi-stop trip)`,
+              note: `Claimed by ${driverName} (multi-stop trip)`,
               gpsLat: null,
               gpsLng: null,
             },

@@ -120,6 +120,15 @@ export async function POST(req: NextRequest) {
     .update({ driver_id: authId })
     .eq('id', authId)
 
+  // The client resolves the driver profile from user_metadata.driver_id, so
+  // it must be set or the driver can't claim jobs.
+  await Promise.all([
+    supabase.from('drivers').update({ user_id: authId }).eq('id', authId),
+    supabase.auth.admin.updateUserById(authId, {
+      user_metadata: { ...authData.user.user_metadata, driver_id: authId },
+    }),
+  ])
+
   // 4. Build the login URL using the site the request came from.
   const origin =
     req.headers.get('origin') ||
