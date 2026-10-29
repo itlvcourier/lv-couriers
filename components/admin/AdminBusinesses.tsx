@@ -91,6 +91,7 @@ export function AdminBusinesses() {
   const [detailBusiness, setDetailBusiness] = useState<BusinessWithLocations | null>(null)
   const [showAddLocationSheet, setShowAddLocationSheet] = useState(false)
   const [editingLocation, setEditingLocation] = useState<DbLocation | null>(null)
+  const [isSavingLocation, setIsSavingLocation] = useState(false)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
   const [locationToDelete, setLocationToDelete] = useState<DbLocation | null>(null)
   const [mainTab, setMainTab] = useState<'businesses' | 'requests'>('businesses')
@@ -611,47 +612,74 @@ export function AdminBusinesses() {
   }
 
   const handleUpdateLocation = async () => {
-    if (!editingLocation) return
-
-    // Keep existing coordinates if geocoding fails so radius pricing isn't wiped
-    let lat: number | null = editingLocation.lat ?? null
-    let lng: number | null = editingLocation.lng ?? null
-    try {
-      const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(editingLocation.address)}`)
-      if (geocodeRes.ok) {
-        const geocodeData = await geocodeRes.json()
-        if (geocodeData.lat && geocodeData.lng) {
-          lat = geocodeData.lat
-          lng = geocodeData.lng
-        }
-      }
-    } catch (e) {
-      console.error('[v0] Failed to geocode location address:', e)
-    }
-
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('business_locations')
-      .update({
-        name: editingLocation.name,
-        address: editingLocation.address,
-        contact_phone: editingLocation.contact_phone,
-        phone: editingLocation.contact_phone,
-        billing_email: editingLocation.billing_email,
-        backup_email: editingLocation.backup_email,
-        lat,
-        lng,
-      })
-      .eq('id', editingLocation.id)
-
-    if (error) {
-      toast.error('Failed to update location: ' + error.message)
+    if (!editingLocation || isSavingLocation) return
+    const loc = editingLocation
+    const name = loc.name.trim()
+    const address = loc.address.trim()
+    if (!name || !address) {
+      toast.error('Location name and address are required')
       return
     }
+    const clean = (v: string | null | undefined) => {
+      const t = (v ?? '').trim()
+      return t === '' ? null : t
+    }
+    const phone = clean(loc.contact_phone)
 
-    await syncDetailBusiness()
-    setEditingLocation(null)
-    toast.success('Location updated successfully')
+    setIsSavingLocation(true)
+    try {
+      // Keep existing coordinates unless the address changed; a slow Maps call must not block the save
+      let lat: number | null = loc.lat ?? null
+      let lng: number | null = loc.lng ?? null
+      const original = detailBusiness?.locations.find((l) => l.id === loc.id)
+      if (!original || original.address.trim() !== address || lat == null || lng == null) {
+        try {
+          const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(address)}`, {
+            signal: AbortSignal.timeout(8000),
+          })
+          if (geocodeRes.ok) {
+            const geocodeData = await geocodeRes.json()
+            if (geocodeData.lat && geocodeData.lng) {
+              lat = geocodeData.lat
+              lng = geocodeData.lng
+            }
+          }
+        } catch (e) {
+          console.error('Failed to geocode location address:', e)
+        }
+      }
+
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('business_locations')
+        .update({
+          name,
+          address,
+          contact_phone: phone,
+          phone: phone ?? '',
+          billing_email: clean(loc.billing_email) ?? detailBusiness?.billing_email ?? '',
+          backup_email: clean(loc.backup_email),
+          lat,
+          lng,
+        })
+        .eq('id', loc.id)
+        .select('id')
+
+      if (error) {
+        toast.error('Failed to update location: ' + error.message)
+        return
+      }
+      if (!data || data.length === 0) {
+        toast.error('Location was not saved. You may not have permission to edit it.')
+        return
+      }
+
+      await syncDetailBusiness()
+      setEditingLocation(null)
+      toast.success('Location updated successfully')
+    } finally {
+      setIsSavingLocation(false)
+    }
   }
 
   const handleDeleteLocation = async (locationId: string) => {
@@ -923,10 +951,10 @@ export function AdminBusinesses() {
                           <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                           <span className="leading-tight">{location.address}</span>
                         </div>
-                        {location.contact_phone && (
+                        {(location.contact_phone || location.phone) && (
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Phone className="w-3.5 h-3.5 shrink-0" />
-                            <span>{location.contact_phone}</span>
+                            <span>{location.contact_phone || location.phone}</span>
                           </div>
                         )}
                         {location.billing_email && (
@@ -1454,7 +1482,7 @@ export function AdminBusinesses() {
         </Sheet>
 
         {/* Edit Location Sheet */}
-        <Sheet open={!!editingLocation} onOpenChange={() => setEditingLocation(null)}>
+        <Sheet open={!!editingLocation} onOpenChange={(open) => { if (!open && !isSavingLocation) setEditingLocation(null) }}>
           <SheetContent className="bg-[var(--bg-card)] border-l border-[var(--border-color)]">
             <SheetHeader>
               <SheetTitle className="text-foreground">Edit Location</SheetTitle>
@@ -1484,7 +1512,8 @@ export function AdminBusinesses() {
                 <div className="space-y-2">
                   <Label className="text-foreground">Phone</Label>
                   <Input
-                    value={editingLocation.contact_phone || ''}
+                    type="tel"
+                    value={editingLocation.contact_phone ?? editingLocation.phone ?? ''}
                     onChange={(e) => setEditingLocation({ ...editingLocation, contact_phone: e.target.value })}
                     className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                   />
@@ -1507,8 +1536,12 @@ export function AdminBusinesses() {
                     className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                   />
                 </div>
-                <Button onClick={handleUpdateLocation} className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90">
-                  Save Changes
+                <Button
+                  onClick={handleUpdateLocation}
+                  disabled={isSavingLocation}
+                  className="w-full bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90"
+                >
+                  {isSavingLocation ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             )}

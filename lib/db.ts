@@ -36,8 +36,9 @@ export interface DbLocation {
   billing_email: string
   backup_email: string | null
   contact_phone: string | null
+  phone?: string | null
   created_at: string
-}
+  }
 
 export interface DbDriver {
   id: string
