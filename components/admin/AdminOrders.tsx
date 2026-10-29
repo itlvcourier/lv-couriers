@@ -58,7 +58,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
-import { updateDeliveryFields } from '@/lib/db-extended'
+import { updateDeliveryFields, loadDeliveryMedia } from '@/lib/db-extended'
 import { useApp } from '@/lib/context'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { getZones, type Zone } from '@/lib/zones'
@@ -115,6 +115,13 @@ export function AdminOrders() {
     () => getDeliveryStatusCounts(),
     { refreshInterval: 60000 },
   )
+  // Photos are excluded from the page query; load them only for the open order.
+  const { data: selectedMedia } = useSWR(
+    selectedDelivery ? ['delivery-media', selectedDelivery.id] : null,
+    ([, id]) => loadDeliveryMedia(id),
+    { revalidateOnFocus: false },
+  )
+  const selectedProofPhoto = selectedDelivery?.proof_photo_url || selectedMedia?.proofPhotoUrl || null
   const filteredDeliveries = pageData?.rows ?? []
   const totalMatching = pageData?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(totalMatching / PAGE_SIZE))
@@ -786,7 +793,7 @@ export function AdminOrders() {
               </div>
 
               {/* Proof of Delivery Section */}
-              {(selectedDelivery.proof_photo_url || selectedDelivery.recipient_note) && (
+              {(selectedProofPhoto || selectedDelivery.recipient_note) && (
                 <>
                   <Separator />
                   <div className="space-y-4">
@@ -796,7 +803,7 @@ export function AdminOrders() {
                     </h4>
                     
                     {/* Delivery Photo */}
-                    {selectedDelivery.proof_photo_url && (
+                    {selectedProofPhoto && (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <ImageIcon className="w-3 h-3" />
@@ -804,7 +811,7 @@ export function AdminOrders() {
                         </p>
                         <div className="relative rounded-lg overflow-hidden border border-border">
                           <img 
-                            src={selectedDelivery.proof_photo_url} 
+                            src={selectedProofPhoto} 
                             alt="Delivery proof" 
                             className="w-full h-40 object-cover"
                           />

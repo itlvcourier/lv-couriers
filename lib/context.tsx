@@ -376,13 +376,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         businessId: user.businessId || null,
         driverId: user.driverId || null,
       }
+      // Start the secondary entities right away instead of waiting for the
+      // core batch; only disputes depend on invoices.
+      const invoicesPromise = loadInvoices(profile).catch(() => [] as Invoice[])
+      const secondaryPromise = Promise.all([
+        loadSavedContacts(profile).catch(() => [] as SavedContact[]),
+        loadAdminNotifications(profile).catch(() => [] as AdminNotification[]),
+        loadSMSLog(profile).catch(() => [] as SMSLogEntry[]),
+        invoicesPromise.then((list) => loadDisputes(list)).catch(() => [] as Dispute[]),
+      ])
       const [b, d, rc, s, dlRes, inv] = await Promise.all([
         loadAllBusinesses().catch(() => [] as Business[]),
         loadAllDrivers().catch(() => [] as Driver[]),
         loadAllRateCards().catch(() => [] as RateCard[]),
         loadSettings().catch(() => DEFAULT_SETTINGS),
         loadDeliveriesWithCursor(profile).catch(() => ({ deliveries: [] as Delivery[], cursor: null })),
-        loadInvoices(profile).catch(() => [] as Invoice[]),
+        invoicesPromise,
       ])
       const dl = dlRes.deliveries
       deliveriesCursorRef.current = dlRes.cursor
@@ -397,15 +406,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDeliveries(dl.map(x => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })))
       setInvoices(inv)
 
-      // Turn 2 entities: saved contacts, admin notifications, SMS log, disputes.
-      // These depend on the data we just loaded (disputes need invoices for
-      // enrichment), so we run them in a second parallel batch.
-      const [contacts, notifs, sms, disputesLoaded] = await Promise.all([
-        loadSavedContacts(profile).catch(() => [] as SavedContact[]),
-        loadAdminNotifications(profile).catch(() => [] as AdminNotification[]),
-        loadSMSLog(profile).catch(() => [] as SMSLogEntry[]),
-        loadDisputes(inv).catch(() => [] as Dispute[]),
-      ])
+      const [contacts, notifs, sms, disputesLoaded] = await secondaryPromise
       setSavedContacts(contacts)
       adminNotificationsRef.current = notifs
       setAdminNotifications(notifs)

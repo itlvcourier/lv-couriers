@@ -3,6 +3,7 @@
  * Maps DB snake_case rows to the app's camelCase types in lib/types.ts.
  */
 import { createClient } from '@/lib/supabase/client'
+import { DELIVERY_COLUMNS_WITHOUT_MEDIA } from '@/lib/delivery-columns'
 import { getFeatureSettings } from '@/lib/feature-settings'
 import { assignZonesForDelivery } from '@/lib/custody'
 import type {
@@ -441,8 +442,31 @@ export async function loadSettings(): Promise<SystemSettings> {
 
 // `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
 // name the relationship explicitly or PostgREST errors as ambiguous.
-const DELIVERY_SELECT =
-  '*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)'
+const DELIVERY_SELECT = `${DELIVERY_COLUMNS_WITHOUT_MEDIA}, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)`
+
+export type DeliveryMedia = {
+  proofPhotoUrl: string | null
+  proofPhotoUrls: string[]
+  signatureUrl: string | null
+}
+
+/** Proof-of-delivery photos + signature for one delivery (excluded from lists). */
+export async function loadDeliveryMedia(deliveryId: string): Promise<DeliveryMedia> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select('proof_photo_url, proof_photo_urls, signature_url')
+    .eq('id', deliveryId)
+    .maybeSingle()
+  if (error) throw error
+  const primary = (data?.proof_photo_url as string | null) ?? null
+  const all = Array.isArray(data?.proof_photo_urls) ? (data!.proof_photo_urls as string[]) : []
+  return {
+    proofPhotoUrl: primary,
+    proofPhotoUrls: all.length ? all : primary ? [primary] : [],
+    signatureUrl: (data?.signature_url as string | null) ?? null,
+  }
+}
 
 function maxUpdatedAt(rows: Row[], fallback: string | null): string | null {
   let max = fallback

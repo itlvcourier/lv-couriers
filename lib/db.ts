@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { DELIVERY_COLUMNS_WITHOUT_MEDIA } from '@/lib/delivery-columns'
 import type { 
   DeliveryStatus,
 } from './types'
@@ -294,11 +295,11 @@ export async function getAllDeliveries(status?: DeliveryStatus, businessId?: str
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
-    .select(`
-      *,
-      business:businesses(id, name, email, phone),
-      location:business_locations(id, name, address),
-      driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+  .select(`
+  ${DELIVERY_COLUMNS_WITHOUT_MEDIA},
+  business:businesses(id, name, email, phone),
+  location:business_locations(id, name, address),
+  driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
       manifest_items(id, delivery_id, item_type, quantity, notes)
     `)
     .order('created_at', { ascending: false })
@@ -316,7 +317,7 @@ export async function getAllDeliveries(status?: DeliveryStatus, businessId?: str
 }
 
 const DELIVERY_LIST_SELECT = `
-  *,
+  ${DELIVERY_COLUMNS_WITHOUT_MEDIA},
   business:businesses(id, name, email, phone),
   location:business_locations(id, name, address),
   driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
