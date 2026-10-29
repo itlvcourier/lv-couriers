@@ -1923,6 +1923,25 @@ export async function updateDeliveryDistance(
 }
 
 /**
+ * Persists a driver's stop sequence on the deliveries themselves, so it works
+ * whether or not the jobs belong to a stored trip. RLS limits drivers to their own rows.
+ */
+export async function updateDeliverySequence(orderedDeliveryIds: string[]): Promise<boolean> {
+  const supabase = createClient()
+  const results = await Promise.all(
+    orderedDeliveryIds.map((deliveryId, index) =>
+      supabase.from('deliveries').update({ trip_order: index }).eq('id', deliveryId),
+    ),
+  )
+  const failed = results.find((r) => r.error)
+  if (failed) {
+    console.error('Failed to save stop sequence:', failed.error?.message)
+    return false
+  }
+  return true
+}
+
+/**
  * Update trip order for deliveries
  * @param tripId The trip ID
  * @param orderedDeliveryIds Array of delivery IDs in the desired order

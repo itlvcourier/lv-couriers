@@ -84,6 +84,7 @@ import {
   updateLocationBillingEmails,
   updateLocationCoordinates,
   updateTripOrder,
+  updateDeliverySequence,
 } from './db-extended'
 
 // Default settings used before system_settings has been loaded from the DB.
@@ -293,6 +294,7 @@ interface AppContextType {
   claimMultiple: (deliveryIds: string[], driverId: string) => void
   addJobToTrip: (tripId: string, deliveryId: string) => void
   reorderTrip: (tripId: string, newOrder: string[]) => void
+  setDriverSequence: (orderedDeliveryIds: string[]) => Promise<boolean>
   retryDelivery: (deliveryId: string) => void
   escalateDelivery: (deliveryId: string) => void
   checkDuplicateAddress: (dropoffAddress: string, businessId: string, locationId: string) => Delivery | null
@@ -2989,6 +2991,12 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
   }
 }, [])
 
+  const setDriverSequence = useCallback(async (orderedDeliveryIds: string[]) => {
+    const position = new Map(orderedDeliveryIds.map((id, i) => [id, i]))
+    setDeliveries(prev => prev.map(d => (position.has(d.id) ? { ...d, tripOrder: position.get(d.id)! } : d)))
+    return updateDeliverySequence(orderedDeliveryIds)
+  }, [])
+
   const retryDelivery = useCallback((deliveryId: string) => {
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
@@ -3250,6 +3258,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         claimMultiple,
         addJobToTrip,
         reorderTrip,
+        setDriverSequence,
         retryDelivery,
         escalateDelivery,
         checkDuplicateAddress,
