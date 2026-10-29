@@ -81,7 +81,7 @@ type BusinessWithLocations = DbBusiness & { locations: DbLocation[] }
 
 export function AdminBusinesses() {
   const { mutate } = useSWRConfig()
-  const { refreshRateCards, settings } = useApp()
+  const { refreshRateCards, settings, refreshData } = useApp()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DbBusiness['invite_status'] | 'all'>('all')
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -551,6 +551,14 @@ export function AdminBusinesses() {
     toast.success(`Store request ${action}`)
   }
 
+  // The detail sheet holds a snapshot, so re-read it from the refreshed list
+  const syncDetailBusiness = async () => {
+    const fresh = (await mutate('all-businesses')) as BusinessWithLocations[] | undefined
+    const updated = fresh?.find((b) => b.id === detailBusiness?.id)
+    if (updated) setDetailBusiness(updated)
+    void refreshData()
+  }
+
   // Location management functions
   const handleAddLocation = async () => {
     if (!detailBusiness || !locationForm.name || !locationForm.address) {
@@ -594,7 +602,7 @@ export function AdminBusinesses() {
       return
     }
 
-    mutate('all-businesses')
+    await syncDetailBusiness()
     // Refresh rate cards since a new one is auto-seeded by the database trigger
     await refreshRateCards()
     setLocationForm({ name: '', address: '', phone: '', billing_email: '', backup_email: '', notes: '', lat: null, lng: null })
@@ -605,9 +613,9 @@ export function AdminBusinesses() {
   const handleUpdateLocation = async () => {
     if (!editingLocation) return
 
-    // Geocode the address to get lat/lng for radius pricing
-    let lat: number | null = null
-    let lng: number | null = null
+    // Keep existing coordinates if geocoding fails so radius pricing isn't wiped
+    let lat: number | null = editingLocation.lat ?? null
+    let lng: number | null = editingLocation.lng ?? null
     try {
       const geocodeRes = await fetch(`/api/maps/geocode?address=${encodeURIComponent(editingLocation.address)}`)
       if (geocodeRes.ok) {
@@ -628,6 +636,7 @@ export function AdminBusinesses() {
         name: editingLocation.name,
         address: editingLocation.address,
         contact_phone: editingLocation.contact_phone,
+        phone: editingLocation.contact_phone,
         billing_email: editingLocation.billing_email,
         backup_email: editingLocation.backup_email,
         lat,
@@ -636,11 +645,11 @@ export function AdminBusinesses() {
       .eq('id', editingLocation.id)
 
     if (error) {
-      toast.error('Failed to update location')
+      toast.error('Failed to update location: ' + error.message)
       return
     }
 
-    mutate('all-businesses')
+    await syncDetailBusiness()
     setEditingLocation(null)
     toast.success('Location updated successfully')
   }
@@ -657,7 +666,7 @@ export function AdminBusinesses() {
       return
     }
 
-    mutate('all-businesses')
+    await syncDetailBusiness()
     setLocationToDelete(null)
     toast.success('Location deleted')
   }

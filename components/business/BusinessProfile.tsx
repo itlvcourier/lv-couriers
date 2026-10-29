@@ -58,7 +58,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
 export function BusinessProfile() {
-  const { currentUser, businesses, deliveries, logout, isOwner } = useApp()
+  const { currentUser, businesses, deliveries, logout, isOwner, refreshData } = useApp()
   const [isEditing, setIsEditing] = useState(false)
   const [editedPhone, setEditedPhone] = useState('')
   const [editedAddress, setEditedAddress] = useState('')
@@ -135,20 +135,29 @@ export function BusinessProfile() {
     if (!primaryLocation) return
     const supabase = createClient()
     const updates: Record<string, string> = {}
-    if (editedPhone.trim()) updates.phone = editedPhone.trim()
+    if (editedPhone.trim()) {
+      updates.phone = editedPhone.trim()
+      updates.contact_phone = editedPhone.trim()
+    }
     if (editedAddress.trim()) updates.address = editedAddress.trim()
     if (Object.keys(updates).length === 0) {
       setIsEditing(false)
       return
     }
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('business_locations')
       .update(updates)
       .eq('id', primaryLocation.id)
+      .select('id')
     if (error) {
       toast.error('Failed to save: ' + error.message)
       return
     }
+    if (!data || data.length === 0) {
+      toast.error('Save was not applied. Please contact support.')
+      return
+    }
+    await refreshData()
     toast.success('Profile updated')
     setIsEditing(false)
   }
