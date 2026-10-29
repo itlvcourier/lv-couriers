@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useApp } from '@/lib/context'
 import { calculateBreakdown } from '@/lib/billing'
 import { BillingBreakdownCard } from '@/components/shared/CostCalculator'
@@ -127,6 +127,46 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const [distanceKm, setDistanceKm] = useState<number | null>(null)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
 
+  // Keep pickup fields in sync with the selected store. Runs on first load and
+  // whenever the store switches; the postal code is looked up from the address
+  // because store records don't carry one.
+  const appliedLocationRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!location) return
+    const key = `${location.id}|${location.address}|${location.phone}`
+    if (appliedLocationRef.current === key) return
+    appliedLocationRef.current = key
+
+    const postalFromAddress =
+      location.address.match(/[A-Z]\d[A-Z]\s?\d[A-Z]\d/i)?.[0]?.toUpperCase() ?? ''
+    setForm(prev => ({
+      ...prev,
+      pickupAddress: location.address,
+      pickupContact: location.phone,
+      pickupPostalCode: postalFromAddress,
+      pickupLat: location.lat,
+      pickupLng: location.lng,
+    }))
+
+    if (postalFromAddress || !location.address) return
+    let cancelled = false
+    fetch(`/api/maps/geocode?address=${encodeURIComponent(location.address)}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then((data: { postalCode?: string | null; lat?: number | null; lng?: number | null } | null) => {
+        if (cancelled || !data) return
+        setForm(prev => ({
+          ...prev,
+          pickupPostalCode: data.postalCode?.toUpperCase() || prev.pickupPostalCode,
+          pickupLat: prev.pickupLat ?? data.lat ?? null,
+          pickupLng: prev.pickupLng ?? data.lng ?? null,
+        }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [location])
+
   // Read sessionStorage pre-fill from a "Reorder" action in BusinessOrders
   useEffect(() => {
     try {
@@ -237,11 +277,14 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   const hasPackages = form.smallPackages + form.bigPackages > 0
 
   const resetForm = () => {
-    setForm({
+    setForm(prev => ({
       ...initialFormState,
-      pickupAddress: location?.address || '',
-      pickupContact: location?.phone || '',
-    })
+      pickupAddress: prev.pickupAddress,
+      pickupContact: prev.pickupContact,
+      pickupPostalCode: prev.pickupPostalCode,
+      pickupLat: prev.pickupLat,
+      pickupLng: prev.pickupLng,
+    }))
     setFromSavedContactId(null)
   }
 

@@ -63,7 +63,7 @@ export function mapLocationRow(row: Row): BusinessLocation {
     billingEmail: (row.billing_email as string) || '',
     backupEmail: (row.backup_email as string) || '',
     contactName: (row.contact_name as string) || '',
-    phone: (row.phone as string) || '',
+    phone: (row.phone as string) || (row.contact_phone as string) || '',
     savedAddresses: [],
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
