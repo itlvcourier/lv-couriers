@@ -35,20 +35,30 @@ export function isAuthError(result: AuthResult): result is NextResponse {
  * Verify the caller is any authenticated user.
  * Reads the session cookie via the SSR client (anon key + cookie).
  */
-export async function requireAuth(_req: NextRequest): Promise<AuthResult> {
+export async function requireAuth(req: NextRequest): Promise<AuthResult> {
   try {
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
+    const admin = createAdminClient()
 
-    if (error || !user) {
+    // Session cookies can be dropped in embedded/mobile webviews (third-party
+    // cookie blocking), so the client also sends its access token. Verify it
+    // with Supabase before trusting it.
+    const bearer = req.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+    let user: { id: string; email?: string } | null = null
+    if (bearer) {
+      const { data } = await admin.auth.getUser(bearer)
+      user = data.user ?? null
+    }
+    if (!user) {
+      const supabase = await createServerClient()
+      const { data } = await supabase.auth.getUser()
+      user = data.user ?? null
+    }
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Fetch the authoritative profile row
-    const admin = createAdminClient()
     const { data: profile } = await admin
       .from('profiles')
       .select('id, role, business_id')

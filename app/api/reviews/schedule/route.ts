@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
+import { runReviewRequests } from '@/lib/sms-cron-jobs'
 
 /**
  * Stamp a delivery as due for a review-request SMS.
@@ -86,6 +87,14 @@ export async function POST(req: NextRequest) {
       ok: false,
       reason: 'Not eligible (not delivered, already sent, or no recipient phone)',
     })
+  }
+
+  // Crons only run twice a day on Hobby, so with no delay configured we send
+  // now instead of leaving the customer waiting up to ~12h. The sweep claims
+  // review_request_sent_at atomically, so this can't double-text.
+  if (delayMins === 0) {
+    const result = await runReviewRequests()
+    return NextResponse.json({ ok: true, dueAt, delayMins, sent: result.sent })
   }
 
   return NextResponse.json({ ok: true, dueAt, delayMins })

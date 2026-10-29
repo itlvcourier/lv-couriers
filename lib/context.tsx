@@ -151,6 +151,29 @@ const DEFAULT_SETTINGS: SystemSettings = {
 
 // Fire-and-forget DB persistence. Logs errors so we can diagnose without
 // blocking the optimistic UI update.
+/**
+ * fetch() for our own API routes that always carries the Supabase access
+ * token. Cookie-only auth silently 401'd in embedded/mobile contexts, which
+ * meant notification texts were never sent. Non-2xx responses are logged so
+ * failures are no longer invisible.
+ */
+async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers)
+  try {
+    const { data } = await createSupabaseClient().auth.getSession()
+    const token = data.session?.access_token
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+  } catch {
+    // Fall back to cookie auth
+  }
+  const res = await fetch(url, { ...init, headers, credentials: 'same-origin' })
+  if (!res.ok) {
+    // eslint-disable-next-line no-console
+    console.error(`[api] ${url} -> ${res.status}`, await res.clone().text().catch(() => ''))
+  }
+  return res
+}
+
 function persist<T>(promise: Promise<T>, label: string): void {
   promise.catch(err => {
     // eslint-disable-next-line no-console
@@ -732,7 +755,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
 
-    void fetch('/api/sms/driver-assigned', {
+    void authedFetch('/api/sms/driver-assigned', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, driverId }),
@@ -848,7 +871,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // when the package is actually picked up (below).
         // When package is picked up — notify business
         if (next === 'picked_up') {
-          void fetch('/api/sms/picked-up', {
+          void authedFetch('/api/sms/picked-up', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ deliveryId }),
@@ -856,7 +879,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         // When the package starts heading to the recipient, SMS them.
         if (next === 'en_route_dropoff') {
-          void fetch('/api/sms/pickup-ready', {
+          void authedFetch('/api/sms/pickup-ready', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ deliveryId }),
@@ -912,36 +935,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const durationMins = pickedUpAt ? Math.round((now.getTime() - pickedUpAt.getTime()) / 60000) : null
     // First photo remains the primary proof; the full set is stored as an array.
     const primaryPhoto = photoUrls[0] ?? null
-    persist(
-      updateDeliveryFields(deliveryId, {
-        status: 'delivered',
-        delivered_at: now.toISOString(),
-        duration_mins: durationMins,
-        proof_photo_url: primaryPhoto,
-        proof_photo_urls: photoUrls,
-        signature_url: signatureUrl ?? null,
-        recipient_note: recipientNote,
-      }),
-      'completeDelivery',
-    )
-    // Fire-and-forget: notify both the recipient and the business that the
-    // package was delivered. Both link to /track/<id> which renders the proof
-    // photo + signature so each side has a verifiable record.
-    void fetch('/api/sms/delivered', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deliveryId }),
-    }).catch(err => console.error('[v0] delivered SMS failed', err))
-    
-    // Schedule the review request instead of sending it now. Firing it here
-    // would land a second text within a second of the "delivered" one, before
-    // the customer has even handled the parcel. The /api/cron/review-requests
-    // sweep picks this up once review_request_due_at has passed.
-    void fetch('/api/reviews/schedule', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deliveryId }),
-    }).catch(err => console.error('[v0] review request scheduling failed', err))
+    // Both server routes only act on rows whose status is already 'delivered',
+    // so they must run after the write commits — firing them in parallel made
+    // them see the old status and silently skip the texts.
+    void updateDeliveryFields(deliveryId, {
+      status: 'delivered',
+      delivered_at: now.toISOString(),
+      duration_mins: durationMins,
+      proof_photo_url: primaryPhoto,
+      proof_photo_urls: photoUrls,
+      signature_url: signatureUrl ?? null,
+      recipient_note: recipientNote,
+    })
+      .then(() => {
+        const init = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deliveryId }),
+        }
+        // Recipient + business get the proof-of-delivery tracking link now.
+        void authedFetch('/api/sms/delivered', init).catch(err =>
+          console.error('[sms] delivered failed', err),
+        )
+        // The review request is queued (not sent now) so it doesn't land a
+        // second after the "delivered" text; the cron sweep sends it later.
+        void authedFetch('/api/reviews/schedule', init).catch(err =>
+          console.error('[sms] review scheduling failed', err),
+        )
+      })
+      .catch(err => console.error('[db] completeDelivery failed:', err?.message || err))
     
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
@@ -1010,7 +1032,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       'failDelivery',
     )
     // Fire-and-forget: notify recipient and business of failed attempt
-    void fetch('/api/sms/failed-attempt', {
+    void authedFetch('/api/sms/failed-attempt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, retryCount: retriesSoFar + 1 }),
@@ -1298,14 +1320,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
 
       // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
-      void fetch('/api/sms/job-alert', {
+      void authedFetch('/api/sms/job-alert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId: saved.id }),
       }).catch(err => console.error('[v0] job-alert SMS failed', err))
 
       // Fire-and-forget: confirm order to business + send tracking to recipient
-      void fetch('/api/sms/order-confirmed', {
+      void authedFetch('/api/sms/order-confirmed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId: saved.id }),
@@ -1313,7 +1335,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
       // show map pins. This runs async and updates the row via realtime.
-      void fetch('/api/delivery/geocode', {
+      void authedFetch('/api/delivery/geocode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId: saved.id }),
@@ -1376,7 +1398,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
     // Fire-and-forget: notify new driver, old driver (if any), and business
-    void fetch('/api/sms/reassigned', {
+    void authedFetch('/api/sms/reassigned', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, newDriverId, oldDriverId }),
@@ -1412,7 +1434,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'cancelOrderByBusiness',
       )
       // Fire-and-forget: notify all parties of cancellation
-      void fetch('/api/sms/cancelled', {
+      void authedFetch('/api/sms/cancelled', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId }),
@@ -1507,7 +1529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
 
       // Fire-and-forget: notify driver of the assignment
-      void fetch('/api/sms/driver-assigned', {
+      void authedFetch('/api/sms/driver-assigned', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId, driverId }),
@@ -2420,7 +2442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return inv
     }))
     // Fire-and-forget: SMS billing contact that payment was received
-    void fetch('/api/sms/payment-received', {
+    void authedFetch('/api/sms/payment-received', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoiceId }),
@@ -2507,7 +2529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }))
 
       // Fire-and-forget: SMS the billing contact that their invoice is ready
-      void fetch('/api/sms/invoice-ready', {
+      void authedFetch('/api/sms/invoice-ready', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId }),
@@ -2558,7 +2580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Fire-and-forget email each invoice the server-side route will persist +
     // send via Resend + schedule reminder events.
     for (const inv of sent) {
-      void fetch('/api/email/invoice-sent', {
+      void authedFetch('/api/email/invoice-sent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId: inv.id }),
@@ -2685,7 +2707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDisputes(prev =>
           prev.map(d => (d.id === newDispute.id ? { ...d, id, createdAt } : d)),
         )
-        void fetch('/api/email/dispute-raised', {
+        void authedFetch('/api/email/dispute-raised', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ disputeId: id }),
@@ -2737,7 +2759,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     persist(
       resolveDisputeInDb(disputeId, action, adminNote, creditAmount ?? null).then(() => {
-        void fetch('/api/email/dispute-resolved', {
+        void authedFetch('/api/email/dispute-resolved', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ disputeId }),
@@ -2924,7 +2946,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTrips(prev => [...prev, newTrip])
 
     for (const deliveryId of deliveryIds) {
-      void fetch('/api/sms/driver-assigned', {
+      void authedFetch('/api/sms/driver-assigned', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId, driverId }),
