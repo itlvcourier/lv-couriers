@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { ListPager, paginate } from '@/components/shared/ListPager'
+
+const INVOICE_PAGE_SIZE = 20
 import { useApp } from '@/lib/context'
 import type { Invoice, InvoiceLine } from '@/lib/types'
 import { formatCurrency, getDeliveryTypeLabel, getRateForType, estimateDeliveryPrice, getRuleApplied, findMatchingTier } from '@/lib/billing'
@@ -47,6 +50,9 @@ export function BusinessInvoices() {
     if (!activeLocationId || activeLocationId === 'all') return true
     return inv.locationId === activeLocationId
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+  const [invoicePage, setInvoicePage] = useState(0)
+  const { page: safeInvoicePage, rows: pagedBusinessInvoices } = paginate(businessInvoices, invoicePage, INVOICE_PAGE_SIZE)
 
   // Get current month's running total
   const currentMonth = new Date()
@@ -128,7 +134,7 @@ export function BusinessInvoices() {
                 No invoices yet
               </div>
             ) : (
-              businessInvoices.map(invoice => (
+              pagedBusinessInvoices.map(invoice => (
                 <button
                   key={invoice.id}
                   onClick={() => setSelectedInvoice(invoice)}
@@ -168,6 +174,15 @@ export function BusinessInvoices() {
                 </button>
               ))
             )}
+          </div>
+          <div className="px-4 pb-4">
+            <ListPager
+              page={safeInvoicePage}
+              pageSize={INVOICE_PAGE_SIZE}
+              total={businessInvoices.length}
+              onPageChange={setInvoicePage}
+              itemLabel="invoices"
+            />
           </div>
         </CardContent>
       </Card>

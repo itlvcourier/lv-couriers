@@ -1097,7 +1097,21 @@ export async function insertAdminNotification(
     })
     .select('*')
     .single()
-  if (error) throw error
+  if (error) {
+    // 23505 = the one-alert-per-delivery unique index already has this alert
+    // (another tab or session created it first). Return the existing row.
+    if (error.code === '23505' && input.deliveryId) {
+      const { data: existing } = await supabase
+        .from('admin_notifications')
+        .select('*')
+        .eq('notification_type', input.type)
+        .eq('delivery_id', input.deliveryId)
+        .limit(1)
+        .maybeSingle()
+      if (existing) return mapAdminNotificationRow(existing as Row)
+    }
+    throw error
+  }
   return mapAdminNotificationRow(data as Row)
 }
 

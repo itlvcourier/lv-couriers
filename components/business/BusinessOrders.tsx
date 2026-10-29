@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { ListPager, paginate } from '@/components/shared/ListPager'
+
+const ORDER_PAGE_SIZE = 20
 import { useApp } from '@/lib/context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -161,6 +164,9 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
     })
   }, [baseFiltered, searchQuery, businessDeliveries])
 
+  const [orderPage, setOrderPage] = useState(0)
+  const { page: safeOrderPage, rows: pagedOrders } = paginate(filteredOrders, orderPage, ORDER_PAGE_SIZE)
+
   const getDriver = (driverId?: string | null) => {
     if (!driverId) return null
     return drivers.find(d => d.id === driverId)
@@ -297,14 +303,20 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={e => {
+            setSearchQuery(e.target.value)
+            setOrderPage(0)
+          }}
           placeholder="Search orders, addresses, recipients..."
           className="pl-9 h-9 text-sm"
         />
       </div>
 
       {/* Filter Tabs */}
-      <Tabs value={filter} onValueChange={v => setFilter(v as typeof filter)}>
+      <Tabs value={filter} onValueChange={v => {
+        setFilter(v as typeof filter)
+        setOrderPage(0)
+      }}>
         <TabsList className="w-full h-auto grid grid-cols-4">
           <TabsTrigger value="all" className="text-[10px] sm:text-sm px-1 sm:px-3">
             All ({businessOrders.length})
@@ -323,7 +335,7 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
 
       {/* Orders List */}
       <div className="space-y-3">
-        {filteredOrders.map(order => {
+        {pagedOrders.map(order => {
           const driver = getDriver(order.driverId)
           const delivery = getDelivery(order.id)
           const canCancel = order.status === 'posted' && !order.driverId
@@ -492,6 +504,14 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
           )
         })}
       </div>
+
+      <ListPager
+        page={safeOrderPage}
+        pageSize={ORDER_PAGE_SIZE}
+        total={filteredOrders.length}
+        onPageChange={setOrderPage}
+        itemLabel="orders"
+      />
 
       {/* Order Detail Sheet */}
       <OrderDetailSheet
