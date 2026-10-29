@@ -86,6 +86,7 @@ import {
   updateTripOrder,
   updateDeliverySequence,
 } from './db-extended'
+import { claimDelivery as claimDeliveryInDb } from './db'
 
 // Default settings used before system_settings has been loaded from the DB.
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -181,7 +182,7 @@ interface AppContextType {
   switchLocation: (locationId: string) => void
   
   // Delivery functions
-  claimDelivery: (deliveryId: string, driverId: string) => void
+  claimDelivery: (deliveryId: string, driverId: string) => Promise<{ success: boolean; error?: string }>
   verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => void
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (
@@ -291,7 +292,7 @@ interface AppContextType {
   trips: Trip[]
   driverReports: DriverMonthlyReport[]
   timeoutWarnings: TimeoutWarning[]
-  claimMultiple: (deliveryIds: string[], driverId: string) => void
+  claimMultiple: (deliveryIds: string[], driverId: string) => Promise<{ claimed: number; failed: number }>
   addJobToTrip: (tripId: string, deliveryId: string) => void
   reorderTrip: (tripId: string, newOrder: string[]) => void
   setDriverSequence: (orderedDeliveryIds: string[]) => Promise<boolean>
@@ -686,30 +687,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [getDriverActiveJobs, getDriverMaxJobs])
 
   // Delivery functions
-  const claimDelivery = useCallback((deliveryId: string, driverId: string) => {
-    // Block self-claim if admin assignment mode is active
+  const claimDelivery = useCallback(async (deliveryId: string, driverId: string) => {
     if (!settings.allowDriverSelfClaim) {
-      console.warn('[v0] Self-claim blocked: dispatch assignment mode is active')
-      return
+      return { success: false, error: 'Jobs are currently assigned by dispatch.' }
     }
-    const driver = drivers.find(d => d.id === driverId)
-    if (!driver) return
+    if (!driverId) {
+      return { success: false, error: 'Your account is not linked to a driver profile.' }
+    }
+    const driverName =
+      drivers.find(d => d.id === driverId)?.name || currentUser?.name || 'Driver'
 
-    persist(
-      updateDeliveryFields(deliveryId, {
-        driver_id: driverId,
-        status: 'claimed',
-        claimed_at: new Date().toISOString(),
-      }),
-      'claimDelivery',
-    )
+    // Atomic: only succeeds while the job is still 'posted', so two drivers
+    // can't claim the same delivery and the UI never shows a phantom claim.
+    try {
+      await claimDeliveryInDb(deliveryId, driverId)
+    } catch (err) {
+      console.error('[db] claimDelivery failed:', (err as Error)?.message || err)
+      void refreshData()
+      return { success: false, error: 'This job is no longer available.' }
+    }
 
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
           ...d,
           driverId,
-          driverName: driver.name,
+          driverName,
           status: 'claimed' as DeliveryStatus,
           claimedAt: new Date().toISOString(),
           statusHistory: [
@@ -717,7 +720,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             {
               status: 'claimed' as DeliveryStatus,
               timestamp: new Date().toISOString(),
-              note: `Claimed by ${driver.name}`,
+              note: `Claimed by ${driverName}`,
               gpsLat: null,
               gpsLng: null,
             },
@@ -727,13 +730,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
 
-    // Fire-and-forget: notify driver with job details + notify business that driver assigned
     void fetch('/api/sms/driver-assigned', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, driverId }),
-    }).catch(err => console.error('[v0] driver-assigned SMS failed', err))
-  }, [drivers, settings.allowDriverSelfClaim])
+    }).catch(err => console.error('[sms] driver-assigned failed', err))
+
+    return { success: true }
+  }, [drivers, currentUser?.name, settings.allowDriverSelfClaim, refreshData])
 
   const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
     // Persist the verified qty + rate to the DB. Rate calculation happens
@@ -2890,11 +2894,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [deliveries])
 
   // Phase 4: Multi-Stop & Advanced functions
-  const claimMultiple = useCallback((deliveryIds: string[], driverId: string) => {
-    const driver = drivers.find(d => d.id === driverId)
-    if (!driver) return
+  const claimMultiple = useCallback(async (requestedIds: string[], driverId: string) => {
+    if (!driverId || !settings.allowDriverSelfClaim) {
+      return { claimed: 0, failed: requestedIds.length }
+    }
+    const driverName =
+      drivers.find(d => d.id === driverId)?.name || currentUser?.name || 'Driver'
 
-    // Create a new trip
+    const results = await Promise.allSettled(
+      requestedIds.map(id => claimDeliveryInDb(id, driverId)),
+    )
+    const deliveryIds = requestedIds.filter((_, i) => results[i].status === 'fulfilled')
+    const failed = requestedIds.length - deliveryIds.length
+    if (failed > 0) void refreshData()
+    if (deliveryIds.length === 0) return { claimed: 0, failed }
+
     const newTrip: Trip = {
       id: `trip-${Date.now()}`,
       driverId,
@@ -2907,13 +2921,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setTrips(prev => [...prev, newTrip])
 
-    // Claim all deliveries
+    for (const deliveryId of deliveryIds) {
+      void fetch('/api/sms/driver-assigned', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId, driverId }),
+      }).catch(err => console.error('[sms] driver-assigned failed', err))
+    }
+
     setDeliveries(prev => prev.map(d => {
       if (deliveryIds.includes(d.id)) {
         return {
           ...d,
           driverId,
-          driverName: driver.name,
+          driverName,
           status: 'claimed' as DeliveryStatus,
           claimedAt: new Date().toISOString(),
           tripId: newTrip.id,
@@ -2931,7 +2952,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [drivers])
+
+    return { claimed: deliveryIds.length, failed }
+  }, [drivers, currentUser?.name, settings.allowDriverSelfClaim, refreshData])
 
   const addJobToTrip = useCallback((tripId: string, deliveryId: string) => {
     const trip = trips.find(t => t.id === tripId)
