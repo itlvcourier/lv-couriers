@@ -110,26 +110,15 @@ export default function TrackingPage() {
 
     void load()
 
-    // Subscribe to real-time updates on this specific delivery
-      const channel = supabase
-      .channel(`delivery-track-${code}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'deliveries',
-          filter: `tracking_code=eq.${code}`,
-        },
-        (payload: unknown) => {
-          if (cancelled) return
-          // Reload full delivery with joins when status changes
-          void load()
-        },
-      )
+    // Database triggers broadcast to this topic on every status change, so
+    // visitors get instant updates without row access to deliveries.
+    const channel = supabase
+      .channel(`track:${code}`)
+      .on('broadcast', { event: 'delivery' }, () => {
+        if (!cancelled) void load()
+      })
       .subscribe()
 
-    // Fallback polling every 30s in case realtime connection drops
     const interval = setInterval(() => {
       if (document.visibilityState !== 'hidden') void load()
     }, 60000)
@@ -159,47 +148,36 @@ export default function TrackingPage() {
     const supabase = createClient()
 
     const loadLocation = async () => {
-      const { data } = await supabase
-        .from('driver_locations')
-        .select('lat, lng, heading, recorded_at')
-        .eq('driver_id', driverId)
-        .order('recorded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data } = await supabase.rpc('get_tracked_driver_location', { p_code: code })
       if (cancelled || !data) return
-      setLiveLocation(data as LiveLocation)
+      const row = data as { lat: number | string; lng: number | string; heading: number | string | null; recorded_at: string }
+      setLiveLocation({
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        heading: row.heading == null ? null : Number(row.heading),
+        recorded_at: row.recorded_at,
+      })
     }
 
     void loadLocation()
 
+    // Each GPS fix from the driver is broadcast to this topic by a trigger.
     const channel = supabase
-      .channel(`driver-loc-${driverId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'driver_locations',
-          filter: `driver_id=eq.${driverId}`,
-        },
-        (payload: { new?: Partial<LiveLocation> }) => {
-          if (cancelled) return
-          const row = payload.new
-          if (row && typeof row.lat === 'number' && typeof row.lng === 'number') {
-            setLiveLocation({
-              lat: row.lat,
-              lng: row.lng,
-              heading: row.heading ?? null,
-              recorded_at: row.recorded_at ?? new Date().toISOString(),
-            })
-          } else {
-            void loadLocation()
-          }
-        },
-      )
+      .channel(`track-loc:${code}`)
+      .on('broadcast', { event: 'location' }, (msg: { payload?: Record<string, unknown> }) => {
+        if (cancelled) return
+        const p = msg.payload
+        if (p && p.lat != null && p.lng != null) {
+          setLiveLocation({
+            lat: Number(p.lat),
+            lng: Number(p.lng),
+            heading: p.heading == null ? null : Number(p.heading),
+            recorded_at: typeof p.recorded_at === 'string' ? p.recorded_at : new Date().toISOString(),
+          })
+        }
+      })
       .subscribe()
 
-    // Fallback poll every 15s in case realtime drops.
     const interval = setInterval(() => {
       if (document.visibilityState !== 'hidden') void loadLocation()
     }, 30000)
