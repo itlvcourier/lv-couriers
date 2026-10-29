@@ -855,6 +855,23 @@ export async function getLiveLocationForDelivery(
 
 export async function getDashboardStats(businessId?: string) {
   const supabase = createClient()
+  // One round-trip for all 8 counts (was 8 separate count queries).
+  const { data: rpcStats, error: rpcError } = await supabase.rpc('get_dashboard_stats', {
+    p_business_id: businessId ?? null,
+  })
+  if (!rpcError && rpcStats) {
+    return rpcStats as {
+      totalDeliveries: number
+      activeDeliveries: number
+      completedToday: number
+      postedDeliveries: number
+      totalDrivers: number
+      activeDrivers: number
+      totalBusinesses: number
+      flaggedDeliveries: number
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0]
 
   // Helper: start a delivery query optionally scoped to one business

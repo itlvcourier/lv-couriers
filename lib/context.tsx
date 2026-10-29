@@ -50,6 +50,7 @@ import {
   loadSettings,
   loadDeliveriesWithCursor,
   loadDeliveriesChangedSince,
+  isDeliveryRelevantToDriver,
   loadInvoices,
   createDeliveryInDb,
   updateDeliveryFields,
@@ -472,11 +473,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deliveriesCursorRef.current = delta.cursor
       if (delta.deliveries.length === 0) return
       const changed = withBizName(delta.deliveries, businessesRef.current)
+      // Drivers get an unscoped delta (so a job claimed by someone else still
+      // arrives and can be dropped); keep only rows that still concern them.
+      const driverId = profile.role === 'driver' ? profile.driverId : null
+      const relevant = (x: Delivery) => !driverId || isDeliveryRelevantToDriver(x, driverId)
       setDeliveries((prev) => {
         const byId = new Map(changed.map((x) => [x.id, x]))
-        const merged = prev.map((x) => byId.get(x.id) ?? x)
+        const merged = prev
+          .map((x) => byId.get(x.id) ?? x)
+          .filter((x) => !byId.has(x.id) || relevant(x))
         const existing = new Set(prev.map((x) => x.id))
-        const added = changed.filter((x) => !existing.has(x.id))
+        const added = changed.filter((x) => !existing.has(x.id) && relevant(x))
         return added.length ? [...added, ...merged] : merged
       })
     } catch (err) {
@@ -553,7 +560,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void refreshData()
       }
     }
-    const interval = setInterval(maybeFetch, 60_000)
+    // Realtime pushes delivery changes, so this poll is only a safety net.
+    const interval = setInterval(maybeFetch, 180_000)
     const onFocus = () => maybeFetch()
     const onVisible = () => { if (document.visibilityState === 'visible') maybeFetch() }
     window.addEventListener('focus', onFocus)
@@ -562,6 +570,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearInterval(interval)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [currentUser, isHydrating, refreshData])
+
+  // Supabase Realtime: when a delivery row changes, run the cheap delta
+  // refresh (debounced, so a burst of scans becomes one query). Replaces
+  // most of the polling load.
+  useEffect(() => {
+    if (!currentUser || isHydrating) return
+    const supabase = createSupabaseClient()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (timer || isPageHidden()) return
+      timer = setTimeout(() => {
+        timer = null
+        void refreshData()
+      }, 1500)
+    }
+    const filter =
+      currentUser.role === 'business' && currentUser.businessId
+        ? `business_id=eq.${currentUser.businessId}`
+        : undefined
+    const channel = supabase
+      .channel(`deliveries-live-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'deliveries', ...(filter ? { filter } : {}) },
+        (payload: { eventType: string; old: unknown }) => {
+          if (payload.eventType === 'DELETE') {
+            const id = (payload.old as { id?: string } | null)?.id
+            if (id) setDeliveries((prev) => prev.filter((x) => x.id !== id))
+            return
+          }
+          scheduleRefresh()
+        },
+      )
+      .subscribe()
+    return () => {
+      if (timer) clearTimeout(timer)
+      void supabase.removeChannel(channel)
     }
   }, [currentUser, isHydrating, refreshData])
 

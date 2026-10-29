@@ -454,6 +454,31 @@ function maxUpdatedAt(rows: Row[], fallback: string | null): string | null {
 }
 
 /**
+ * What a driver needs: open jobs, parcels waiting at a hub, and anything they
+ * are (or were) attached to. Everything else is another driver's business.
+ */
+function driverScopeFilter(driverId: string): string {
+  return [
+    'status.eq.posted',
+    'leg_status.eq.at_hub',
+    `driver_id.eq.${driverId}`,
+    `pickup_driver_id.eq.${driverId}`,
+    `holder_driver_id.eq.${driverId}`,
+    `sorted_for_driver_id.eq.${driverId}`,
+  ].join(',')
+}
+
+export function isDeliveryRelevantToDriver(d: Delivery, driverId: string): boolean {
+  return (
+    d.status === 'posted' ||
+    d.legStatus === 'at_hub' ||
+    d.driverId === driverId ||
+    d.holderDriverId === driverId ||
+    d.sortedForDriverId === driverId
+  )
+}
+
+/**
  * Full load. Also returns a cursor (the newest `updated_at` seen, taken from
  * the server's clock) so later refreshes can ask only for rows changed since.
  */
@@ -470,6 +495,8 @@ export async function loadDeliveriesWithCursor(profile: {
     .limit(500)
   if (profile.role === 'business' && profile.businessId) {
     query = query.eq('business_id', profile.businessId)
+  } else if (profile.role === 'driver' && profile.driverId) {
+    query = query.or(driverScopeFilter(profile.driverId))
   }
   const { data, error } = await query
   if (error) throw error
