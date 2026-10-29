@@ -82,17 +82,9 @@ export default function TrackingPage() {
     const supabase = createClient()
 
     const load = async () => {
-      const { data, error } = await supabase
-        .from('deliveries')
-        .select(
-          `id, driver_id, status, recipient_name, dropoff_address,
-           dropoff_lat, dropoff_lng, pickup_lat, pickup_lng, delivered_at,
-           picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
-           proof_photo_url, signature_url, recipient_note, tracking_expires_at,
-           business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name, phone)`,
-        )
-        .eq('tracking_code', code)
-        .maybeSingle()
+      // Public visitors have no row access to deliveries; this security-definer
+      // function returns only the one delivery matching the tracking code.
+      const { data, error } = await supabase.rpc('get_tracked_delivery', { p_code: code })
 
       if (cancelled) return
       if (error || !data) {
