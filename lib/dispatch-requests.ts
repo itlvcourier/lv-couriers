@@ -125,7 +125,14 @@ export async function createDispatchRequest(
 }
 
 /** Run the server-side sweep that flips overdue pending requests to expired. */
+// Every read path calls expireStaleRequests(); throttle the write RPC so
+// polling screens don't fire it on every tick.
+let lastExpireAt = 0
+const EXPIRE_THROTTLE_MS = 2 * 60_000
+
 export async function expireStaleRequests(): Promise<number> {
+  if (Date.now() - lastExpireAt < EXPIRE_THROTTLE_MS) return 0
+  lastExpireAt = Date.now()
   const supabase = createClient()
   const { data, error } = await supabase.rpc("expire_dispatch_requests")
   if (error) {

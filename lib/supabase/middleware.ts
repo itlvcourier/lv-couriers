@@ -32,7 +32,10 @@ export async function updateSession(request: NextRequest) {
   // Just refresh the session - don't read user or redirect
   // Client-side handles all auth checks via localStorage
   // This is because Supabase SSR cookies are not persisting in this environment
-  await supabase.auth.getUser()
+  // getClaims() verifies the JWT locally (and only refreshes the session when
+  // it's expired) instead of getUser(), which makes a network round-trip to
+  // Supabase Auth on every single page request.
+  await supabase.auth.getClaims()
 
   return supabaseResponse
 }

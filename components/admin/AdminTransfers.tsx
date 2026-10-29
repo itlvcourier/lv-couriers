@@ -70,7 +70,9 @@ export function AdminTransfers() {
 
   useEffect(() => {
     load()
-    const id = setInterval(load, 30_000)
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'hidden') load()
+    }, 30_000)
     return () => clearInterval(id)
   }, [load])
 

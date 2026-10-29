@@ -101,7 +101,7 @@ export function AdminDashboard() {
   const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR(
     ['all-deliveries', selectedBusinessId],
     () => getAllDeliveries(undefined, bizFilter),
-    { refreshInterval: 15000 },
+    { refreshInterval: 30000 },
   )
 
   // Fetch drivers — always platform-wide (drivers work across businesses)
@@ -116,7 +116,7 @@ export function AdminDashboard() {
 
   // Fetch admin notifications
   const { data: notifications = [] } = useSWR('admin-notifications', () => getAdminNotifications(10), {
-    refreshInterval: 15000,
+    refreshInterval: 30000,
   })
 
   // Fetch ratings summary — scoped to business filter

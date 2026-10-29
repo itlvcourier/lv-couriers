@@ -138,7 +138,9 @@ export default function TrackingPage() {
       .subscribe()
 
     // Fallback polling every 30s in case realtime connection drops
-    const interval = setInterval(load, 30000)
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') void load()
+    }, 60000)
 
     return () => {
       cancelled = true
@@ -206,7 +208,9 @@ export default function TrackingPage() {
       .subscribe()
 
     // Fallback poll every 15s in case realtime drops.
-    const interval = setInterval(loadLocation, 15000)
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') void loadLocation()
+    }, 30000)
 
     return () => {
       cancelled = true

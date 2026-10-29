@@ -439,17 +439,33 @@ export async function loadSettings(): Promise<SystemSettings> {
   return mapSettingsRow(data as Row)
 }
 
-export async function loadDeliveries(profile: {
+// `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
+// name the relationship explicitly or PostgREST errors as ambiguous.
+const DELIVERY_SELECT =
+  '*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)'
+
+function maxUpdatedAt(rows: Row[], fallback: string | null): string | null {
+  let max = fallback
+  for (const r of rows) {
+    const u = r.updated_at as string | undefined
+    if (u && (!max || u > max)) max = u
+  }
+  return max
+}
+
+/**
+ * Full load. Also returns a cursor (the newest `updated_at` seen, taken from
+ * the server's clock) so later refreshes can ask only for rows changed since.
+ */
+export async function loadDeliveriesWithCursor(profile: {
   role: string
   businessId: string | null
   driverId: string | null
-}): Promise<Delivery[]> {
+}): Promise<{ deliveries: Delivery[]; cursor: string | null }> {
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
-    // `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
-    // name the relationship explicitly or PostgREST errors as ambiguous.
-    .select('*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)')
+    .select(DELIVERY_SELECT)
     .order('created_at', { ascending: false })
     .limit(500)
   if (profile.role === 'business' && profile.businessId) {
@@ -457,7 +473,41 @@ export async function loadDeliveries(profile: {
   }
   const { data, error } = await query
   if (error) throw error
-  return (data || []).map((row: Row) => mapDeliveryRow(row))
+  const rows = (data || []) as Row[]
+  return { deliveries: rows.map((row) => mapDeliveryRow(row)), cursor: maxUpdatedAt(rows, null) }
+}
+
+export async function loadDeliveries(profile: {
+  role: string
+  businessId: string | null
+  driverId: string | null
+}): Promise<Delivery[]> {
+  return (await loadDeliveriesWithCursor(profile)).deliveries
+}
+
+/**
+ * Incremental load: only deliveries whose `updated_at` moved past the cursor.
+ * Usually returns zero rows, so a refresh tick costs one tiny indexed query
+ * instead of re-downloading every delivery with its manifest.
+ */
+export async function loadDeliveriesChangedSince(
+  profile: { role: string; businessId: string | null; driverId: string | null },
+  since: string,
+): Promise<{ deliveries: Delivery[]; cursor: string }> {
+  const supabase = createClient()
+  let query = supabase
+    .from('deliveries')
+    .select(DELIVERY_SELECT)
+    .gt('updated_at', since)
+    .order('updated_at', { ascending: true })
+    .limit(200)
+  if (profile.role === 'business' && profile.businessId) {
+    query = query.eq('business_id', profile.businessId)
+  }
+  const { data, error } = await query
+  if (error) throw error
+  const rows = (data || []) as Row[]
+  return { deliveries: rows.map((row) => mapDeliveryRow(row)), cursor: maxUpdatedAt(rows, since) ?? since }
 }
 
 export async function loadInvoices(profile: {

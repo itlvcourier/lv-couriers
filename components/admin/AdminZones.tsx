@@ -192,8 +192,9 @@ export function AdminZones() {
   // Refresh live parcel counts periodically.
   useEffect(() => {
     const id = setInterval(() => {
+      if (document.visibilityState === 'hidden') return
       getZoneParcelCounts().then(setParcelCounts).catch(() => {})
-    }, 30_000)
+    }, 60_000)
     return () => clearInterval(id)
   }, [])
 

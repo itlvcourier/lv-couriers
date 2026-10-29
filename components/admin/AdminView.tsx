@@ -148,7 +148,9 @@ export function AdminView() {
         .catch(() => {})
     }
     poll()
-    const id = setInterval(poll, 60_000)
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'hidden') poll()
+    }, 60_000)
     return () => {
       active = false
       clearInterval(id)

@@ -40,12 +40,16 @@ import type {
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES, calculateBreakdown } from './billing'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 import { unregisterDevicePush } from '@/lib/native/push'
+import { isPageHidden } from '@/lib/visibility'
+
+const FULL_REFRESH_MS = 5 * 60_000
 import {
   loadAllBusinesses,
   loadAllDrivers,
   loadAllRateCards,
   loadSettings,
-  loadDeliveries,
+  loadDeliveriesWithCursor,
+  loadDeliveriesChangedSince,
   loadInvoices,
   createDeliveryInDb,
   updateDeliveryFields,
@@ -346,6 +350,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [driverReports] = useState<DriverMonthlyReport[]>([])
   const [timeoutWarnings, setTimeoutWarnings] = useState<TimeoutWarning[]>([])
   const [savedContacts, setSavedContacts] = useState<SavedContact[]>([])
+  const deliveriesCursorRef = useRef<string | null>(null)
+  const lastFullRefreshRef = useRef(0)
+  const businessesRef = useRef<Business[]>([])
+  const adminNotificationsLoadedRef = useRef(false)
+  const currentUserRoleRef = useRef<UserRole | null>(null)
+  useEffect(() => {
+    currentUserRoleRef.current = currentUser?.role ?? null
+    if (!currentUser) {
+      deliveriesCursorRef.current = null
+      adminNotificationsLoadedRef.current = false
+    }
+  }, [currentUser])
 
   // -------------------------------------------------------------------------
   // Hydration: fetch the profile + all core entities after a Supabase session
@@ -359,16 +375,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         businessId: user.businessId || null,
         driverId: user.driverId || null,
       }
-      const [b, d, rc, s, dl, inv] = await Promise.all([
+      const [b, d, rc, s, dlRes, inv] = await Promise.all([
         loadAllBusinesses().catch(() => [] as Business[]),
         loadAllDrivers().catch(() => [] as Driver[]),
         loadAllRateCards().catch(() => [] as RateCard[]),
         loadSettings().catch(() => DEFAULT_SETTINGS),
-        loadDeliveries(profile).catch(() => [] as Delivery[]),
+        loadDeliveriesWithCursor(profile).catch(() => ({ deliveries: [] as Delivery[], cursor: null })),
         loadInvoices(profile).catch(() => [] as Invoice[]),
       ])
+      const dl = dlRes.deliveries
+      deliveriesCursorRef.current = dlRes.cursor
+      lastFullRefreshRef.current = Date.now()
       // Backfill businessName on deliveries using the businesses we loaded.
       const byBizId = new Map(b.map(biz => [biz.id, biz.name]))
+      businessesRef.current = b
       setBusinesses(b)
       setDrivers(d)
       setRateCards(rc)
@@ -386,7 +406,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadDisputes(inv).catch(() => [] as Dispute[]),
       ])
       setSavedContacts(contacts)
+      adminNotificationsRef.current = notifs
       setAdminNotifications(notifs)
+      adminNotificationsLoadedRef.current = true
       setSMSLog(sms)
       setDisputes(disputesLoaded)
     } catch (err) {
@@ -402,6 +424,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // on an interval. This is what makes a business-created delivery show up in
   // an already-open driver session, and keeps every role's data fresh.
   // -------------------------------------------------------------------------
+  //
+  // Two tiers to keep Supabase load low:
+  //  - every tick: fetch only deliveries changed since the last cursor
+  //    (usually 0 rows) and merge them in.
+  //  - every FULL_REFRESH_MS: full reload of deliveries + reference data
+  //    (businesses, drivers, settings, invoices), which also picks up deletes.
   const refreshData = useCallback(async () => {
     if (!currentUser) return
     const profile = {
@@ -409,29 +437,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
       businessId: currentUser.businessId || null,
       driverId: currentUser.driverId || null,
     }
+    const withBizName = (list: Delivery[], bizList: Business[]) => {
+      const byBizId = new Map(bizList.map((biz) => [biz.id, biz.name]))
+      return list.map((x) => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' }))
+    }
     try {
-      const [b, d, dl, inv, s] = await Promise.all([
-        loadAllBusinesses().catch(() => null),
-        loadAllDrivers().catch(() => null),
-        loadDeliveries(profile).catch(() => null),
-        loadInvoices(profile).catch(() => null),
-        loadSettings().catch(() => null),
-      ])
-      if (b) setBusinesses(b)
-      if (d) setDrivers(d)
-      if (s) setSettings(s)
-      if (dl) {
-        const byBizId = new Map((b || businesses).map((biz) => [biz.id, biz.name]))
-        setDeliveries(
-          dl.map((x) => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })),
-        )
+      const cursor = deliveriesCursorRef.current
+      const fullDue = !cursor || Date.now() - lastFullRefreshRef.current >= FULL_REFRESH_MS
+
+      if (fullDue) {
+        const [b, d, dlRes, inv, s] = await Promise.all([
+          loadAllBusinesses().catch(() => null),
+          loadAllDrivers().catch(() => null),
+          loadDeliveriesWithCursor(profile).catch(() => null),
+          loadInvoices(profile).catch(() => null),
+          loadSettings().catch(() => null),
+        ])
+        lastFullRefreshRef.current = Date.now()
+        if (b) {
+          businessesRef.current = b
+          setBusinesses(b)
+        }
+        if (d) setDrivers(d)
+        if (s) setSettings(s)
+        if (dlRes) {
+          deliveriesCursorRef.current = dlRes.cursor
+          setDeliveries(withBizName(dlRes.deliveries, businessesRef.current))
+        }
+        if (inv) setInvoices(inv)
+        return
       }
-      if (inv) setInvoices(inv)
+
+      const delta = await loadDeliveriesChangedSince(profile, cursor)
+      deliveriesCursorRef.current = delta.cursor
+      if (delta.deliveries.length === 0) return
+      const changed = withBizName(delta.deliveries, businessesRef.current)
+      setDeliveries((prev) => {
+        const byId = new Map(changed.map((x) => [x.id, x]))
+        const merged = prev.map((x) => byId.get(x.id) ?? x)
+        const existing = new Set(prev.map((x) => x.id))
+        const added = changed.filter((x) => !existing.has(x.id))
+        return added.length ? [...added, ...merged] : merged
+      })
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[db] refresh failed', err)
     }
-  }, [currentUser, businesses])
+  }, [currentUser])
 
   // Build an app-level user object from a Supabase auth user. All role +
   // linkage info lives in raw_user_meta_data (set when the account was
@@ -494,6 +546,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let lastRefreshAt = 0
     const DEBOUNCE_MS = 20_000
     const maybeFetch = () => {
+      if (isPageHidden()) return
       const now = Date.now()
       if (now - lastRefreshAt >= DEBOUNCE_MS) {
         lastRefreshAt = now
@@ -1019,6 +1072,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const sweep = () => {
       if (!settingsRef.current.notifyTimeoutWarnings) return
+      // Only an admin session (with its notifications already loaded) can
+      // dedupe correctly. Driver/business sessions never load admin
+      // notifications, so they used to re-insert the same alert on every
+      // reload (61 copies per delivery).
+      if (currentUserRoleRef.current !== 'admin' || !adminNotificationsLoadedRef.current) return
 
       for (const d of deliveries) {
         if (!IN_FLIGHT.includes(d.status)) continue
