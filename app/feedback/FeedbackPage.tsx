@@ -120,7 +120,7 @@ export function FeedbackPage({ token }: { token: string }) {
     setSubmitting(true)
     try {
       await submitCustomerFeedback(
-        feedback.id,
+        token,
         driverRating,
         businessRating,
         driverProfessionalism,

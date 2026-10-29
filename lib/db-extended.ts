@@ -1542,42 +1542,24 @@ export async function createFeedbackToken(
 export async function getFeedbackByToken(token: string): Promise<CustomerFeedback | null> {
   const supabase = createClient()
   
-  const { data, error } = await supabase
-    .from('customer_feedback')
-    .select('*')
-    .eq('token', token)
-    .maybeSingle()
-  
+  // Token, expiry and already-submitted checks happen inside the RPC; the
+  // table itself is not readable without signing in.
+  const { data, error } = await supabase.rpc('get_feedback_by_token', { p_token: token })
+
   if (error) {
     console.error('[v0] Failed to fetch feedback by token:', error?.message)
     return null
   }
-  
-  if (!data) {
-    console.log('[v0] Feedback not found for token:', token)
-    return null
-  }
-  
-  // Check if token is expired
-  if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) {
-    console.log('[v0] Feedback token expired:', token)
-    return null
-  }
-  
-  // Check if feedback was already submitted
-  if (data.feedback_received) {
-    console.log('[v0] Feedback already submitted for token:', token)
-    return null
-  }
-  
-  return mapCustomerFeedbackRow(data)
+
+  const row = Array.isArray(data) ? data[0] : data
+  return row ? mapCustomerFeedbackRow(row) : null
 }
 
 /**
  * Submit customer feedback
  */
 export async function submitCustomerFeedback(
-  feedbackId: string,
+  token: string,
   driverRating: number,
   businessRating: number,
   driverProfessionalism: number | null,
@@ -1591,32 +1573,28 @@ export async function submitCustomerFeedback(
 ): Promise<CustomerFeedback> {
   const supabase = createClient()
   
-  const { data, error } = await supabase
-    .from('customer_feedback')
-    .update({
-      driver_rating: driverRating,
-      business_rating: businessRating,
-      driver_professionalism: driverProfessionalism,
-      driver_timeliness: driverTimeliness,
-      driver_package_handling: driverPackageHandling,
-      business_packaging: businessPackaging,
-      business_accuracy: businessAccuracy,
-      comment,
-      reported_issues: reportedIssues,
-      issue_details: issueDetails,
-      feedback_received: true,
-      submitted_at: new Date().toISOString(),
-    })
-    .eq('id', feedbackId)
-    .select('*')
-    .single()
-  
+  const { data, error } = await supabase.rpc('submit_feedback_by_token', {
+    p_token: token,
+    p_driver_rating: driverRating,
+    p_business_rating: businessRating,
+    p_driver_professionalism: driverProfessionalism,
+    p_driver_timeliness: driverTimeliness,
+    p_driver_package_handling: driverPackageHandling,
+    p_business_packaging: businessPackaging,
+    p_business_accuracy: businessAccuracy,
+    p_comment: comment,
+    p_reported_issues: reportedIssues,
+    p_issue_details: issueDetails,
+  })
+
   if (error) {
     console.error('[v0] Failed to submit feedback:', error.message)
     throw error
   }
-  
-  return mapCustomerFeedbackRow(data)
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) throw new Error('Feedback link has expired or was already used')
+  return mapCustomerFeedbackRow(row)
 }
 
 /**

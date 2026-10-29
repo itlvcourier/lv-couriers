@@ -17,7 +17,7 @@ const securityHeaders = [
   // Disable powerful APIs the app does not use
   {
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(self)',
+    value: 'camera=(self), microphone=(), geolocation=(self)',
   },
   // Clickjacking protection — allow embedding from same origin only
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },

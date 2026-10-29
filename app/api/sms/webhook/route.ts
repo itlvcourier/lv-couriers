@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { setOptOut, sendSms } from '@/lib/twilio'
 
@@ -23,6 +24,24 @@ export async function POST(req: Request) {
 
   // Parse x-www-form-urlencoded
   const params = new URLSearchParams(body)
+
+  // Reject requests that weren't signed by Twilio, so nobody can opt numbers
+  // in or out (or trigger outbound SMS) by posting to this URL.
+  const authToken = process.env.TWILIO_AUTH_TOKEN
+  const signature = req.headers.get('x-twilio-signature') || ''
+  if (!authToken || !signature) {
+    return new Response('Forbidden', { status: 403 })
+  }
+  const forwardedProto = req.headers.get('x-forwarded-proto')
+  const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host')
+  const url = new URL(req.url)
+  const publicUrl = forwardedHost
+    ? `${forwardedProto || 'https'}://${forwardedHost}${url.pathname}${url.search}`
+    : req.url
+  if (!twilio.validateRequest(authToken, signature, publicUrl, Object.fromEntries(params))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
   const from = params.get('From') || ''
   const rawMsg = (params.get('Body') || '').trim().toUpperCase()
 
