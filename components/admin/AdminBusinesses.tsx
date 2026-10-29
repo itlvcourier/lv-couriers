@@ -294,6 +294,7 @@ export function AdminBusinesses() {
         name: form.name,
         contact_name: form.contact_name || form.name, // Falls back to business name if no contact name
         email: form.billing_email,
+        billing_email: form.billing_email,
         phone: form.contact_phone || '',
         invoice_format: 'combined',
         invite_status: 'pending',
@@ -302,7 +303,7 @@ export function AdminBusinesses() {
       .single()
     
     if (businessError) {
-      toast.error('Failed to create business')
+      toast.error(`Failed to create business: ${businessError.message}`)
       console.error(businessError)
       return
     }
