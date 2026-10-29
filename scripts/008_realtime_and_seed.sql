@@ -43,10 +43,10 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO drivers (id, name, email, phone, status, max_jobs_override, invite_status, total_deliveries, month_deliveries, avg_delivery_mins, rush_sla_rate)
 VALUES 
-  ('dddd1111-dddd-1111-dddd-111111111111', 'Marcus Reid', 'marcus@lvcourier.ca', '(403) 555-0101', 'available', NULL, 'active', 127, 23, 22, 94),
-  ('dddd2222-dddd-2222-dddd-222222222222', 'Jenna Cole', 'jenna@lvcourier.ca', '(403) 555-0102', 'on_delivery', NULL, 'active', 203, 41, 18, 97),
-  ('dddd3333-dddd-3333-dddd-333333333333', 'Tariq Hassan', 'tariq@lvcourier.ca', '(403) 555-0103', 'available', 2, 'active', 89, 28, 31, 88),
-  ('dddd4444-dddd-4444-dddd-444444444444', 'Sasha Kim', 'sasha@lvcourier.ca', '(403) 555-0104', 'off_duty', NULL, 'active', 156, 19, 24, 91)
+  ('dddd1111-dddd-1111-dddd-111111111111', 'Marcus Reid', 'marcus@atria360.ca', '(403) 555-0101', 'available', NULL, 'active', 127, 23, 22, 94),
+  ('dddd2222-dddd-2222-dddd-222222222222', 'Jenna Cole', 'jenna@atria360.ca', '(403) 555-0102', 'on_delivery', NULL, 'active', 203, 41, 18, 97),
+  ('dddd3333-dddd-3333-dddd-333333333333', 'Tariq Hassan', 'tariq@atria360.ca', '(403) 555-0103', 'available', 2, 'active', 89, 28, 31, 88),
+  ('dddd4444-dddd-4444-dddd-444444444444', 'Sasha Kim', 'sasha@atria360.ca', '(403) 555-0104', 'off_duty', NULL, 'active', 156, 19, 24, 91)
 ON CONFLICT (id) DO NOTHING;
 
 -- ================================================================

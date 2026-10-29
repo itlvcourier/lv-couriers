@@ -1107,7 +1107,7 @@ function InvoiceDetail({
         <CardContent className="p-6 space-y-6">
           <div className="flex justify-between">
             <div>
-              <h3 className="text-xl font-bold text-gray-900">LV Courier Inc.</h3>
+              <h3 className="text-xl font-bold text-gray-900">DOMS By Atria360</h3>
               <p className="text-sm text-gray-600">Calgary, AB</p>
               <p className="text-sm text-gray-600">(403) 555-0100</p>
             </div>
@@ -1178,7 +1178,7 @@ function InvoiceDetail({
 
           <div className="border-t border-gray-200 pt-4 text-sm">
             <p className="font-medium text-gray-900 mb-1">Payment Instructions:</p>
-            <p className="text-gray-600">E-transfer to: lvcourieralberta@gmail.com</p>
+            <p className="text-gray-600">E-transfer to: info@atria360.ca</p>
             <p className="text-gray-600">Reference: {invoice.invoiceNumber}</p>
           </div>
         </CardContent>

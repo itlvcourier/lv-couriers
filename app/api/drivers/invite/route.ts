@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
 
   // Email + SMS in parallel. SMS is best-effort: skip-logged because the
   // sms_type enum has no "invite" value and the message isn't delivery-bound.
-  const smsBody = `Welcome to Lv Couriers, ${name}. Sign in at ${loginUrl} with email ${email} and temp password: ${tempPassword}. Please change it on first sign-in.`
+  const smsBody = `Welcome to DOMS By Atria360, ${name}. Sign in at ${loginUrl} with email ${email} and temp password: ${tempPassword}. Please change it on first sign-in.`
   const [emailResult, smsResult] = await Promise.all([
     sendEmail({
       to: email,

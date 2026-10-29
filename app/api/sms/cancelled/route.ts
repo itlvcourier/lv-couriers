@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: `Status is ${delivery.status}` })
   }
 
-  const businessName = delivery.businesses?.name || 'LV Couriers'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
   const businessPhone = delivery.businesses?.phone || null
   const driverPhone = delivery.drivers?.phone || null
   const driverName = delivery.drivers?.name || 'Driver'
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
-        body: `${greeting}, your delivery from ${businessName} has been cancelled. If this is unexpected, please contact ${businessName} directly. — LV Couriers`,
+        body: `${greeting}, your delivery from ${businessName} has been cancelled. If this is unexpected, please contact ${businessName} directly. — DOMS By Atria360`,
         type: 'order_cancelled',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: businessPhone,
-        body: `Your delivery to ${recipientLabel} has been cancelled. Contact LV Couriers if you have questions. — LV Couriers`,
+        body: `Your delivery to ${recipientLabel} has been cancelled. Contact DOMS By Atria360 if you have questions. — DOMS By Atria360`,
         type: 'order_cancelled',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'business' })),
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: driverPhone,
-        body: `${driverName}, the delivery you were assigned has been cancelled. Please check the app for your updated job list. — LV Couriers`,
+        body: `${driverName}, the delivery you were assigned has been cancelled. Please check the app for your updated job list. — DOMS By Atria360`,
         type: 'order_cancelled',
         deliveryId,
         driverId: delivery.driver_id,

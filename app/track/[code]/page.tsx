@@ -324,7 +324,7 @@ export default function TrackingPage() {
               we&apos;ll help.
             </p>
             <p className="text-sm text-muted-foreground">
-              Contact LV Courier:{' '}
+              Contact DOMS By Atria360:{' '}
               <a href="tel:5875759699" className="text-primary font-medium">
                 587-575-9699
               </a>
@@ -349,7 +349,7 @@ export default function TrackingPage() {
               This delivery doesn&apos;t exist or the link has expired.
             </p>
             <p className="text-sm text-muted-foreground">
-              Contact LV Courier:{' '}
+              Contact DOMS By Atria360:{' '}
               <a href="tel:5875759699" className="text-primary font-medium">
                 587-575-9699
               </a>
@@ -678,8 +678,8 @@ function TrackingHeader() {
     <header className="border-b border-border bg-card">
       <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-1">
-          <span className="text-xl font-bold text-primary">LV</span>
-          <span className="text-xl font-bold">COURIER</span>
+          <span className="text-xl font-bold text-primary">DOMS</span>
+          <span className="text-xl font-bold">by Atria360</span>
         </div>
         <a
           href="tel:5875759699"

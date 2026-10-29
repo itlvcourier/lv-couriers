@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: `Status is ${delivery.status}` })
   }
 
-  const businessName = delivery.businesses?.name || 'LV Couriers'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
   const businessPhone = delivery.businesses?.phone || null
   const trackingUrl = buildTrackingUrl(deliveryId)
   const retries = delivery.retry_count ?? 0
@@ -67,9 +67,9 @@ export async function POST(req: NextRequest) {
     const recipMsg = attemptsLeft > 0
       ? `${greeting}, we attempted delivery from ${businessName} but were unable to complete it. ` +
         `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining. ` +
-        `Track your delivery: ${trackingUrl} — LV Couriers`
+        `Track your delivery: ${trackingUrl} — DOMS By Atria360`
       : `${greeting}, we were unable to complete your delivery from ${businessName} after ${retries} attempt${retries !== 1 ? 's' : ''}. ` +
-        `Please contact us to arrange redelivery. Track: ${trackingUrl} — LV Couriers`
+        `Please contact us to arrange redelivery. Track: ${trackingUrl} — DOMS By Atria360`
     sends.push(
       sendSms({ to: delivery.recipient_phone, body: recipMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -81,9 +81,9 @@ export async function POST(req: NextRequest) {
     const recipientLabel = delivery.recipient_name || 'recipient'
     const bizMsg = attemptsLeft > 0
       ? `Delivery to ${recipientLabel} failed (attempt ${retries}/${maxRetries}). ` +
-        `Driver will retry. Track: ${trackingUrl} — LV Couriers`
+        `Driver will retry. Track: ${trackingUrl} — DOMS By Atria360`
       : `Delivery to ${recipientLabel} permanently failed after ${retries} attempts. ` +
-        `Admin review required. Track: ${trackingUrl} — LV Couriers`
+        `Admin review required. Track: ${trackingUrl} — DOMS By Atria360`
     sends.push(
       sendSms({ to: businessPhone, body: bizMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'business' })),

@@ -1,5 +1,5 @@
 -- DOMS Database Schema - Part 1: Extensions and Enums
--- LV Courier Inc. - Delivery Operations Management System
+-- DOMS By Atria360 - Delivery Operations Management System
 -- Run this FIRST before any other scripts
 
 -- ================================================================

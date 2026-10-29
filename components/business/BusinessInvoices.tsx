@@ -296,7 +296,7 @@ function InvoiceDetailView({
       <body>
         <div class="header">
           <div>
-            <div class="logo">LV Courier</div>
+            <div class="logo">DOMS By Atria360</div>
             <p>Delivery Operations Management</p>
           </div>
           <div class="invoice-info">
@@ -313,7 +313,7 @@ function InvoiceDetailView({
           </div>
           <div class="meta-section">
             <h3>Payment Instructions</h3>
-            <p>E-transfer to: lvcourieralberta@gmail.com</p>
+            <p>E-transfer to: info@atria360.ca</p>
             <p>Reference: ${invoice.invoiceNumber}</p>
           </div>
         </div>
@@ -355,7 +355,7 @@ function InvoiceDetailView({
         
         <div class="payment-info">
           <h3>Payment Instructions</h3>
-          <p>Please send e-transfer to: <strong>lvcourieralberta@gmail.com</strong></p>
+          <p>Please send e-transfer to: <strong>info@atria360.ca</strong></p>
           <p>Include reference: <strong>${invoice.invoiceNumber}</strong></p>
         </div>
         
@@ -460,7 +460,7 @@ function InvoiceDetailView({
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4">
             <p className="font-medium mb-2">Payment Instructions</p>
-            <p className="text-sm text-muted-foreground">E-transfer to: lvcourieralberta@gmail.com</p>
+            <p className="text-sm text-muted-foreground">E-transfer to: info@atria360.ca</p>
             <p className="text-sm text-muted-foreground">Reference: {invoice.invoiceNumber}</p>
           </CardContent>
         </Card>

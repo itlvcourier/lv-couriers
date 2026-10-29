@@ -2809,7 +2809,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       recipientName: 'Recipient',
       recipientPhone,
       type: 'tracking_link',
-      message: `Your LV Courier delivery is on the way! Track: lvcourier.ca/track/${trackingCode}`,
+      message: `Your DOMS By Atria360 delivery is on the way! Track: atria360.ca/track/${trackingCode}`,
       status: 'sent',
       sentAt: new Date().toISOString(),
       deliveredAt: null,

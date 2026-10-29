@@ -1,8 +1,8 @@
-# LV Couriers - Demo Accounts & Setup Guide
+# DOMS By Atria360 - Demo Accounts & Setup Guide
 
 ## Overview
 
-LV Couriers is a production-ready delivery management system with three distinct user roles: Business, Driver, and Admin. This guide covers setting up demo accounts and testing the application.
+DOMS By Atria360 is a production-ready delivery management system with three distinct user roles: Business, Driver, and Admin. This guide covers setting up demo accounts and testing the application.
 
 ## Database Schema
 
@@ -31,7 +31,7 @@ The following demo auth accounts have been created and linked to the database:
 
 ### Business Demo Account
 ```
-Email: business@demo.lvcouriers.com
+Email: business@demo.atria360.ca
 Password: Demo@Business123
 Role: Business
 Permissions: Post deliveries, view own deliveries, live tracking
@@ -39,7 +39,7 @@ Permissions: Post deliveries, view own deliveries, live tracking
 
 ### Driver Demo Account
 ```
-Email: driver@demo.lvcouriers.com
+Email: driver@demo.atria360.ca
 Password: Demo@Driver123
 Role: Driver
 Permissions: View available jobs, claim deliveries, complete deliveries, upload proof
@@ -47,7 +47,7 @@ Permissions: View available jobs, claim deliveries, complete deliveries, upload 
 
 ### Admin Demo Account
 ```
-Email: admin@demo.lvcouriers.com
+Email: admin@demo.atria360.ca
 Password: Demo@Admin123
 Role: Admin
 Permissions: Manage drivers, manage businesses, view all deliveries, invite drivers via email

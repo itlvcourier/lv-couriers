@@ -26,7 +26,7 @@ export type EmailResult =
   | { ok: true; id: string }
   | { ok: false; reason: string; bounced: boolean }
 
-const FROM_ADDRESS = process.env.RESEND_FROM || 'Lv Couriers <billing@lv-couriers.local>'
+const FROM_ADDRESS = process.env.RESEND_FROM || 'DOMS By Atria360 <info@atria360.ca>'
 
 let _resend: Resend | null = null
 function getResend(): Resend | null {

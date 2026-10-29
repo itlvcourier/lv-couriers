@@ -45,7 +45,7 @@ export async function geocodeAddress(
     const res = await fetch(`${NOMINATIM_BASE}?${params}`, {
       headers: {
         // Nominatim requires a User-Agent identifying the app
-        'User-Agent': 'LVCourier/1.0 (delivery tracking)',
+        'User-Agent': 'DOMS By Atria360/1.0 (delivery tracking)',
       },
     })
 

@@ -17,8 +17,8 @@ export default function TermsOfServicePage() {
             <span className="text-sm">Back</span>
           </Link>
           <div className="flex items-center gap-1">
-            <span className="text-lg font-bold text-[var(--accent-orange)]">LV</span>
-            <span className="text-lg font-normal text-foreground">COURIER</span>
+            <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
+            <span className="text-lg font-normal text-foreground">by Atria360</span>
           </div>
         </div>
       </header>
@@ -33,7 +33,7 @@ export default function TermsOfServicePage() {
             <section>
               <h2 className="text-lg font-semibold text-foreground mb-3">1. Agreement to Terms</h2>
               <p className="text-muted-foreground leading-relaxed">
-                By accessing or using the LV Courier Delivery Operations Management System (DOMS), you agree to be bound by 
+                By accessing or using DOMS (Delivery Operations Management System) by Atria360, you agree to be bound by 
                 these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, 
                 you are prohibited from using or accessing this service.
               </p>
@@ -42,7 +42,7 @@ export default function TermsOfServicePage() {
             <section>
               <h2 className="text-lg font-semibold text-foreground mb-3">2. Description of Service</h2>
               <p className="text-muted-foreground leading-relaxed">
-                LV Courier provides a delivery management platform that connects businesses with delivery drivers. Our services include:
+                DOMS By Atria360 provides a delivery management platform that connects businesses with delivery drivers. Our services include:
               </p>
               <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4 mt-3">
                 <li>Order creation and management for businesses</li>
@@ -129,7 +129,7 @@ export default function TermsOfServicePage() {
             <section>
               <h2 className="text-lg font-semibold text-foreground mb-3">8. Liability Limitations</h2>
               <p className="text-muted-foreground leading-relaxed">
-                LV Courier&apos;s liability for lost or damaged packages is limited to the declared value of the package, 
+                DOMS By Atria360&apos;s liability for lost or damaged packages is limited to the declared value of the package, 
                 up to a maximum of $500 CAD per delivery. We are not liable for:
               </p>
               <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4 mt-3">
@@ -159,7 +159,7 @@ export default function TermsOfServicePage() {
             <section>
               <h2 className="text-lg font-semibold text-foreground mb-3">10. Intellectual Property</h2>
               <p className="text-muted-foreground leading-relaxed">
-                The LV Courier platform, including all software, designs, logos, and content, is the property of LV Courier 
+                The DOMS By Atria360 platform, including all software, designs, logos, and content, is the property of DOMS By Atria360 
                 and is protected by intellectual property laws. You may not copy, modify, distribute, or reverse engineer 
                 any part of our service without prior written consent.
               </p>
@@ -196,8 +196,8 @@ export default function TermsOfServicePage() {
                 For questions about these Terms of Service, please contact us at:
               </p>
               <div className="mt-3 p-4 bg-[var(--bg-card-2)] rounded-lg">
-                <p className="text-foreground font-medium">LV Courier</p>
-                <p className="text-muted-foreground text-sm">Email: legal@lvcourier.ca</p>
+                <p className="text-foreground font-medium">DOMS By Atria360</p>
+                <p className="text-muted-foreground text-sm">Email: legal@atria360.ca</p>
                 <p className="text-muted-foreground text-sm">Phone: (604) 555-0123</p>
                 <p className="text-muted-foreground text-sm">Address: Vancouver, BC, Canada</p>
               </div>
@@ -211,7 +211,7 @@ export default function TermsOfServicePage() {
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} LV Courier. All rights reserved.
+              &copy; {new Date().getFullYear()} DOMS By Atria360. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

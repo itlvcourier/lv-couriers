@@ -17,19 +17,19 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 
 const demoAccounts = [
   {
-    email: 'business@demo.lvcouriers.com',
+    email: 'business@demo.atria360.ca',
     password: 'Demo@Business123',
     user_id: '11000000-0000-0000-0000-000000000001',
     role: 'business',
   },
   {
-    email: 'driver@demo.lvcouriers.com',
+    email: 'driver@demo.atria360.ca',
     password: 'Demo@Driver123',
     user_id: '22000000-0000-0000-0000-000000000001',
     role: 'driver',
   },
   {
-    email: 'admin@demo.lvcouriers.com',
+    email: 'admin@demo.atria360.ca',
     password: 'Demo@Admin123',
     user_id: '33000000-0000-0000-0000-000000000001',
     role: 'admin',
@@ -108,15 +108,15 @@ async function createDemoUsers() {
 
   console.log('\n=== Demo Account Credentials ===');
   console.log('Business Account:');
-  console.log('  Email: business@demo.lvcouriers.com');
+  console.log('  Email: business@demo.atria360.ca');
   console.log('  Password: Demo@Business123');
   console.log();
   console.log('Driver Account:');
-  console.log('  Email: driver@demo.lvcouriers.com');
+  console.log('  Email: driver@demo.atria360.ca');
   console.log('  Password: Demo@Driver123');
   console.log();
   console.log('Admin Account:');
-  console.log('  Email: admin@demo.lvcouriers.com');
+  console.log('  Email: admin@demo.atria360.ca');
   console.log('  Password: Demo@Admin123');
   console.log();
   console.log('Note: Change these passwords after first login for security.');

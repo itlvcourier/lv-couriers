@@ -30,17 +30,17 @@ export async function GET() {
     // Create demo users using Admin API
     const demoUsers = [
       {
-        email: 'business@demo.lvcouriers.com',
+        email: 'business@demo.atria360.ca',
         password: 'Demo@123',
         user_metadata: { role: 'business', name: 'Demo Business' },
       },
       {
-        email: 'driver@demo.lvcouriers.com',
+        email: 'driver@demo.atria360.ca',
         password: 'Demo@123',
         user_metadata: { role: 'driver', name: 'Demo Driver' },
       },
       {
-        email: 'admin@demo.lvcouriers.com',
+        email: 'admin@demo.atria360.ca',
         password: 'Demo@123',
         user_metadata: { role: 'admin', name: 'Admin User' },
       },

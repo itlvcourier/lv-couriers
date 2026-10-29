@@ -1,4 +1,4 @@
--- LV Couriers Database Schema
+-- DOMS By Atria360 Database Schema
 -- This creates all the necessary tables for the delivery management system
 
 -- Enable UUID extension

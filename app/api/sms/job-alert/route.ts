@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0, failed: 0, note: 'no on-duty drivers' })
   }
 
-  const businessName = delivery.businesses?.name || 'LV Couriers'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
   const message =
     `${urgencyTag}New job from ${businessName}: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}. ` +

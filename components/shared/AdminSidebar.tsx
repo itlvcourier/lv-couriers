@@ -65,7 +65,7 @@ export function AdminSidebar({ activePage, onPageChange }: AdminSidebarProps) {
 
       {/* Footer */}
       <div className="p-4 border-t border-[#1f2535]">
-        <p className="text-xs text-[#6b7280] text-center">LV Couriers v1.0</p>
+        <p className="text-xs text-[#6b7280] text-center">DOMS By Atria360 v1.0</p>
       </div>
     </aside>
   )

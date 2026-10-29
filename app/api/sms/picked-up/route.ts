@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   const msg =
     `Package picked up by ${driverName}. ` +
     `Now heading to ${recipientLabel} at ${delivery.dropoff_address || 'destination'}. ` +
-    `Track: ${trackingUrl} — LV Couriers`
+    `Track: ${trackingUrl} — DOMS By Atria360`
 
   const result = await sendSms({
     to: businessPhone,

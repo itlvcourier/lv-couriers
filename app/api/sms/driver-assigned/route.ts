@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
   const trackingUrl = buildTrackingUrl(deliveryId)
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
-  const businessName = delivery.businesses?.name || 'LV Courier'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
 
   // Notify driver with pickup/dropoff details
   if (driver.phone) {

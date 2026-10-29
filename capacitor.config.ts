@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 /**
- * Capacitor configuration for LV Couriers (DOMS).
+ * Capacitor configuration for DOMS By Atria360.
  *
  * IMPORTANT — Hosted server mode:
  * This app is a server-rendered Next.js app (Supabase auth, API routes, Twilio,
@@ -12,7 +12,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
  * The URL is read from the CAP_SERVER_URL environment variable so you can point
  * the same project at:
  *   - your local dev machine while testing, e.g. http://192.168.1.50:3000
- *   - your production domain for release builds, e.g. https://app.lvcourier.ca
+ *   - your production domain for release builds, e.g. https://app.atria360.ca
  *
  * If CAP_SERVER_URL is not set, no server.url is emitted (Capacitor would then
  * expect bundled web assets — only relevant if you ever switch to static export).
@@ -24,8 +24,8 @@ const serverUrl = process.env.CAP_SERVER_URL?.trim()
 const isCleartext = !!serverUrl && serverUrl.startsWith('http://')
 
 const config: CapacitorConfig = {
-  appId: 'ca.lvcourier.app',
-  appName: 'LV Couriers',
+  appId: 'ca.atria360.doms',
+  appName: 'DOMS By Atria360',
   // webDir is only used when bundling static assets. In hosted-server mode it is
   // unused, but Capacitor still requires the field to exist. We point it at a
   // lightweight folder that contains a fallback page.
@@ -36,8 +36,8 @@ const config: CapacitorConfig = {
         cleartext: isCleartext,
         // Allow navigation within your own domain(s). Add production + preview here.
         allowNavigation: [
-          'app.lvcourier.ca',
-          '*.lvcourier.ca',
+          'app.atria360.ca',
+          '*.atria360.ca',
           '*.vercel.app',
         ],
       }

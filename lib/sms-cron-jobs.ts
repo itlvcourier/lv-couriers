@@ -120,9 +120,9 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
         // customer_feedback insert policy only allows the authenticated role.
         supabase,
       )
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lvcourier.ca'
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://atria360.ca'
       const feedbackUrl = `${baseUrl}/feedback/${token}`
-      const businessName = delivery.businesses?.name || 'LV Couriers'
+      const businessName = delivery.businesses?.name || 'DOMS By Atria360'
       const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
 
       const result = await sendSms({
@@ -131,7 +131,7 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
           `${greeting}, how was your delivery from ${businessName}? ` +
           `Share your feedback here: ${feedbackUrl} ` +
           `(link expires in 7 days)\n` +
-          `Reply STOP to unsubscribe. — LV Couriers`,
+          `Reply STOP to unsubscribe. — DOMS By Atria360`,
         type: 'feedback_request',
         deliveryId: delivery.id,
       })
@@ -219,7 +219,7 @@ export async function runWeeklySmsSummary(): Promise<WeeklySummaryResult> {
         body:
           `${biz.name} weekly summary (${weekLabel}): ` +
           `${count} ${count !== 1 ? 'deliveries' : 'delivery'} completed. ` +
-          `Log in for details. — LV Couriers`,
+          `Log in for details. — DOMS By Atria360`,
         type: 'weekly_summary',
       }).then((r) => ({ ok: r.ok, businessId: biz.id })),
     )

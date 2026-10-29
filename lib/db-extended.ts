@@ -287,10 +287,10 @@ export function mapSettingsRow(row: Row): SystemSettings {
     notifyTimeoutWarnings: row.notify_timeout_warnings !== false,
     notifyFlagAlerts: row.notify_flag_alerts !== false,
     // Invoice template settings
-    invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
+    invoiceCompanyName: (row.invoice_company_name as string) || 'DOMS By Atria360',
     invoiceCompanyAddress: (row.invoice_company_address as string) || '',
     invoiceCompanyPhone: (row.invoice_company_phone as string) || '',
-    invoiceCompanyEmail: (row.invoice_company_email as string) || 'billing@lv-couriers.local',
+    invoiceCompanyEmail: (row.invoice_company_email as string) || 'info@atria360.ca',
     invoiceTaxNumber: (row.invoice_tax_number as string) || '',
     invoiceTaxLabel: (row.invoice_tax_label as string) || 'GST',
     invoiceTaxRate: (row.invoice_tax_rate as number) ?? 5,

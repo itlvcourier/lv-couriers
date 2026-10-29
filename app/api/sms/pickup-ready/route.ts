@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const businessName = delivery.businesses?.name || 'LV Couriers'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
   const businessPhone = delivery.businesses?.phone || null
   const recipientName = delivery.recipient_name || 'there'
   const trackingUrl = buildTrackingUrl(deliveryId)

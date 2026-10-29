@@ -64,8 +64,8 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-1 mb-2">
-            <span className="text-4xl font-bold text-[var(--accent-orange)]">LV</span>
-            <span className="text-4xl font-normal text-foreground">COURIER</span>
+            <span className="text-4xl font-bold text-[var(--accent-orange)]">DOMS</span>
+            <span className="text-4xl font-normal text-foreground">by Atria360</span>
           </div>
           <p className="text-muted-foreground text-sm">Delivery Operations</p>
         </div>
@@ -154,27 +154,6 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo Credentials */}
-        <Card className="mt-4 bg-[var(--bg-card)] border-[var(--border-color)] border-dashed">
-          <CardContent className="py-4">
-            <p className="text-xs font-medium text-muted-foreground mb-3">Demo credentials:</p>
-            <div className="space-y-2 text-xs font-mono">
-              <div className="flex justify-between items-center p-2 bg-[var(--bg-card-2)] rounded-lg">
-                <span className="text-muted-foreground">Admin</span>
-                <span className="text-foreground">admin@lvcourier.ca / lvcourier2026</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-[var(--bg-card-2)] rounded-lg">
-                <span className="text-muted-foreground">Driver</span>
-                <span className="text-foreground">marcus@lvcourier.ca / lvcourier2026</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-[var(--bg-card-2)] rounded-lg">
-                <span className="text-muted-foreground">Business</span>
-                <span className="text-foreground">freshmart@lvcourier.ca / lvcourier2026</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Footer Links */}
         <div className="mt-6 flex flex-col items-center gap-3">
           <div className="flex items-center gap-4 text-xs">
@@ -193,7 +172,7 @@ export default function LoginPage() {
             </Link>
           </div>
           <p className="text-xs text-muted-foreground/70" suppressHydrationWarning>
-            &copy; {new Date().getFullYear()} LV Courier. All rights reserved.
+            &copy; {new Date().getFullYear()} DOMS By Atria360. All rights reserved.
           </p>
         </div>
       </div>

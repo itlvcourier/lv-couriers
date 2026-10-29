@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     // Send confirmation (skip opt-out check on the confirmation itself)
     await sendSms({
       to: from,
-      body: 'You have been unsubscribed from LV Couriers SMS notifications. Reply START to re-subscribe.',
+      body: 'You have been unsubscribed from DOMS By Atria360 SMS notifications. Reply START to re-subscribe.',
       type: 'opt_out_confirm',
       skipOptOutCheck: true,
       skipLog: false,
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     await setOptOut(from, false)
     await sendSms({
       to: from,
-      body: 'You have re-subscribed to LV Couriers SMS notifications. Reply STOP at any time to unsubscribe.',
+      body: 'You have re-subscribed to DOMS By Atria360 SMS notifications. Reply STOP at any time to unsubscribe.',
       type: 'opt_out_confirm',
       skipOptOutCheck: true,
       skipLog: false,

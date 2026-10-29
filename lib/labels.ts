@@ -216,7 +216,7 @@ function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
     <div class="label">
       <header class="hdr">
         <div class="brand">
-          <div class="biz">${escapeHtml(d.businessName || 'LV Courier')}</div>
+          <div class="biz">${escapeHtml(d.businessName || 'DOMS By Atria360')}</div>
           <div class="ship">SHIPPING LABEL${created ? ` · ${escapeHtml(created)}` : ''}</div>
         </div>
         ${d.isRush ? '<div class="rush">RUSH</div>' : ''}
@@ -247,7 +247,7 @@ function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
 
       <footer class="legal">
         Handle per privacy policy. Contains personal delivery info — do not photograph or share.
-        Misdelivered? Return to LV Courier. lvcourier.ca
+        Misdelivered? Return to DOMS By Atria360. atria360.ca
       </footer>
     </div>`
 }

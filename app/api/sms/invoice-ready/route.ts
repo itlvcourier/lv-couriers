@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     body:
       `Invoice #${invoice.invoice_number} for ${businessName} is ready. ` +
       `Total: ${total}, due ${dueDate}. ` +
-      `Log in to view and pay. — LV Couriers`,
+      `Log in to view and pay. — DOMS By Atria360`,
     type: 'invoice_ready',
     invoiceId,
   })

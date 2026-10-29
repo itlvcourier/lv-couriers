@@ -17,8 +17,8 @@ export default function PrivacyPolicyPage() {
             <span className="text-sm">Back</span>
           </Link>
           <div className="flex items-center gap-1">
-            <span className="text-lg font-bold text-[var(--accent-orange)]">LV</span>
-            <span className="text-lg font-normal text-foreground">COURIER</span>
+            <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
+            <span className="text-lg font-normal text-foreground">by Atria360</span>
           </div>
         </div>
       </header>
@@ -33,7 +33,7 @@ export default function PrivacyPolicyPage() {
             <section>
               <h2 className="text-lg font-semibold text-foreground mb-3">1. Introduction</h2>
               <p className="text-muted-foreground leading-relaxed">
-                LV Courier (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) operates the Delivery Operations Management System (DOMS). 
+                DOMS By Atria360 (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) operates the Delivery Operations Management System (DOMS). 
                 This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our 
                 delivery management platform and mobile applications.
               </p>
@@ -130,8 +130,8 @@ export default function PrivacyPolicyPage() {
                 If you have any questions about this Privacy Policy or our data practices, please contact us at:
               </p>
               <div className="mt-3 p-4 bg-[var(--bg-card-2)] rounded-lg">
-                <p className="text-foreground font-medium">LV Courier</p>
-                <p className="text-muted-foreground text-sm">Email: privacy@lvcourier.ca</p>
+                <p className="text-foreground font-medium">DOMS By Atria360</p>
+                <p className="text-muted-foreground text-sm">Email: privacy@atria360.ca</p>
                 <p className="text-muted-foreground text-sm">Phone: (604) 555-0123</p>
               </div>
             </section>
@@ -144,7 +144,7 @@ export default function PrivacyPolicyPage() {
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} LV Courier. All rights reserved.
+              &copy; {new Date().getFullYear()} DOMS By Atria360. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <Link href="/privacy" className="text-sm text-[var(--accent-orange)] font-medium">

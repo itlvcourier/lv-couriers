@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
   const trackingUrl = buildTrackingUrl(deliveryId)
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
-  const businessName = delivery.businesses?.name || 'LV Courier'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
 
   // Notify business that their order was received
   if (delivery.businesses?.phone) {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     const recipientMsg =
       `Hi ${delivery.recipient_name || 'there'}, ` +
       `${businessName} has scheduled a delivery for you. ` +
-      `Track your package: ${trackingUrl}\n\n— LV Couriers`
+      `Track your package: ${trackingUrl}\n\n— DOMS By Atria360`
 
     sends.push(
       sendSms({

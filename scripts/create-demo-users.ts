@@ -17,17 +17,17 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 
 const demoAccounts = [
   {
-    email: 'business@demo.lvcouriers.com',
+    email: 'business@demo.atria360.ca',
     password: 'Demo@123',
     metadata: { role: 'business', name: 'Downtown Deli' },
   },
   {
-    email: 'driver@demo.lvcouriers.com',
+    email: 'driver@demo.atria360.ca',
     password: 'Demo@123',
     metadata: { role: 'driver', name: 'Marcus Johnson' },
   },
   {
-    email: 'admin@demo.lvcouriers.com',
+    email: 'admin@demo.atria360.ca',
     password: 'Demo@123',
     metadata: { role: 'admin', name: 'Admin User' },
   },

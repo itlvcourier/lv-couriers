@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'DOMS - Delivery Operations Management System',
-  description: 'LV Courier Inc. - Delivery management for drivers, businesses, and administrators',
+  description: 'DOMS By Atria360 - Delivery management for drivers, businesses, and administrators',
   generator: 'v0',
 }
 
