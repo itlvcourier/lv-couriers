@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { ListPager, paginate } from '@/components/shared/ListPager'
+
+const INVOICE_PAGE_SIZE = 20
 import { useApp } from '@/lib/context'
 import type { Invoice, InvoiceStatus, Dispute, PaymentDetails, InvoiceEmailEvent, InvoiceEventType } from '@/lib/types'
 import { formatCurrency } from '@/lib/billing'
@@ -175,6 +178,9 @@ export function AdminInvoices() {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
   }, [invoices, filter])
 
+  const [invoicePage, setInvoicePage] = useState(0)
+  const { page: safeInvoicePage, rows: pagedInvoices } = paginate(filteredInvoices, invoicePage, INVOICE_PAGE_SIZE)
+
   // Counts per status
   const counts = useMemo(() => {
     const base: Record<InvoiceFilter, number> = {
@@ -326,7 +332,10 @@ export function AdminInvoices() {
         <DraftBanner
           count={draftInvoices.length}
           total={draftTotal}
-          onReviewAll={() => setFilter('draft')}
+          onReviewAll={() => {
+            setFilter('draft')
+            setInvoicePage(0)
+          }}
           onSendAll={() =>
             setShowSendModal({ invoiceIds: draftInvoices.map(i => i.id) })
           }
@@ -385,7 +394,10 @@ export function AdminInvoices() {
       </div>
 
       {/* Filter Tabs */}
-      <Tabs value={filter} onValueChange={(v) => setFilter(v as InvoiceFilter)}>
+      <Tabs value={filter} onValueChange={(v) => {
+        setFilter(v as InvoiceFilter)
+        setInvoicePage(0)
+      }}>
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
           <TabsList className="bg-muted/30 w-max min-w-full sm:min-w-0">
             {(Object.keys(filterLabels) as InvoiceFilter[]).map(key => (
@@ -437,7 +449,7 @@ export function AdminInvoices() {
             </CardContent>
           </Card>
         ) : (
-          filteredInvoices.map(invoice => (
+          pagedInvoices.map(invoice => (
             <div key={invoice.id} className="flex items-start gap-3">
               <Checkbox
                 checked={selectedIds.has(invoice.id)}
@@ -467,6 +479,14 @@ export function AdminInvoices() {
           ))
         )}
       </div>
+
+      <ListPager
+        page={safeInvoicePage}
+        pageSize={INVOICE_PAGE_SIZE}
+        total={filteredInvoices.length}
+        onPageChange={setInvoicePage}
+        itemLabel="invoices"
+      />
 
       {/* Invoice Detail Sheet */}
       <Sheet
@@ -1087,7 +1107,7 @@ function InvoiceDetail({
         <CardContent className="p-6 space-y-6">
           <div className="flex justify-between">
             <div>
-              <h3 className="text-xl font-bold text-gray-900">LV Courier Inc.</h3>
+              <h3 className="text-xl font-bold text-gray-900">DOMS By Atria360</h3>
               <p className="text-sm text-gray-600">Calgary, AB</p>
               <p className="text-sm text-gray-600">(403) 555-0100</p>
             </div>
@@ -1158,7 +1178,7 @@ function InvoiceDetail({
 
           <div className="border-t border-gray-200 pt-4 text-sm">
             <p className="font-medium text-gray-900 mb-1">Payment Instructions:</p>
-            <p className="text-gray-600">E-transfer to: lvcourieralberta@gmail.com</p>
+            <p className="text-gray-600">E-transfer to: info@atria360.ca</p>
             <p className="text-gray-600">Reference: {invoice.invoiceNumber}</p>
           </div>
         </CardContent>

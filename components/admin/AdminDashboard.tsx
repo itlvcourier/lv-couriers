@@ -45,6 +45,9 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+const LIVE_SWR = { refreshInterval: 90_000, revalidateOnFocus: false, dedupingInterval: 30_000 }
+const SLOW_SWR = { refreshInterval: 600_000, revalidateOnFocus: false, dedupingInterval: 120_000 }
+
 export function AdminDashboard() {
   // Business filter — 'all' = platform-wide, any other value = single business
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('all')
@@ -94,36 +97,30 @@ export function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useSWR(
     ['dashboard-stats', selectedBusinessId],
     () => getDashboardStats(bizFilter),
-    { refreshInterval: 30000 },
+    LIVE_SWR,
   )
 
   // Fetch deliveries — scoped to business filter
   const { data: deliveries = [], isLoading: deliveriesLoading } = useSWR(
     ['all-deliveries', selectedBusinessId],
     () => getAllDeliveries(undefined, bizFilter),
-    { refreshInterval: 15000 },
+    LIVE_SWR,
   )
 
   // Fetch drivers — always platform-wide (drivers work across businesses)
-  const { data: drivers = [], isLoading: driversLoading } = useSWR('all-drivers', getDrivers, {
-    refreshInterval: 30000,
-  })
+  const { data: drivers = [], isLoading: driversLoading } = useSWR('all-drivers', getDrivers, LIVE_SWR)
 
   // Fetch businesses — always all (used to populate the filter dropdown)
-  const { data: businesses = [], isLoading: businessesLoading } = useSWR('all-businesses', getBusinesses, {
-    refreshInterval: 60000,
-  })
+  const { data: businesses = [], isLoading: businessesLoading } = useSWR('all-businesses', getBusinesses, SLOW_SWR)
 
   // Fetch admin notifications
-  const { data: notifications = [] } = useSWR('admin-notifications', () => getAdminNotifications(10), {
-    refreshInterval: 15000,
-  })
+  const { data: notifications = [] } = useSWR('admin-notifications', () => getAdminNotifications(10), LIVE_SWR)
 
   // Fetch ratings summary — scoped to business filter
   const { data: ratings } = useSWR(
     ['admin-ratings-summary', selectedBusinessId],
     () => getAdminRatingsSummary(bizFilter),
-    { refreshInterval: 120000 },
+    SLOW_SWR,
   )
 
   const isLoading = statsLoading || deliveriesLoading || driversLoading || businessesLoading

@@ -939,7 +939,7 @@ export function AdminSettings() {
                   id="invoiceCompanyName"
                   value={localSettings.invoiceCompanyName || ''}
                   onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceCompanyName: e.target.value }))}
-                  placeholder="LV Couriers"
+                  placeholder="DOMS By Atria360"
                   className="bg-[var(--bg-card-2)]"
                 />
               </div>
@@ -1054,7 +1054,7 @@ export function AdminSettings() {
                   id="invoiceBankAccountName"
                   value={localSettings.invoiceBankAccountName || ''}
                   onChange={(e) => setLocalSettings(prev => ({ ...prev, invoiceBankAccountName: e.target.value }))}
-                  placeholder="LV Couriers Inc."
+                  placeholder="DOMS By Atria360 Inc."
                   className="bg-[var(--bg-card-2)]"
                 />
               </div>

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { DELIVERY_COLUMNS_WITHOUT_MEDIA } from '@/lib/delivery-columns'
 import type { 
   DeliveryStatus,
 } from './types'
@@ -35,8 +36,9 @@ export interface DbLocation {
   billing_email: string
   backup_email: string | null
   contact_phone: string | null
+  phone?: string | null
   created_at: string
-}
+  }
 
 export interface DbDriver {
   id: string
@@ -294,11 +296,11 @@ export async function getAllDeliveries(status?: DeliveryStatus, businessId?: str
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
-    .select(`
-      *,
-      business:businesses(id, name, email, phone),
-      location:business_locations(id, name, address),
-      driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+  .select(`
+  ${DELIVERY_COLUMNS_WITHOUT_MEDIA},
+  business:businesses(id, name, email, phone),
+  location:business_locations(id, name, address),
+  driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
       manifest_items(id, delivery_id, item_type, quantity, notes)
     `)
     .order('created_at', { ascending: false })
@@ -313,6 +315,93 @@ export async function getAllDeliveries(status?: DeliveryStatus, businessId?: str
   const { data, error } = await query
   if (error) throw error
   return data as DbDelivery[]
+}
+
+const DELIVERY_LIST_SELECT = `
+  ${DELIVERY_COLUMNS_WITHOUT_MEDIA},
+  business:businesses(id, name, email, phone),
+  location:business_locations(id, name, address),
+  driver:drivers!deliveries_driver_id_fkey(id, name, phone, status),
+  manifest_items(id, delivery_id, item_type, quantity, notes)
+`
+
+export type DeliveryPageFilters = {
+  status?: DeliveryStatus | 'all'
+  search?: string
+}
+
+function applyDeliveryFilters<Q extends { eq: Function; or: Function }>(
+  query: Q,
+  { status, search }: DeliveryPageFilters,
+): Q {
+  let q = query
+  if (status && status !== 'all') q = q.eq('status', status)
+  const term = search?.trim().replace(/[%,()*]/g, ' ').trim()
+  if (term) {
+    const like = `%${term}%`
+    q = q.or(
+      [
+        `tracking_code.ilike.${like}`,
+        `pickup_address.ilike.${like}`,
+        `dropoff_address.ilike.${like}`,
+        `recipient_name.ilike.${like}`,
+      ].join(','),
+    )
+  }
+  return q
+}
+
+/** One page of deliveries plus the total matching count, filtered in SQL. */
+export async function getDeliveriesPage(
+  page: number,
+  pageSize: number,
+  filters: DeliveryPageFilters = {},
+) {
+  const supabase = createClient()
+  const from = page * pageSize
+  const query = applyDeliveryFilters(
+    supabase
+      .from('deliveries')
+      .select(DELIVERY_LIST_SELECT, { count: 'exact' })
+      .order('created_at', { ascending: false }),
+    filters,
+  ).range(from, from + pageSize - 1)
+
+  const { data, error, count } = await query
+  if (error) throw error
+  return { rows: (data ?? []) as DbDelivery[], total: count ?? 0 }
+}
+
+/** All deliveries matching the filters, fetched in chunks (for CSV export). */
+export async function getAllDeliveriesMatching(filters: DeliveryPageFilters = {}) {
+  const chunk = 500
+  const out: DbDelivery[] = []
+  for (let page = 0; page < 40; page++) {
+    const { rows, total } = await getDeliveriesPage(page, chunk, filters)
+    out.push(...rows)
+    if (out.length >= total || rows.length < chunk) break
+  }
+  return out
+}
+
+/** Head-only counts per status bucket — no rows are transferred. */
+export async function getDeliveryStatusCounts() {
+  const supabase = createClient()
+  const count = async (statuses: DeliveryStatus[]) => {
+    const { count, error } = await supabase
+      .from('deliveries')
+      .select('id', { count: 'exact', head: true })
+      .in('status', statuses)
+    if (error) throw error
+    return count ?? 0
+  }
+  const [posted, active, delivered, flagged] = await Promise.all([
+    count(['posted']),
+    count(['claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff']),
+    count(['delivered']),
+    count(['flagged']),
+  ])
+  return { posted, active, delivered, flagged }
 }
 
 export async function getDelivery(deliveryId: string) {
@@ -855,6 +944,23 @@ export async function getLiveLocationForDelivery(
 
 export async function getDashboardStats(businessId?: string) {
   const supabase = createClient()
+  // One round-trip for all 8 counts (was 8 separate count queries).
+  const { data: rpcStats, error: rpcError } = await supabase.rpc('get_dashboard_stats', {
+    p_business_id: businessId ?? null,
+  })
+  if (!rpcError && rpcStats) {
+    return rpcStats as {
+      totalDeliveries: number
+      activeDeliveries: number
+      completedToday: number
+      postedDeliveries: number
+      totalDrivers: number
+      activeDrivers: number
+      totalBusinesses: number
+      flaggedDeliveries: number
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0]
 
   // Helper: start a delivery query optionally scoped to one business

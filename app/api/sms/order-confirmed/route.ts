@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -8,9 +8,6 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * Also sends tracking link to the recipient if phone is provided.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin(req)
-  if (isAuthError(auth)) return auth
-
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -19,6 +16,9 @@ export async function POST(req: NextRequest) {
   }
 
   const deliveryId = body.deliveryId
+
+  const auth = await requireDeliveryParty(req, deliveryId)
+  if (isAuthError(auth)) return auth
   if (!deliveryId) {
     return NextResponse.json({ error: 'deliveryId required' }, { status: 400 })
   }
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
   const trackingUrl = buildTrackingUrl(deliveryId)
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
-  const businessName = delivery.businesses?.name || 'LV Courier'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
 
   // Notify business that their order was received
   if (delivery.businesses?.phone) {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     const recipientMsg =
       `Hi ${delivery.recipient_name || 'there'}, ` +
       `${businessName} has scheduled a delivery for you. ` +
-      `Track your package: ${trackingUrl}\n\n— LV Couriers`
+      `Track your package: ${trackingUrl}\n\n— DOMS By Atria360`
 
     sends.push(
       sendSms({

@@ -3,6 +3,7 @@
  * Maps DB snake_case rows to the app's camelCase types in lib/types.ts.
  */
 import { createClient } from '@/lib/supabase/client'
+import { DELIVERY_COLUMNS_WITHOUT_MEDIA } from '@/lib/delivery-columns'
 import { getFeatureSettings } from '@/lib/feature-settings'
 import { assignZonesForDelivery } from '@/lib/custody'
 import type {
@@ -62,7 +63,7 @@ export function mapLocationRow(row: Row): BusinessLocation {
     billingEmail: (row.billing_email as string) || '',
     backupEmail: (row.backup_email as string) || '',
     contactName: (row.contact_name as string) || '',
-    phone: (row.phone as string) || '',
+    phone: (row.phone as string) || (row.contact_phone as string) || '',
     savedAddresses: [],
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
@@ -286,10 +287,10 @@ export function mapSettingsRow(row: Row): SystemSettings {
     notifyTimeoutWarnings: row.notify_timeout_warnings !== false,
     notifyFlagAlerts: row.notify_flag_alerts !== false,
     // Invoice template settings
-    invoiceCompanyName: (row.invoice_company_name as string) || 'LV Couriers',
+    invoiceCompanyName: (row.invoice_company_name as string) || 'DOMS By Atria360',
     invoiceCompanyAddress: (row.invoice_company_address as string) || '',
     invoiceCompanyPhone: (row.invoice_company_phone as string) || '',
-    invoiceCompanyEmail: (row.invoice_company_email as string) || 'billing@lv-couriers.local',
+    invoiceCompanyEmail: (row.invoice_company_email as string) || 'info@atria360.ca',
     invoiceTaxNumber: (row.invoice_tax_number as string) || '',
     invoiceTaxLabel: (row.invoice_tax_label as string) || 'GST',
     invoiceTaxRate: (row.invoice_tax_rate as number) ?? 5,
@@ -439,25 +440,125 @@ export async function loadSettings(): Promise<SystemSettings> {
   return mapSettingsRow(data as Row)
 }
 
+// `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
+// name the relationship explicitly or PostgREST errors as ambiguous.
+const DELIVERY_SELECT = `${DELIVERY_COLUMNS_WITHOUT_MEDIA}, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)`
+
+export type DeliveryMedia = {
+  proofPhotoUrl: string | null
+  proofPhotoUrls: string[]
+  signatureUrl: string | null
+}
+
+/** Proof-of-delivery photos + signature for one delivery (excluded from lists). */
+export async function loadDeliveryMedia(deliveryId: string): Promise<DeliveryMedia> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select('proof_photo_url, proof_photo_urls, signature_url')
+    .eq('id', deliveryId)
+    .maybeSingle()
+  if (error) throw error
+  const primary = (data?.proof_photo_url as string | null) ?? null
+  const all = Array.isArray(data?.proof_photo_urls) ? (data!.proof_photo_urls as string[]) : []
+  return {
+    proofPhotoUrl: primary,
+    proofPhotoUrls: all.length ? all : primary ? [primary] : [],
+    signatureUrl: (data?.signature_url as string | null) ?? null,
+  }
+}
+
+function maxUpdatedAt(rows: Row[], fallback: string | null): string | null {
+  let max = fallback
+  for (const r of rows) {
+    const u = r.updated_at as string | undefined
+    if (u && (!max || u > max)) max = u
+  }
+  return max
+}
+
+/**
+ * What a driver needs: open jobs, parcels waiting at a hub, and anything they
+ * are (or were) attached to. Everything else is another driver's business.
+ */
+function driverScopeFilter(driverId: string): string {
+  return [
+    'status.eq.posted',
+    'leg_status.eq.at_hub',
+    `driver_id.eq.${driverId}`,
+    `pickup_driver_id.eq.${driverId}`,
+    `holder_driver_id.eq.${driverId}`,
+    `sorted_for_driver_id.eq.${driverId}`,
+  ].join(',')
+}
+
+export function isDeliveryRelevantToDriver(d: Delivery, driverId: string): boolean {
+  return (
+    d.status === 'posted' ||
+    d.legStatus === 'at_hub' ||
+    d.driverId === driverId ||
+    d.holderDriverId === driverId ||
+    d.sortedForDriverId === driverId
+  )
+}
+
+/**
+ * Full load. Also returns a cursor (the newest `updated_at` seen, taken from
+ * the server's clock) so later refreshes can ask only for rows changed since.
+ */
+export async function loadDeliveriesWithCursor(profile: {
+  role: string
+  businessId: string | null
+  driverId: string | null
+}): Promise<{ deliveries: Delivery[]; cursor: string | null }> {
+  const supabase = createClient()
+  let query = supabase
+    .from('deliveries')
+    .select(DELIVERY_SELECT)
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (profile.role === 'business' && profile.businessId) {
+    query = query.eq('business_id', profile.businessId)
+  } else if (profile.role === 'driver' && profile.driverId) {
+    query = query.or(driverScopeFilter(profile.driverId))
+  }
+  const { data, error } = await query
+  if (error) throw error
+  const rows = (data || []) as Row[]
+  return { deliveries: rows.map((row) => mapDeliveryRow(row)), cursor: maxUpdatedAt(rows, null) }
+}
+
 export async function loadDeliveries(profile: {
   role: string
   businessId: string | null
   driverId: string | null
 }): Promise<Delivery[]> {
+  return (await loadDeliveriesWithCursor(profile)).deliveries
+}
+
+/**
+ * Incremental load: only deliveries whose `updated_at` moved past the cursor.
+ * Usually returns zero rows, so a refresh tick costs one tiny indexed query
+ * instead of re-downloading every delivery with its manifest.
+ */
+export async function loadDeliveriesChangedSince(
+  profile: { role: string; businessId: string | null; driverId: string | null },
+  since: string,
+): Promise<{ deliveries: Delivery[]; cursor: string }> {
   const supabase = createClient()
   let query = supabase
     .from('deliveries')
-    // `driver_id` and `pickup_driver_id` both FK to drivers, so the embed must
-    // name the relationship explicitly or PostgREST errors as ambiguous.
-    .select('*, business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name), manifest_items(*)')
-    .order('created_at', { ascending: false })
-    .limit(500)
+    .select(DELIVERY_SELECT)
+    .gt('updated_at', since)
+    .order('updated_at', { ascending: true })
+    .limit(200)
   if (profile.role === 'business' && profile.businessId) {
     query = query.eq('business_id', profile.businessId)
   }
   const { data, error } = await query
   if (error) throw error
-  return (data || []).map((row: Row) => mapDeliveryRow(row))
+  const rows = (data || []) as Row[]
+  return { deliveries: rows.map((row) => mapDeliveryRow(row)), cursor: maxUpdatedAt(rows, since) ?? since }
 }
 
 export async function loadInvoices(profile: {
@@ -1020,7 +1121,21 @@ export async function insertAdminNotification(
     })
     .select('*')
     .single()
-  if (error) throw error
+  if (error) {
+    // 23505 = the one-alert-per-delivery unique index already has this alert
+    // (another tab or session created it first). Return the existing row.
+    if (error.code === '23505' && input.deliveryId) {
+      const { data: existing } = await supabase
+        .from('admin_notifications')
+        .select('*')
+        .eq('notification_type', input.type)
+        .eq('delivery_id', input.deliveryId)
+        .limit(1)
+        .maybeSingle()
+      if (existing) return mapAdminNotificationRow(existing as Row)
+    }
+    throw error
+  }
   return mapAdminNotificationRow(data as Row)
 }
 
@@ -1427,42 +1542,24 @@ export async function createFeedbackToken(
 export async function getFeedbackByToken(token: string): Promise<CustomerFeedback | null> {
   const supabase = createClient()
   
-  const { data, error } = await supabase
-    .from('customer_feedback')
-    .select('*')
-    .eq('token', token)
-    .maybeSingle()
-  
+  // Token, expiry and already-submitted checks happen inside the RPC; the
+  // table itself is not readable without signing in.
+  const { data, error } = await supabase.rpc('get_feedback_by_token', { p_token: token })
+
   if (error) {
     console.error('[v0] Failed to fetch feedback by token:', error?.message)
     return null
   }
-  
-  if (!data) {
-    console.log('[v0] Feedback not found for token:', token)
-    return null
-  }
-  
-  // Check if token is expired
-  if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) {
-    console.log('[v0] Feedback token expired:', token)
-    return null
-  }
-  
-  // Check if feedback was already submitted
-  if (data.feedback_received) {
-    console.log('[v0] Feedback already submitted for token:', token)
-    return null
-  }
-  
-  return mapCustomerFeedbackRow(data)
+
+  const row = Array.isArray(data) ? data[0] : data
+  return row ? mapCustomerFeedbackRow(row) : null
 }
 
 /**
  * Submit customer feedback
  */
 export async function submitCustomerFeedback(
-  feedbackId: string,
+  token: string,
   driverRating: number,
   businessRating: number,
   driverProfessionalism: number | null,
@@ -1476,32 +1573,28 @@ export async function submitCustomerFeedback(
 ): Promise<CustomerFeedback> {
   const supabase = createClient()
   
-  const { data, error } = await supabase
-    .from('customer_feedback')
-    .update({
-      driver_rating: driverRating,
-      business_rating: businessRating,
-      driver_professionalism: driverProfessionalism,
-      driver_timeliness: driverTimeliness,
-      driver_package_handling: driverPackageHandling,
-      business_packaging: businessPackaging,
-      business_accuracy: businessAccuracy,
-      comment,
-      reported_issues: reportedIssues,
-      issue_details: issueDetails,
-      feedback_received: true,
-      submitted_at: new Date().toISOString(),
-    })
-    .eq('id', feedbackId)
-    .select('*')
-    .single()
-  
+  const { data, error } = await supabase.rpc('submit_feedback_by_token', {
+    p_token: token,
+    p_driver_rating: driverRating,
+    p_business_rating: businessRating,
+    p_driver_professionalism: driverProfessionalism,
+    p_driver_timeliness: driverTimeliness,
+    p_driver_package_handling: driverPackageHandling,
+    p_business_packaging: businessPackaging,
+    p_business_accuracy: businessAccuracy,
+    p_comment: comment,
+    p_reported_issues: reportedIssues,
+    p_issue_details: issueDetails,
+  })
+
   if (error) {
     console.error('[v0] Failed to submit feedback:', error.message)
     throw error
   }
-  
-  return mapCustomerFeedbackRow(data)
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) throw new Error('Feedback link has expired or was already used')
+  return mapCustomerFeedbackRow(row)
 }
 
 /**
@@ -1804,6 +1897,25 @@ export async function updateDeliveryDistance(
     return false
   }
 
+  return true
+}
+
+/**
+ * Persists a driver's stop sequence on the deliveries themselves, so it works
+ * whether or not the jobs belong to a stored trip. RLS limits drivers to their own rows.
+ */
+export async function updateDeliverySequence(orderedDeliveryIds: string[]): Promise<boolean> {
+  const supabase = createClient()
+  const results = await Promise.all(
+    orderedDeliveryIds.map((deliveryId, index) =>
+      supabase.from('deliveries').update({ trip_order: index }).eq('id', deliveryId),
+    ),
+  )
+  const failed = results.find((r) => r.error)
+  if (failed) {
+    console.error('Failed to save stop sequence:', failed.error?.message)
+    return false
+  }
   return true
 }
 

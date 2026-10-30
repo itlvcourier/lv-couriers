@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
   try {
     // Create feedback token and get the link
     const token = await createFeedbackToken(delivery.id, delivery.driver_id, delivery.business_id, delivery.location_id)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lvcourier.ca'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://atria360.ca'
     const feedbackUrl = `${baseUrl}/feedback/${token}`
     
-    const businessName = delivery.businesses?.name || 'LV Couriers'
+    const businessName = delivery.businesses?.name || 'DOMS By Atria360'
     const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
 
     const result = await sendSms({
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         `${greeting}, how was your delivery from ${businessName}? ` +
         `Share your feedback here: ${feedbackUrl} ` +
         `(link expires in 7 days)\n` +
-        `Reply STOP to unsubscribe. — LV Couriers`,
+        `Reply STOP to unsubscribe. — DOMS By Atria360`,
       type: 'feedback_request',
       deliveryId,
     })

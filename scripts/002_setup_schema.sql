@@ -1,4 +1,4 @@
--- LV Couriers Database Schema (Simplified)
+-- DOMS By Atria360 Database Schema (Simplified)
 -- Drop existing tables if they exist
 DROP TABLE IF EXISTS activity_events CASCADE;
 DROP TABLE IF EXISTS status_history CASCADE;

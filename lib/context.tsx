@@ -40,12 +40,17 @@ import type {
 import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES, calculateBreakdown } from './billing'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 import { unregisterDevicePush } from '@/lib/native/push'
+import { isPageHidden } from '@/lib/visibility'
+
+const FULL_REFRESH_MS = 5 * 60_000
 import {
   loadAllBusinesses,
   loadAllDrivers,
   loadAllRateCards,
   loadSettings,
-  loadDeliveries,
+  loadDeliveriesWithCursor,
+  loadDeliveriesChangedSince,
+  isDeliveryRelevantToDriver,
   loadInvoices,
   createDeliveryInDb,
   updateDeliveryFields,
@@ -79,7 +84,9 @@ import {
   updateLocationBillingEmails,
   updateLocationCoordinates,
   updateTripOrder,
+  updateDeliverySequence,
 } from './db-extended'
+import { claimDelivery as claimDeliveryInDb } from './db'
 
 // Default settings used before system_settings has been loaded from the DB.
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -144,6 +151,29 @@ const DEFAULT_SETTINGS: SystemSettings = {
 
 // Fire-and-forget DB persistence. Logs errors so we can diagnose without
 // blocking the optimistic UI update.
+/**
+ * fetch() for our own API routes that always carries the Supabase access
+ * token. Cookie-only auth silently 401'd in embedded/mobile contexts, which
+ * meant notification texts were never sent. Non-2xx responses are logged so
+ * failures are no longer invisible.
+ */
+async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers)
+  try {
+    const { data } = await createSupabaseClient().auth.getSession()
+    const token = data.session?.access_token
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+  } catch {
+    // Fall back to cookie auth
+  }
+  const res = await fetch(url, { ...init, headers, credentials: 'same-origin' })
+  if (!res.ok) {
+    // eslint-disable-next-line no-console
+    console.error(`[api] ${url} -> ${res.status}`, await res.clone().text().catch(() => ''))
+  }
+  return res
+}
+
 function persist<T>(promise: Promise<T>, label: string): void {
   promise.catch(err => {
     // eslint-disable-next-line no-console
@@ -175,7 +205,7 @@ interface AppContextType {
   switchLocation: (locationId: string) => void
   
   // Delivery functions
-  claimDelivery: (deliveryId: string, driverId: string) => void
+  claimDelivery: (deliveryId: string, driverId: string) => Promise<{ success: boolean; error?: string }>
   verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => void
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (
@@ -285,9 +315,10 @@ interface AppContextType {
   trips: Trip[]
   driverReports: DriverMonthlyReport[]
   timeoutWarnings: TimeoutWarning[]
-  claimMultiple: (deliveryIds: string[], driverId: string) => void
+  claimMultiple: (deliveryIds: string[], driverId: string) => Promise<{ claimed: number; failed: number }>
   addJobToTrip: (tripId: string, deliveryId: string) => void
   reorderTrip: (tripId: string, newOrder: string[]) => void
+  setDriverSequence: (orderedDeliveryIds: string[]) => Promise<boolean>
   retryDelivery: (deliveryId: string) => void
   escalateDelivery: (deliveryId: string) => void
   checkDuplicateAddress: (dropoffAddress: string, businessId: string, locationId: string) => Delivery | null
@@ -346,6 +377,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [driverReports] = useState<DriverMonthlyReport[]>([])
   const [timeoutWarnings, setTimeoutWarnings] = useState<TimeoutWarning[]>([])
   const [savedContacts, setSavedContacts] = useState<SavedContact[]>([])
+  const deliveriesCursorRef = useRef<string | null>(null)
+  const lastFullRefreshRef = useRef(0)
+  const businessesRef = useRef<Business[]>([])
+  const adminNotificationsLoadedRef = useRef(false)
+  const currentUserRoleRef = useRef<UserRole | null>(null)
+  useEffect(() => {
+    currentUserRoleRef.current = currentUser?.role ?? null
+    if (!currentUser) {
+      deliveriesCursorRef.current = null
+      adminNotificationsLoadedRef.current = false
+    }
+  }, [currentUser])
 
   // -------------------------------------------------------------------------
   // Hydration: fetch the profile + all core entities after a Supabase session
@@ -359,16 +402,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         businessId: user.businessId || null,
         driverId: user.driverId || null,
       }
-      const [b, d, rc, s, dl, inv] = await Promise.all([
+      // Start the secondary entities right away instead of waiting for the
+      // core batch; only disputes depend on invoices.
+      const invoicesPromise = loadInvoices(profile).catch(() => [] as Invoice[])
+      const secondaryPromise = Promise.all([
+        loadSavedContacts(profile).catch(() => [] as SavedContact[]),
+        loadAdminNotifications(profile).catch(() => [] as AdminNotification[]),
+        loadSMSLog(profile).catch(() => [] as SMSLogEntry[]),
+        invoicesPromise.then((list) => loadDisputes(list)).catch(() => [] as Dispute[]),
+      ])
+      const [b, d, rc, s, dlRes, inv] = await Promise.all([
         loadAllBusinesses().catch(() => [] as Business[]),
         loadAllDrivers().catch(() => [] as Driver[]),
         loadAllRateCards().catch(() => [] as RateCard[]),
         loadSettings().catch(() => DEFAULT_SETTINGS),
-        loadDeliveries(profile).catch(() => [] as Delivery[]),
-        loadInvoices(profile).catch(() => [] as Invoice[]),
+        loadDeliveriesWithCursor(profile).catch(() => ({ deliveries: [] as Delivery[], cursor: null })),
+        invoicesPromise,
       ])
+      const dl = dlRes.deliveries
+      deliveriesCursorRef.current = dlRes.cursor
+      lastFullRefreshRef.current = Date.now()
       // Backfill businessName on deliveries using the businesses we loaded.
       const byBizId = new Map(b.map(biz => [biz.id, biz.name]))
+      businessesRef.current = b
       setBusinesses(b)
       setDrivers(d)
       setRateCards(rc)
@@ -376,17 +432,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDeliveries(dl.map(x => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })))
       setInvoices(inv)
 
-      // Turn 2 entities: saved contacts, admin notifications, SMS log, disputes.
-      // These depend on the data we just loaded (disputes need invoices for
-      // enrichment), so we run them in a second parallel batch.
-      const [contacts, notifs, sms, disputesLoaded] = await Promise.all([
-        loadSavedContacts(profile).catch(() => [] as SavedContact[]),
-        loadAdminNotifications(profile).catch(() => [] as AdminNotification[]),
-        loadSMSLog(profile).catch(() => [] as SMSLogEntry[]),
-        loadDisputes(inv).catch(() => [] as Dispute[]),
-      ])
+      const [contacts, notifs, sms, disputesLoaded] = await secondaryPromise
       setSavedContacts(contacts)
+      adminNotificationsRef.current = notifs
       setAdminNotifications(notifs)
+      adminNotificationsLoadedRef.current = true
       setSMSLog(sms)
       setDisputes(disputesLoaded)
     } catch (err) {
@@ -402,6 +452,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // on an interval. This is what makes a business-created delivery show up in
   // an already-open driver session, and keeps every role's data fresh.
   // -------------------------------------------------------------------------
+  //
+  // Two tiers to keep Supabase load low:
+  //  - every tick: fetch only deliveries changed since the last cursor
+  //    (usually 0 rows) and merge them in.
+  //  - every FULL_REFRESH_MS: full reload of deliveries + reference data
+  //    (businesses, drivers, settings, invoices), which also picks up deletes.
   const refreshData = useCallback(async () => {
     if (!currentUser) return
     const profile = {
@@ -409,29 +465,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
       businessId: currentUser.businessId || null,
       driverId: currentUser.driverId || null,
     }
+    const withBizName = (list: Delivery[], bizList: Business[]) => {
+      const byBizId = new Map(bizList.map((biz) => [biz.id, biz.name]))
+      return list.map((x) => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' }))
+    }
     try {
-      const [b, d, dl, inv, s] = await Promise.all([
-        loadAllBusinesses().catch(() => null),
-        loadAllDrivers().catch(() => null),
-        loadDeliveries(profile).catch(() => null),
-        loadInvoices(profile).catch(() => null),
-        loadSettings().catch(() => null),
-      ])
-      if (b) setBusinesses(b)
-      if (d) setDrivers(d)
-      if (s) setSettings(s)
-      if (dl) {
-        const byBizId = new Map((b || businesses).map((biz) => [biz.id, biz.name]))
-        setDeliveries(
-          dl.map((x) => (x.businessName ? x : { ...x, businessName: byBizId.get(x.businessId) || '' })),
-        )
+      const cursor = deliveriesCursorRef.current
+      const fullDue = !cursor || Date.now() - lastFullRefreshRef.current >= FULL_REFRESH_MS
+
+      if (fullDue) {
+        const [b, d, dlRes, inv, s] = await Promise.all([
+          loadAllBusinesses().catch(() => null),
+          loadAllDrivers().catch(() => null),
+          loadDeliveriesWithCursor(profile).catch(() => null),
+          loadInvoices(profile).catch(() => null),
+          loadSettings().catch(() => null),
+        ])
+        lastFullRefreshRef.current = Date.now()
+        if (b) {
+          businessesRef.current = b
+          setBusinesses(b)
+        }
+        if (d) setDrivers(d)
+        if (s) setSettings(s)
+        if (dlRes) {
+          deliveriesCursorRef.current = dlRes.cursor
+          setDeliveries(withBizName(dlRes.deliveries, businessesRef.current))
+        }
+        if (inv) setInvoices(inv)
+        return
       }
-      if (inv) setInvoices(inv)
+
+      const delta = await loadDeliveriesChangedSince(profile, cursor)
+      deliveriesCursorRef.current = delta.cursor
+      if (delta.deliveries.length === 0) return
+      const changed = withBizName(delta.deliveries, businessesRef.current)
+      // Drivers get an unscoped delta (so a job claimed by someone else still
+      // arrives and can be dropped); keep only rows that still concern them.
+      const driverId = profile.role === 'driver' ? profile.driverId : null
+      const relevant = (x: Delivery) => !driverId || isDeliveryRelevantToDriver(x, driverId)
+      setDeliveries((prev) => {
+        const byId = new Map(changed.map((x) => [x.id, x]))
+        const merged = prev
+          .map((x) => byId.get(x.id) ?? x)
+          .filter((x) => !byId.has(x.id) || relevant(x))
+        const existing = new Set(prev.map((x) => x.id))
+        const added = changed.filter((x) => !existing.has(x.id) && relevant(x))
+        return added.length ? [...added, ...merged] : merged
+      })
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[db] refresh failed', err)
     }
-  }, [currentUser, businesses])
+  }, [currentUser])
 
   // Build an app-level user object from a Supabase auth user. All role +
   // linkage info lives in raw_user_meta_data (set when the account was
@@ -454,7 +540,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: meta.full_name || authUser.email || '',
       businessId: meta.business_id || undefined,
       locationId: meta.location_id || undefined,
-      driverId: meta.driver_id || undefined,
+      // Invited drivers share their auth id with their drivers row, so fall
+      // back to it for accounts created before driver_id was stored.
+      driverId: meta.driver_id || (role === 'driver' ? authUser.id : undefined),
     }
   }, [])
 
@@ -494,13 +582,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let lastRefreshAt = 0
     const DEBOUNCE_MS = 20_000
     const maybeFetch = () => {
+      if (isPageHidden()) return
       const now = Date.now()
       if (now - lastRefreshAt >= DEBOUNCE_MS) {
         lastRefreshAt = now
         void refreshData()
       }
     }
-    const interval = setInterval(maybeFetch, 60_000)
+    // Realtime pushes delivery changes, so this poll is only a safety net.
+    const interval = setInterval(maybeFetch, 180_000)
     const onFocus = () => maybeFetch()
     const onVisible = () => { if (document.visibilityState === 'visible') maybeFetch() }
     window.addEventListener('focus', onFocus)
@@ -509,6 +599,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearInterval(interval)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [currentUser, isHydrating, refreshData])
+
+  // Supabase Realtime: when a delivery row changes, run the cheap delta
+  // refresh (debounced, so a burst of scans becomes one query). Replaces
+  // most of the polling load.
+  useEffect(() => {
+    if (!currentUser || isHydrating) return
+    const supabase = createSupabaseClient()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (timer || isPageHidden()) return
+      timer = setTimeout(() => {
+        timer = null
+        void refreshData()
+      }, 1500)
+    }
+    const filter =
+      currentUser.role === 'business' && currentUser.businessId
+        ? `business_id=eq.${currentUser.businessId}`
+        : undefined
+    const channel = supabase
+      .channel(`deliveries-live-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'deliveries', ...(filter ? { filter } : {}) },
+        (payload: { eventType: string; old: unknown }) => {
+          if (payload.eventType === 'DELETE') {
+            const id = (payload.old as { id?: string } | null)?.id
+            if (id) setDeliveries((prev) => prev.filter((x) => x.id !== id))
+            return
+          }
+          scheduleRefresh()
+        },
+      )
+      .subscribe()
+    return () => {
+      if (timer) clearTimeout(timer)
+      void supabase.removeChannel(channel)
     }
   }, [currentUser, isHydrating, refreshData])
 
@@ -583,30 +712,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [getDriverActiveJobs, getDriverMaxJobs])
 
   // Delivery functions
-  const claimDelivery = useCallback((deliveryId: string, driverId: string) => {
-    // Block self-claim if admin assignment mode is active
+  const claimDelivery = useCallback(async (deliveryId: string, driverId: string) => {
     if (!settings.allowDriverSelfClaim) {
-      console.warn('[v0] Self-claim blocked: dispatch assignment mode is active')
-      return
+      return { success: false, error: 'Jobs are currently assigned by dispatch.' }
     }
-    const driver = drivers.find(d => d.id === driverId)
-    if (!driver) return
+    if (!driverId) {
+      return { success: false, error: 'Your account is not linked to a driver profile.' }
+    }
+    const driverName =
+      drivers.find(d => d.id === driverId)?.name || currentUser?.name || 'Driver'
 
-    persist(
-      updateDeliveryFields(deliveryId, {
-        driver_id: driverId,
-        status: 'claimed',
-        claimed_at: new Date().toISOString(),
-      }),
-      'claimDelivery',
-    )
+    // Atomic: only succeeds while the job is still 'posted', so two drivers
+    // can't claim the same delivery and the UI never shows a phantom claim.
+    try {
+      await claimDeliveryInDb(deliveryId, driverId)
+    } catch (err) {
+      console.error('[db] claimDelivery failed:', (err as Error)?.message || err)
+      void refreshData()
+      return { success: false, error: 'This job is no longer available.' }
+    }
 
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
         return {
           ...d,
           driverId,
-          driverName: driver.name,
+          driverName,
           status: 'claimed' as DeliveryStatus,
           claimedAt: new Date().toISOString(),
           statusHistory: [
@@ -614,7 +745,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             {
               status: 'claimed' as DeliveryStatus,
               timestamp: new Date().toISOString(),
-              note: `Claimed by ${driver.name}`,
+              note: `Claimed by ${driverName}`,
               gpsLat: null,
               gpsLng: null,
             },
@@ -624,13 +755,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
 
-    // Fire-and-forget: notify driver with job details + notify business that driver assigned
-    void fetch('/api/sms/driver-assigned', {
+    void authedFetch('/api/sms/driver-assigned', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, driverId }),
-    }).catch(err => console.error('[v0] driver-assigned SMS failed', err))
-  }, [drivers, settings.allowDriverSelfClaim])
+    }).catch(err => console.error('[sms] driver-assigned failed', err))
+
+    return { success: true }
+  }, [drivers, currentUser?.name, settings.allowDriverSelfClaim, refreshData])
 
   const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
     // Persist the verified qty + rate to the DB. Rate calculation happens
@@ -739,7 +871,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // when the package is actually picked up (below).
         // When package is picked up — notify business
         if (next === 'picked_up') {
-          void fetch('/api/sms/picked-up', {
+          void authedFetch('/api/sms/picked-up', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ deliveryId }),
@@ -747,7 +879,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         // When the package starts heading to the recipient, SMS them.
         if (next === 'en_route_dropoff') {
-          void fetch('/api/sms/pickup-ready', {
+          void authedFetch('/api/sms/pickup-ready', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ deliveryId }),
@@ -803,36 +935,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const durationMins = pickedUpAt ? Math.round((now.getTime() - pickedUpAt.getTime()) / 60000) : null
     // First photo remains the primary proof; the full set is stored as an array.
     const primaryPhoto = photoUrls[0] ?? null
-    persist(
-      updateDeliveryFields(deliveryId, {
-        status: 'delivered',
-        delivered_at: now.toISOString(),
-        duration_mins: durationMins,
-        proof_photo_url: primaryPhoto,
-        proof_photo_urls: photoUrls,
-        signature_url: signatureUrl ?? null,
-        recipient_note: recipientNote,
-      }),
-      'completeDelivery',
-    )
-    // Fire-and-forget: notify both the recipient and the business that the
-    // package was delivered. Both link to /track/<id> which renders the proof
-    // photo + signature so each side has a verifiable record.
-    void fetch('/api/sms/delivered', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deliveryId }),
-    }).catch(err => console.error('[v0] delivered SMS failed', err))
-    
-    // Schedule the review request instead of sending it now. Firing it here
-    // would land a second text within a second of the "delivered" one, before
-    // the customer has even handled the parcel. The /api/cron/review-requests
-    // sweep picks this up once review_request_due_at has passed.
-    void fetch('/api/reviews/schedule', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deliveryId }),
-    }).catch(err => console.error('[v0] review request scheduling failed', err))
+    // Both server routes only act on rows whose status is already 'delivered',
+    // so they must run after the write commits — firing them in parallel made
+    // them see the old status and silently skip the texts.
+    void updateDeliveryFields(deliveryId, {
+      status: 'delivered',
+      delivered_at: now.toISOString(),
+      duration_mins: durationMins,
+      proof_photo_url: primaryPhoto,
+      proof_photo_urls: photoUrls,
+      signature_url: signatureUrl ?? null,
+      recipient_note: recipientNote,
+    })
+      .then(() => {
+        const init = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deliveryId }),
+        }
+        // Recipient + business get the proof-of-delivery tracking link now.
+        void authedFetch('/api/sms/delivered', init).catch(err =>
+          console.error('[sms] delivered failed', err),
+        )
+        // The review request is queued (not sent now) so it doesn't land a
+        // second after the "delivered" text; the cron sweep sends it later.
+        void authedFetch('/api/reviews/schedule', init).catch(err =>
+          console.error('[sms] review scheduling failed', err),
+        )
+      })
+      .catch(err => console.error('[db] completeDelivery failed:', err?.message || err))
     
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
@@ -901,7 +1032,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       'failDelivery',
     )
     // Fire-and-forget: notify recipient and business of failed attempt
-    void fetch('/api/sms/failed-attempt', {
+    void authedFetch('/api/sms/failed-attempt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, retryCount: retriesSoFar + 1 }),
@@ -1019,6 +1150,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const sweep = () => {
       if (!settingsRef.current.notifyTimeoutWarnings) return
+      // Only an admin session (with its notifications already loaded) can
+      // dedupe correctly. Driver/business sessions never load admin
+      // notifications, so they used to re-insert the same alert on every
+      // reload (61 copies per delivery).
+      if (currentUserRoleRef.current !== 'admin' || !adminNotificationsLoadedRef.current) return
 
       for (const d of deliveries) {
         if (!IN_FLIGHT.includes(d.status)) continue
@@ -1184,14 +1320,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
 
       // Fire-and-forget: broadcast SMS alert to all on-duty drivers.
-      void fetch('/api/sms/job-alert', {
+      void authedFetch('/api/sms/job-alert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId: saved.id }),
       }).catch(err => console.error('[v0] job-alert SMS failed', err))
 
       // Fire-and-forget: confirm order to business + send tracking to recipient
-      void fetch('/api/sms/order-confirmed', {
+      void authedFetch('/api/sms/order-confirmed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId: saved.id }),
@@ -1199,7 +1335,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Fire-and-forget: geocode pickup/dropoff addresses so the track page can
       // show map pins. This runs async and updates the row via realtime.
-      void fetch('/api/delivery/geocode', {
+      void authedFetch('/api/delivery/geocode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId: saved.id }),
@@ -1262,7 +1398,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return d
     }))
     // Fire-and-forget: notify new driver, old driver (if any), and business
-    void fetch('/api/sms/reassigned', {
+    void authedFetch('/api/sms/reassigned', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deliveryId, newDriverId, oldDriverId }),
@@ -1298,7 +1434,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'cancelOrderByBusiness',
       )
       // Fire-and-forget: notify all parties of cancellation
-      void fetch('/api/sms/cancelled', {
+      void authedFetch('/api/sms/cancelled', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId }),
@@ -1393,7 +1529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
 
       // Fire-and-forget: notify driver of the assignment
-      void fetch('/api/sms/driver-assigned', {
+      void authedFetch('/api/sms/driver-assigned', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deliveryId, driverId }),
@@ -2306,7 +2442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return inv
     }))
     // Fire-and-forget: SMS billing contact that payment was received
-    void fetch('/api/sms/payment-received', {
+    void authedFetch('/api/sms/payment-received', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoiceId }),
@@ -2393,7 +2529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }))
 
       // Fire-and-forget: SMS the billing contact that their invoice is ready
-      void fetch('/api/sms/invoice-ready', {
+      void authedFetch('/api/sms/invoice-ready', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId }),
@@ -2444,7 +2580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Fire-and-forget email each invoice the server-side route will persist +
     // send via Resend + schedule reminder events.
     for (const inv of sent) {
-      void fetch('/api/email/invoice-sent', {
+      void authedFetch('/api/email/invoice-sent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId: inv.id }),
@@ -2571,7 +2707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDisputes(prev =>
           prev.map(d => (d.id === newDispute.id ? { ...d, id, createdAt } : d)),
         )
-        void fetch('/api/email/dispute-raised', {
+        void authedFetch('/api/email/dispute-raised', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ disputeId: id }),
@@ -2623,7 +2759,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     persist(
       resolveDisputeInDb(disputeId, action, adminNote, creditAmount ?? null).then(() => {
-        void fetch('/api/email/dispute-resolved', {
+        void authedFetch('/api/email/dispute-resolved', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ disputeId }),
@@ -2703,7 +2839,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       recipientName: 'Recipient',
       recipientPhone,
       type: 'tracking_link',
-      message: `Your LV Courier delivery is on the way! Track: lvcourier.ca/track/${trackingCode}`,
+      message: `Your DOMS By Atria360 delivery is on the way! Track: atria360.ca/track/${trackingCode}`,
       status: 'sent',
       sentAt: new Date().toISOString(),
       deliveredAt: null,
@@ -2782,11 +2918,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [deliveries])
 
   // Phase 4: Multi-Stop & Advanced functions
-  const claimMultiple = useCallback((deliveryIds: string[], driverId: string) => {
-    const driver = drivers.find(d => d.id === driverId)
-    if (!driver) return
+  const claimMultiple = useCallback(async (requestedIds: string[], driverId: string) => {
+    if (!driverId || !settings.allowDriverSelfClaim) {
+      return { claimed: 0, failed: requestedIds.length }
+    }
+    const driverName =
+      drivers.find(d => d.id === driverId)?.name || currentUser?.name || 'Driver'
 
-    // Create a new trip
+    const results = await Promise.allSettled(
+      requestedIds.map(id => claimDeliveryInDb(id, driverId)),
+    )
+    const deliveryIds = requestedIds.filter((_, i) => results[i].status === 'fulfilled')
+    const failed = requestedIds.length - deliveryIds.length
+    if (failed > 0) void refreshData()
+    if (deliveryIds.length === 0) return { claimed: 0, failed }
+
     const newTrip: Trip = {
       id: `trip-${Date.now()}`,
       driverId,
@@ -2799,13 +2945,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setTrips(prev => [...prev, newTrip])
 
-    // Claim all deliveries
+    for (const deliveryId of deliveryIds) {
+      void authedFetch('/api/sms/driver-assigned', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId, driverId }),
+      }).catch(err => console.error('[sms] driver-assigned failed', err))
+    }
+
     setDeliveries(prev => prev.map(d => {
       if (deliveryIds.includes(d.id)) {
         return {
           ...d,
           driverId,
-          driverName: driver.name,
+          driverName,
           status: 'claimed' as DeliveryStatus,
           claimedAt: new Date().toISOString(),
           tripId: newTrip.id,
@@ -2814,7 +2967,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             {
               status: 'claimed' as DeliveryStatus,
               timestamp: new Date().toISOString(),
-              note: `Claimed by ${driver.name} (multi-stop trip)`,
+              note: `Claimed by ${driverName} (multi-stop trip)`,
               gpsLat: null,
               gpsLng: null,
             },
@@ -2823,7 +2976,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [drivers])
+
+    return { claimed: deliveryIds.length, failed }
+  }, [drivers, currentUser?.name, settings.allowDriverSelfClaim, refreshData])
 
   const addJobToTrip = useCallback((tripId: string, deliveryId: string) => {
     const trip = trips.find(t => t.id === tripId)
@@ -2882,6 +3037,12 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
     })
   }
 }, [])
+
+  const setDriverSequence = useCallback(async (orderedDeliveryIds: string[]) => {
+    const position = new Map(orderedDeliveryIds.map((id, i) => [id, i]))
+    setDeliveries(prev => prev.map(d => (position.has(d.id) ? { ...d, tripOrder: position.get(d.id)! } : d)))
+    return updateDeliverySequence(orderedDeliveryIds)
+  }, [])
 
   const retryDelivery = useCallback((deliveryId: string) => {
     setDeliveries(prev => prev.map(d => {
@@ -3144,6 +3305,7 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
         claimMultiple,
         addJobToTrip,
         reorderTrip,
+        setDriverSequence,
         retryDelivery,
         escalateDelivery,
         checkDuplicateAddress,

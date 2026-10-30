@@ -85,11 +85,12 @@ export function AdminSort() {
     void loadAll()
   }, [loadAll])
 
-  // Live oversight: poll every 15s.
+  // Live oversight: poll every 30s while the tab is visible.
   useEffect(() => {
     const id = setInterval(() => {
+      if (document.visibilityState === 'hidden') return
       refresh().catch(() => {})
-    }, 15_000)
+    }, 30_000)
     return () => clearInterval(id)
   }, [refresh])
 

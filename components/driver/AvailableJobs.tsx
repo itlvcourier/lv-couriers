@@ -317,8 +317,12 @@ export function AvailableJobs({ onJobClaimed }: AvailableJobsProps) {
     )
   }
 
-  const handleClaim = (deliveryId: string) => {
-    claimDelivery(deliveryId, driverId)
+  const handleClaim = async (deliveryId: string) => {
+    const result = await claimDelivery(deliveryId, driverId)
+    if (!result.success) {
+      toast.error(result.error || 'Could not claim this delivery')
+      return
+    }
     toast.success('Delivery claimed successfully')
     onJobClaimed?.()
   }
@@ -353,12 +357,20 @@ export function AvailableJobs({ onJobClaimed }: AvailableJobsProps) {
     setShowConfirmSheet(true)
   }
   
-  const handleConfirmClaimAll = () => {
-    claimMultiple(selectedIds, driverId)
-    toast.success(`${selectedIds.length} jobs claimed - your trip is ready`)
+  const handleConfirmClaimAll = async () => {
+    const { claimed, failed } = await claimMultiple(selectedIds, driverId)
     setShowConfirmSheet(false)
     setSelectionMode(false)
     setSelectedIds([])
+    if (claimed === 0) {
+      toast.error('None of the selected jobs could be claimed')
+      return
+    }
+    if (failed > 0) {
+      toast.warning(`${claimed} claimed, ${failed} no longer available`)
+    } else {
+      toast.success(`${claimed} jobs claimed - your trip is ready`)
+    }
     onJobClaimed?.()
   }
   

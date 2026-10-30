@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
 
@@ -14,9 +14,6 @@ import { sendSms, buildTrackingUrl } from '@/lib/twilio'
  * - Recipient phone must be present
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin(req)
-  if (isAuthError(auth)) return auth
-
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -25,6 +22,9 @@ export async function POST(req: NextRequest) {
   }
 
   const deliveryId = body.deliveryId
+
+  const auth = await requireDeliveryParty(req, deliveryId)
+  if (isAuthError(auth)) return auth
   if (!deliveryId) {
     return NextResponse.json({ error: 'deliveryId is required' }, { status: 400 })
   }
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Look up business name + phone so we can also notify them.
-  let businessName = 'LV Courier'
+  let businessName = 'DOMS By Atria360'
   let businessPhone: string | null = null
   if (delivery.business_id) {
     const { data: biz } = await supabase
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
 
   if (delivery.recipient_phone) {
-    const recipMsg = `${greeting} package from ${businessName} has been delivered. View proof: ${trackingUrl}\n\n— LV Couriers`
+    const recipMsg = `${greeting} package from ${businessName} has been delivered. View proof: ${trackingUrl}\n\n— DOMS By Atria360`
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     const recipientLabel = delivery.recipient_name || 'recipient'
     const bizMsg =
       `Delivery to ${recipientLabel} completed. ` +
-      `View proof of delivery (photo + signature): ${trackingUrl}\n\n— LV Couriers`
+      `View proof of delivery (photo + signature): ${trackingUrl}\n\n— DOMS By Atria360`
     sends.push(
       sendSms({
         to: businessPhone,

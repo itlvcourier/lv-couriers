@@ -402,7 +402,7 @@ function randomToken(): string {
   for (let i = 0; i < 5; i++) {
     s += TOKEN_ALPHABET[Math.floor(Math.random() * TOKEN_ALPHABET.length)]
   }
-  return `LV-${s}`
+  return `DM-${s}`
 }
 
 /** Generate a collision-checked scan token (retries on the unique index). */

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
+import { runReviewRequests } from '@/lib/sms-cron-jobs'
 
 /**
  * Stamp a delivery as due for a review-request SMS.
@@ -13,9 +14,6 @@ import { requireAdmin, isAuthError } from '@/lib/auth-guard'
  * Delay is admin-controlled via system_settings.review_request_delay_mins.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin(req)
-  if (isAuthError(auth)) return auth
-
   let body: { deliveryId?: string }
   try {
     body = await req.json()
@@ -24,6 +22,9 @@ export async function POST(req: NextRequest) {
   }
 
   const deliveryId = body.deliveryId
+
+  const auth = await requireDeliveryParty(req, deliveryId)
+  if (isAuthError(auth)) return auth
   if (!deliveryId) {
     return NextResponse.json({ error: 'deliveryId required' }, { status: 400 })
   }
@@ -86,6 +87,14 @@ export async function POST(req: NextRequest) {
       ok: false,
       reason: 'Not eligible (not delivered, already sent, or no recipient phone)',
     })
+  }
+
+  // Crons only run twice a day on Hobby, so with no delay configured we send
+  // now instead of leaving the customer waiting up to ~12h. The sweep claims
+  // review_request_sent_at atomically, so this can't double-text.
+  if (delayMins === 0) {
+    const result = await runReviewRequests()
+    return NextResponse.json({ ok: true, dueAt, delayMins, sent: result.sent })
   }
 
   return NextResponse.json({ ok: true, dueAt, delayMins })

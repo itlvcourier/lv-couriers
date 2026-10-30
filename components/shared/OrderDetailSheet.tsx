@@ -19,6 +19,8 @@ import {
   ImageIcon,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import useSWR from 'swr'
+import { loadDeliveryMedia } from '@/lib/db-extended'
 import type { Driver, Business } from '@/lib/types'
 
 // Simplified order shape used by this sheet (from BusinessOrders etc.)
@@ -65,7 +67,7 @@ interface OrderDetailSheetProps {
 }
 
 export function OrderDetailSheet({ 
-  order, 
+  order: baseOrder, 
   driver, 
   business,
   onClose, 
@@ -73,7 +75,21 @@ export function OrderDetailSheet({
   onAccept,
   viewType 
 }: OrderDetailSheetProps) {
-  if (!order) return null
+  // List queries skip the heavy photo/signature columns; fetch them for the open order.
+  const { data: media } = useSWR(
+    baseOrder?.id ? ['delivery-media', baseOrder.id] : null,
+    ([, id]) => loadDeliveryMedia(id),
+    { revalidateOnFocus: false },
+  )
+  if (!baseOrder) return null
+  const order: OrderLike = media
+    ? {
+        ...baseOrder,
+        proofPhotoUrl: baseOrder.proofPhotoUrl || media.proofPhotoUrl,
+        proofPhotoUrls: baseOrder.proofPhotoUrls?.length ? baseOrder.proofPhotoUrls : media.proofPhotoUrls,
+        signatureUrl: baseOrder.signatureUrl || media.signatureUrl,
+      }
+    : baseOrder
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)

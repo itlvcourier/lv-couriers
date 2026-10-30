@@ -35,20 +35,30 @@ export function isAuthError(result: AuthResult): result is NextResponse {
  * Verify the caller is any authenticated user.
  * Reads the session cookie via the SSR client (anon key + cookie).
  */
-export async function requireAuth(_req: NextRequest): Promise<AuthResult> {
+export async function requireAuth(req: NextRequest): Promise<AuthResult> {
   try {
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
+    const admin = createAdminClient()
 
-    if (error || !user) {
+    // Session cookies can be dropped in embedded/mobile webviews (third-party
+    // cookie blocking), so the client also sends its access token. Verify it
+    // with Supabase before trusting it.
+    const bearer = req.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+    let user: { id: string; email?: string } | null = null
+    if (bearer) {
+      const { data } = await admin.auth.getUser(bearer)
+      user = data.user ?? null
+    }
+    if (!user) {
+      const supabase = await createServerClient()
+      const { data } = await supabase.auth.getUser()
+      user = data.user ?? null
+    }
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Fetch the authoritative profile row
-    const admin = createAdminClient()
     const { data: profile } = await admin
       .from('profiles')
       .select('id, role, business_id')
@@ -81,4 +91,52 @@ export async function requireAdmin(req: NextRequest): Promise<AuthResult> {
   }
 
   return result
+}
+
+/**
+ * Verify the caller is a party to a specific delivery: an admin, the driver
+ * assigned to it, or the business that owns it. Used by delivery-scoped SMS
+ * routes so drivers/businesses can trigger notifications for their own jobs
+ * without being able to fire texts for anyone else's delivery.
+ */
+export async function requireDeliveryParty(
+  req: NextRequest,
+  deliveryId: string | undefined | null,
+): Promise<AuthResult> {
+  const result = await requireAuth(req)
+  if (isAuthError(result)) return result
+  if (result.profile.role === 'admin') return result
+  if (!deliveryId) {
+    return NextResponse.json({ error: 'deliveryId required' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+  const { data: delivery } = await admin
+    .from('deliveries')
+    .select('driver_id, business_id')
+    .eq('id', deliveryId)
+    .maybeSingle<{ driver_id: string | null; business_id: string | null }>()
+
+  if (!delivery) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  if (
+    result.profile.business_id &&
+    delivery.business_id === result.profile.business_id
+  ) {
+    return result
+  }
+
+  if (delivery.driver_id) {
+    const { data: driver } = await admin
+      .from('drivers')
+      .select('id')
+      .eq('id', delivery.driver_id)
+      .eq('user_id', result.user.id)
+      .maybeSingle()
+    if (driver) return result
+  }
+
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 }

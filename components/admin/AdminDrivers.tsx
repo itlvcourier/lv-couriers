@@ -629,7 +629,7 @@ export function AdminDrivers() {
                   type={field === 'email' ? 'email' : 'text'}
                   value={form[field]}
                   onChange={e => setForm({ ...form, [field]: e.target.value })}
-                  placeholder={field === 'name' ? 'John Doe' : field === 'email' ? 'driver@lvcourier.ca' : '(403) 555-0100'}
+                  placeholder={field === 'name' ? 'John Doe' : field === 'email' ? 'driver@atria360.ca' : '(403) 555-0100'}
                   className="bg-[var(--bg-card-2)] border-[var(--border-color)]"
                 />
               </div>

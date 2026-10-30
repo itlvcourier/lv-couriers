@@ -1,6 +1,6 @@
 # Capacitor Mobile App Setup Guide (Android + iOS) — Full Detailed Walkthrough
 
-This guide turns the **LV Couriers (DOMS)** web app into native **Android** and
+This guide turns the **DOMS By Atria360** web app into native **Android** and
 **iOS** apps using **Capacitor**. It assumes you have **never used Capacitor,
 Android Studio, or Xcode before**. Every step lists the exact command, the exact
 file path, and the exact buttons to click.
@@ -33,7 +33,7 @@ order**. Do not skip steps — later steps depend on earlier ones.
 ## PART A — Core concepts (read once)
 
 **1. Your app runs on a live server, the app is a "shell" around it.**
-LV Couriers is a server-rendered Next.js app — it uses Supabase auth, API
+DOMS By Atria360 is a server-rendered Next.js app — it uses Supabase auth, API
 routes, Twilio SMS, Resend email, and a Postgres database. That kind of app
 **cannot** be packaged as static files inside a phone app. So instead, the
 native app is a thin **shell**: when opened, it loads your live website (your
@@ -70,7 +70,7 @@ in this repository:
 | Item | File / location | What it does |
 |------|-----------------|--------------|
 | Capacitor + all plugins installed | `package.json` | core, cli, android, ios, camera, geolocation, push-notifications, status-bar, splash-screen, haptics, app, share, browser, network |
-| Capacitor configuration | `capacitor.config.ts` | App id `ca.lvcourier.app`, name "LV Couriers", reads the live URL from `CAP_SERVER_URL` |
+| Capacitor configuration | `capacitor.config.ts` | App id `ca.atria360.doms`, name "DOMS By Atria360", reads the live URL from `CAP_SERVER_URL` |
 | Native bridge layer | `lib/native/` | `camera.ts`, `geolocation.ts`, `push.ts`, `app-shell.ts`, `share.ts`, `index.ts` — all feature-detected |
 | Native initializer | `components/native/NativeAppProvider.tsx` | Runs on launch: themes the status bar, hides the splash, handles the Android back button, registers push after login. Mounted in `app/layout.tsx` |
 | Native camera wiring | `components/shared/CameraCapture.tsx` | Uses the OS camera & gallery inside the app, falls back to the web camera in a browser |
@@ -97,7 +97,7 @@ set permissions, run them, and (optionally) wire up push + publish.
 - **SDK** — Software Development Kit; the set of tools and libraries needed to
   build for a platform (Android SDK, iOS SDK).
 - **`appId` / bundle id / package name** — the unique reverse-domain identifier
-  of your app. For this project it is **`ca.lvcourier.app`**. It must match
+  of your app. For this project it is **`ca.atria360.doms`**. It must match
   everywhere (Capacitor, Firebase, the stores).
 - **APK / AAB** — Android app file formats. APK = installable test build, AAB =
   the bundle you upload to Google Play.
@@ -226,13 +226,13 @@ means the phone itself).
 
 When you are ready to ship, change the value to your real, public HTTPS site:
 ```bash
-CAP_SERVER_URL=https://app.lvcourier.ca
+CAP_SERVER_URL=https://app.atria360.ca
 ```
 (or your `https://your-app.vercel.app` URL). Then re-run `npx cap sync`. More on
 this in Step 8.
 
 > The allowed domains are already listed in `capacitor.config.ts` under
-> `allowNavigation`: `app.lvcourier.ca`, `*.lvcourier.ca`, `*.vercel.app`. If
+> `allowNavigation`: `app.atria360.ca`, `*.atria360.ca`, `*.vercel.app`. If
 > your production domain is different, add it there.
 
 ---
@@ -443,14 +443,14 @@ Push for **both** Android and iOS goes through **Firebase Cloud Messaging
 ### 6.1 — Create a Firebase project
 
 1. Go to https://console.firebase.google.com and sign in with a Google account.
-2. Click **Add project**, give it a name (e.g. "LV Couriers"), continue through
+2. Click **Add project**, give it a name (e.g. "DOMS By Atria360"), continue through
    the steps (you can disable Google Analytics if you like), and **Create
    project**.
 
 ### 6.2 — Register the Android app in Firebase
 
 1. In your Firebase project, click the **Android** icon to add an Android app.
-2. **Android package name:** enter exactly **`ca.lvcourier.app`** (must match
+2. **Android package name:** enter exactly **`ca.atria360.doms`** (must match
    `appId` in `capacitor.config.ts`).
 3. Register the app, then **download `google-services.json`**.
 4. Place that file at **`android/app/google-services.json`** in your project.
@@ -459,7 +459,7 @@ Push for **both** Android and iOS goes through **Firebase Cloud Messaging
 ### 6.3 — Register the iOS app in Firebase (Mac / iOS only)
 
 1. In Firebase, click **Add app → iOS**.
-2. **iOS bundle ID:** enter exactly **`ca.lvcourier.app`**.
+2. **iOS bundle ID:** enter exactly **`ca.atria360.doms`**.
 3. Download **`GoogleService-Info.plist`**.
 4. In Xcode, drag that file into the **App/App** folder in the left sidebar.
    When prompted, check **Copy items if needed** and make sure the **App** target
@@ -572,7 +572,7 @@ Do this only when you're ready to release publicly.
 Before **any** release build:
 1. Edit `.env` and set the production URL:
    ```bash
-   CAP_SERVER_URL=https://app.lvcourier.ca
+   CAP_SERVER_URL=https://app.atria360.ca
    ```
 2. Run:
    ```bash
@@ -651,7 +651,7 @@ to avoid review delays.
 - Make sure an SDK Platform and Build-Tools are installed (Step 0.4).
 
 **Camera or GPS does nothing / immediately fails**
-- The permission was denied. On the device: **Settings → Apps → LV Couriers →
+- The permission was denied. On the device: **Settings → Apps → DOMS By Atria360 →
   Permissions** and enable Camera / Location. Then relaunch.
 - Confirm Step 3 permission entries were added and you rebuilt.
 - iOS Simulator has no camera — test camera on a real iPhone.

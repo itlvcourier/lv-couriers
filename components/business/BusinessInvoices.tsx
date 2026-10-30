@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { ListPager, paginate } from '@/components/shared/ListPager'
+
+const INVOICE_PAGE_SIZE = 20
 import { useApp } from '@/lib/context'
 import type { Invoice, InvoiceLine } from '@/lib/types'
 import { formatCurrency, getDeliveryTypeLabel, getRateForType, estimateDeliveryPrice, getRuleApplied, findMatchingTier } from '@/lib/billing'
@@ -47,6 +50,9 @@ export function BusinessInvoices() {
     if (!activeLocationId || activeLocationId === 'all') return true
     return inv.locationId === activeLocationId
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+  const [invoicePage, setInvoicePage] = useState(0)
+  const { page: safeInvoicePage, rows: pagedBusinessInvoices } = paginate(businessInvoices, invoicePage, INVOICE_PAGE_SIZE)
 
   // Get current month's running total
   const currentMonth = new Date()
@@ -128,7 +134,7 @@ export function BusinessInvoices() {
                 No invoices yet
               </div>
             ) : (
-              businessInvoices.map(invoice => (
+              pagedBusinessInvoices.map(invoice => (
                 <button
                   key={invoice.id}
                   onClick={() => setSelectedInvoice(invoice)}
@@ -168,6 +174,15 @@ export function BusinessInvoices() {
                 </button>
               ))
             )}
+          </div>
+          <div className="px-4 pb-4">
+            <ListPager
+              page={safeInvoicePage}
+              pageSize={INVOICE_PAGE_SIZE}
+              total={businessInvoices.length}
+              onPageChange={setInvoicePage}
+              itemLabel="invoices"
+            />
           </div>
         </CardContent>
       </Card>
@@ -281,7 +296,7 @@ function InvoiceDetailView({
       <body>
         <div class="header">
           <div>
-            <div class="logo">LV Courier</div>
+            <div class="logo">DOMS By Atria360</div>
             <p>Delivery Operations Management</p>
           </div>
           <div class="invoice-info">
@@ -298,7 +313,7 @@ function InvoiceDetailView({
           </div>
           <div class="meta-section">
             <h3>Payment Instructions</h3>
-            <p>E-transfer to: lvcourieralberta@gmail.com</p>
+            <p>E-transfer to: info@atria360.ca</p>
             <p>Reference: ${invoice.invoiceNumber}</p>
           </div>
         </div>
@@ -340,7 +355,7 @@ function InvoiceDetailView({
         
         <div class="payment-info">
           <h3>Payment Instructions</h3>
-          <p>Please send e-transfer to: <strong>lvcourieralberta@gmail.com</strong></p>
+          <p>Please send e-transfer to: <strong>info@atria360.ca</strong></p>
           <p>Include reference: <strong>${invoice.invoiceNumber}</strong></p>
         </div>
         
@@ -445,7 +460,7 @@ function InvoiceDetailView({
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4">
             <p className="font-medium mb-2">Payment Instructions</p>
-            <p className="text-sm text-muted-foreground">E-transfer to: lvcourieralberta@gmail.com</p>
+            <p className="text-sm text-muted-foreground">E-transfer to: info@atria360.ca</p>
             <p className="text-sm text-muted-foreground">Reference: {invoice.invoiceNumber}</p>
           </CardContent>
         </Card>

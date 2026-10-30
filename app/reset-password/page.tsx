@@ -106,8 +106,8 @@ export default function ResetPasswordPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-1 mb-2">
-              <span className="text-4xl font-bold text-[var(--accent-orange)]">LV</span>
-              <span className="text-4xl font-normal text-foreground">COURIER</span>
+              <span className="text-4xl font-bold text-[var(--accent-orange)]">DOMS</span>
+              <span className="text-4xl font-normal text-foreground">by Atria360</span>
             </div>
           </div>
 
@@ -151,8 +151,8 @@ export default function ResetPasswordPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-1 mb-2">
-            <span className="text-4xl font-bold text-[var(--accent-orange)]">LV</span>
-            <span className="text-4xl font-normal text-foreground">COURIER</span>
+            <span className="text-4xl font-bold text-[var(--accent-orange)]">DOMS</span>
+            <span className="text-4xl font-normal text-foreground">by Atria360</span>
           </div>
           <p className="text-muted-foreground text-sm">Delivery Operations</p>
         </div>

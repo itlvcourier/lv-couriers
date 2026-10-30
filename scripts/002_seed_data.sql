@@ -1,4 +1,4 @@
--- Seed data for LV Couriers
+-- Seed data for DOMS By Atria360
 
 -- Insert businesses
 INSERT INTO businesses (id, name, address, phone, email) VALUES

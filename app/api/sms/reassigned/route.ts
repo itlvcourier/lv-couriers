@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     ? await supabase.from('drivers').select('id, name, phone').eq('id', oldDriverId).maybeSingle<{ id: string; name: string; phone: string | null }>()
     : { data: null }
 
-  const businessName = delivery.businesses?.name || 'LV Couriers'
+  const businessName = delivery.businesses?.name || 'DOMS By Atria360'
   const businessPhone = delivery.businesses?.phone || null
   const trackingUrl = buildTrackingUrl(deliveryId)
   const recipientLabel = delivery.recipient_name || 'recipient'
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           `Hi ${newDriver.name}, you've been assigned a delivery for ${businessName}. ` +
           `Pickup: ${delivery.pickup_address || 'see app'}. ` +
           `Dropoff: ${delivery.dropoff_address || 'see app'} (${recipientLabel}). ` +
-          `Track: ${trackingUrl} — LV Couriers`,
+          `Track: ${trackingUrl} — DOMS By Atria360`,
         type: 'driver_reassigned',
         deliveryId,
         driverId: newDriver.id,
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: oldDriver.phone,
-        body: `Hi ${oldDriver.name}, the delivery to ${recipientLabel} has been reassigned to another driver. Check the app for your current jobs. — LV Couriers`,
+        body: `Hi ${oldDriver.name}, the delivery to ${recipientLabel} has been reassigned to another driver. Check the app for your current jobs. — DOMS By Atria360`,
         type: 'driver_reassigned',
         deliveryId,
         driverId: oldDriver.id,
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         to: businessPhone,
         body:
           `Driver update: ${newDriver.name} is now handling the delivery to ${recipientLabel}. ` +
-          `Track: ${trackingUrl} — LV Couriers`,
+          `Track: ${trackingUrl} — DOMS By Atria360`,
         type: 'driver_reassigned',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'business' })),

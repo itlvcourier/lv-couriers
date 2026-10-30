@@ -13,7 +13,7 @@ DECLARE
   exists_count int;
 BEGIN
   LOOP
-    candidate := 'LV-';
+    candidate := 'DM-';
     FOR i IN 1..6 LOOP
       candidate := candidate || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
     END LOOP;

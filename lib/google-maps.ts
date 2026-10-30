@@ -1,5 +1,5 @@
 /**
- * Google Maps utilities for LV Courier
+ * Google Maps utilities for DOMS By Atria360
  * - Geocoding (address → coordinates)
  * - Reverse Geocoding (coordinates → address)
  * - Distance Matrix (ETA calculations)

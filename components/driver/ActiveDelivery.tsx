@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useApp } from '@/lib/context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { Progress } from '@/components/ui/progress'
 import { PickupVerification } from './PickupVerification'
 import { DeliveryCompletion } from './DeliveryCompletion'
 import { UpdateAddressSheet } from './UpdateAddressSheet'
+import { RoutePlanCard } from './RoutePlanCard'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { useHubs } from '@/lib/hooks/useHubs'
 import type { Hub } from '@/lib/hubs'
@@ -607,7 +608,7 @@ function TripView({
   deliveries: Delivery[]
   onAddJob: () => void
 }) {
-  const { reorderTrip, advanceStatus, getDriverMaxJobs, getDriverActiveJobs, currentUser, settings, refreshData } = useApp()
+  const { setDriverSequence, advanceStatus, getDriverMaxJobs, getDriverActiveJobs, currentUser, settings, refreshData } = useApp()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showVerification, setShowVerification] = useState<Delivery | null>(null)
   const [showCompletion, setShowCompletion] = useState<Delivery | null>(null)
@@ -618,29 +619,37 @@ function TripView({
   const activeJobs = getDriverActiveJobs(driverId)
   const canAddMore = activeJobs < maxJobs && settings.allowDriverSelfClaim
   
-  // Order deliveries according to trip order
-  const orderedDeliveries = trip.order
-    .map(id => deliveries.find(d => d.id === id))
-    .filter((d): d is Delivery => !!d)
+  // The driver's chosen sequence lives on each delivery (trip_order), so it
+  // survives reloads and works even when the jobs were claimed one at a time.
+  const tripPosition = new globalThis.Map(trip.order.map((id, i) => [id, i]))
+  const orderedDeliveries = [...deliveries].sort((a, b) => {
+    const ao = a.tripOrder ?? tripPosition.get(a.id) ?? Number.MAX_SAFE_INTEGER
+    const bo = b.tripOrder ?? tripPosition.get(b.id) ?? Number.MAX_SAFE_INTEGER
+    if (ao !== bo) return ao - bo
+    return (a.claimedAt ?? '').localeCompare(b.claimedAt ?? '')
+  })
   
   const completedCount = orderedDeliveries.filter(d => d.status === 'delivered').length
   const progress = (completedCount / orderedDeliveries.length) * 100
-  
-  const handleMoveUp = (index: number) => {
-    if (index === 0) return
-    const newOrder = [...trip.order]
-    ;[newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]]
-    reorderTrip(trip.id, newOrder)
-    toast.success('Trip order updated')
+
+  const saveSequence = async (ids: string[], message: string) => {
+    const ok = await setDriverSequence(ids)
+    if (ok) toast.success(message)
+    else toast.error('Could not save the new order. Check your connection.')
   }
-  
-  const handleMoveDown = (index: number) => {
-    if (index === trip.order.length - 1) return
-    const newOrder = [...trip.order]
-    ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-    reorderTrip(trip.id, newOrder)
-    toast.success('Trip order updated')
+
+  const moveJob = (index: number, delta: -1 | 1) => {
+    const target = index + delta
+    if (target < 0 || target >= orderedDeliveries.length) return
+    const ids = orderedDeliveries.map(d => d.id)
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    void saveSequence(ids, 'Stop order updated')
   }
+
+  const hubFor = useCallback((d: Delivery) => resolveHub(hubs, d.hubId), [hubs])
+
+  const handleMoveUp = (index: number) => moveJob(index, -1)
+  const handleMoveDown = (index: number) => moveJob(index, 1)
   
   const handleHubDrop = async (delivery: Delivery) => {
     if (!driverId) return
@@ -703,6 +712,12 @@ function TripView({
           <Progress value={progress} className="h-2" />
         </CardContent>
       </Card>
+
+      <RoutePlanCard
+        orderedDeliveries={orderedDeliveries}
+        hubFor={hubFor}
+        onApplyOrder={saveSequence}
+      />
       
       {/* Job list */}
       <div className="space-y-3">

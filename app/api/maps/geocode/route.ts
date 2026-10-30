@@ -49,11 +49,14 @@ export async function GET(request: NextRequest) {
     }
 
     const result = data.results[0]
+    const postalComponent = (result.address_components as { long_name: string; types: string[] }[] | undefined)
+      ?.find((c) => c.types.includes('postal_code'))
     return NextResponse.json({
       lat: result.geometry.location.lat,
       lng: result.geometry.location.lng,
       formattedAddress: result.formatted_address,
       placeId: result.place_id,
+      postalCode: postalComponent?.long_name ?? null,
     })
   } catch (error) {
     console.error('maps/geocode error:', error instanceof Error ? error.message : error)

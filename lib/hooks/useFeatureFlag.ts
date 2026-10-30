@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getFeatureSettings, type FeatureSettings } from '@/lib/feature-settings'
+import { isPageHidden } from '@/lib/visibility'
 
 // ============================================================================
 // Reactive client store for feature flags.
@@ -22,7 +23,9 @@ let cached: FeatureSettings | null = null
 let inflight: Promise<FeatureSettings> | null = null
 const listeners = new Set<() => void>()
 let pollTimer: ReturnType<typeof setInterval> | null = null
-const POLL_MS = 10000
+// Flags change rarely; writers call invalidateFeatureSettings() for an
+// instant update in their own session, and other tabs re-read on focus.
+const POLL_MS = 120_000
 
 function emit() {
   listeners.forEach((l) => l())
@@ -47,8 +50,12 @@ function fetchSettings(): Promise<FeatureSettings> {
 function ensurePolling() {
   if (pollTimer || typeof window === 'undefined') return
   pollTimer = setInterval(() => {
+    if (isPageHidden()) return
     fetchSettings().catch(() => {})
   }, POLL_MS)
+  document.addEventListener('visibilitychange', () => {
+    if (!isPageHidden() && listeners.size > 0) fetchSettings().catch(() => {})
+  })
 }
 
 function maybeStopPolling() {

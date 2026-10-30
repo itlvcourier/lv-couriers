@@ -33,10 +33,10 @@ export type CompanySettings = {
 }
 
 export const defaultCompanySettings: CompanySettings = {
-  companyName: 'LV Couriers',
+  companyName: 'DOMS By Atria360',
   companyAddress: '',
   companyPhone: '',
-  companyEmail: 'billing@lv-couriers.local',
+  companyEmail: 'info@atria360.ca',
   taxNumber: '',
   taxLabel: 'GST',
   taxRate: 5,
@@ -59,8 +59,8 @@ const fmtDate = (iso: string) => {
 }
 
 function baseLayout(title: string, body: string, company: CompanySettings = defaultCompanySettings) {
-  const companyHeader = company.companyName || 'LV COURIERS'
-  const footerEmail = company.companyEmail || 'billing@lv-couriers.local'
+  const companyHeader = company.companyName || 'DOMS BY ATRIA360'
+  const footerEmail = company.companyEmail || 'info@atria360.ca'
   
   return `<!DOCTYPE html>
 <html>
@@ -133,7 +133,7 @@ function detailsBlock(d: InvoiceEmailData, company: CompanySettings = defaultCom
 // ---------- Templates ----------
 
 export function invoiceSentEmail(d: InvoiceEmailData, company: CompanySettings = defaultCompanySettings) {
-  const companyName = company.companyName || 'Lv Couriers'
+  const companyName = company.companyName || 'DOMS By Atria360'
   const subject = `Invoice ${d.invoiceNumber} from ${companyName} - ${fmtMoney(d.total)}`
   const html = baseLayout(subject, `
     <h1 style="font-size:22px;font-weight:600;color:#fafafa;margin:0 0 12px;">New invoice for ${escapeHtml(d.businessName)}</h1>
@@ -194,7 +194,7 @@ type DriverWelcomeData = {
 }
 
 export function driverWelcomeEmail(d: DriverWelcomeData) {
-  const subject = `Welcome to Lv Couriers, ${d.name}`
+  const subject = `Welcome to DOMS By Atria360, ${d.name}`
   const html = baseLayout(subject, `
     <h1 style="font-size:22px;font-weight:600;color:#fafafa;margin:0 0 12px;">Welcome aboard, ${escapeHtml(d.name)}</h1>
     <p style="font-size:15px;line-height:1.6;color:#a3a3a3;margin:0 0 16px;">Your driver account is ready. Use the credentials below to sign in and start claiming jobs.</p>

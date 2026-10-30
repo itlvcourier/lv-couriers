@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     body:
       `Payment received for Invoice #${invoice.invoice_number} (${businessName}). ` +
       `Amount: ${amount} on ${paidDate}. ` +
-      `Thank you! — LV Couriers`,
+      `Thank you! — DOMS By Atria360`,
     type: 'payment_received',
     invoiceId,
   })

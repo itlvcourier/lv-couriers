@@ -33,14 +33,14 @@ CREATE POLICY "Allow insert for authenticated" ON audit_logs
 -- Seed some example audit log entries
 INSERT INTO audit_logs (user_email, user_role, action, entity_type, entity_name, details, created_at)
 VALUES
-  ('admin@lvcourier.ca', 'admin', 'create', 'business', 'FreshMart', '{"notes": "New business onboarded"}', NOW() - INTERVAL '5 days'),
-  ('admin@lvcourier.ca', 'admin', 'create', 'driver', 'Marcus Chen', '{"vehicle": "Honda Civic 2022"}', NOW() - INTERVAL '4 days'),
-  ('freshmart@lvcourier.ca', 'business', 'create', 'delivery', 'WANRUAAJ', '{"pickup": "Shawnessy", "dropoff": "Calgary"}', NOW() - INTERVAL '3 days'),
-  ('admin@lvcourier.ca', 'admin', 'assign', 'delivery', 'WANRUAAJ', '{"driver": "Marcus Chen"}', NOW() - INTERVAL '3 days'),
-  ('driver@lvcourier.ca', 'driver', 'status_change', 'delivery', 'WANRUAAJ', '{"from": "claimed", "to": "picked_up"}', NOW() - INTERVAL '2 days'),
-  ('driver@lvcourier.ca', 'driver', 'status_change', 'delivery', 'WANRUAAJ', '{"from": "picked_up", "to": "delivered"}', NOW() - INTERVAL '2 days'),
-  ('admin@lvcourier.ca', 'admin', 'create', 'invoice', 'INV-2024-001', '{"amount": 45.50, "business": "FreshMart"}', NOW() - INTERVAL '1 day'),
-  ('admin@lvcourier.ca', 'admin', 'send', 'invoice', 'INV-2024-001', '{"sent_to": "freshmart@lvcourier.ca"}', NOW() - INTERVAL '1 day'),
-  ('admin@lvcourier.ca', 'admin', 'update', 'business', 'FreshMart', '{"field": "billing_email", "old": "old@email.com", "new": "freshmart@lvcourier.ca"}', NOW() - INTERVAL '12 hours'),
-  ('admin@lvcourier.ca', 'admin', 'approve', 'store_request', 'Downtown Location', '{"business": "FreshMart", "type": "add"}', NOW() - INTERVAL '6 hours'),
+  ('info@atria360.ca', 'admin', 'create', 'business', 'FreshMart', '{"notes": "New business onboarded"}', NOW() - INTERVAL '5 days'),
+  ('info@atria360.ca', 'admin', 'create', 'driver', 'Marcus Chen', '{"vehicle": "Honda Civic 2022"}', NOW() - INTERVAL '4 days'),
+  ('freshmart@atria360.ca', 'business', 'create', 'delivery', 'WANRUAAJ', '{"pickup": "Shawnessy", "dropoff": "Calgary"}', NOW() - INTERVAL '3 days'),
+  ('info@atria360.ca', 'admin', 'assign', 'delivery', 'WANRUAAJ', '{"driver": "Marcus Chen"}', NOW() - INTERVAL '3 days'),
+  ('driver@atria360.ca', 'driver', 'status_change', 'delivery', 'WANRUAAJ', '{"from": "claimed", "to": "picked_up"}', NOW() - INTERVAL '2 days'),
+  ('driver@atria360.ca', 'driver', 'status_change', 'delivery', 'WANRUAAJ', '{"from": "picked_up", "to": "delivered"}', NOW() - INTERVAL '2 days'),
+  ('info@atria360.ca', 'admin', 'create', 'invoice', 'INV-2024-001', '{"amount": 45.50, "business": "FreshMart"}', NOW() - INTERVAL '1 day'),
+  ('info@atria360.ca', 'admin', 'send', 'invoice', 'INV-2024-001', '{"sent_to": "freshmart@atria360.ca"}', NOW() - INTERVAL '1 day'),
+  ('info@atria360.ca', 'admin', 'update', 'business', 'FreshMart', '{"field": "billing_email", "old": "old@email.com", "new": "freshmart@atria360.ca"}', NOW() - INTERVAL '12 hours'),
+  ('info@atria360.ca', 'admin', 'approve', 'store_request', 'Downtown Location', '{"business": "FreshMart", "type": "add"}', NOW() - INTERVAL '6 hours'),
   ('system', null, 'status_change', 'delivery', 'RWC3995A', '{"reason": "SLA timeout", "from": "posted", "to": "timeout"}', NOW() - INTERVAL '2 hours');

@@ -82,17 +82,9 @@ export default function TrackingPage() {
     const supabase = createClient()
 
     const load = async () => {
-      const { data, error } = await supabase
-        .from('deliveries')
-        .select(
-          `id, driver_id, status, recipient_name, dropoff_address,
-           dropoff_lat, dropoff_lng, pickup_lat, pickup_lng, delivered_at,
-           picked_up_at, posted_at, claimed_at, en_route_dropoff_at,
-           proof_photo_url, signature_url, recipient_note, tracking_expires_at,
-           business:businesses(name), driver:drivers!deliveries_driver_id_fkey(name, phone)`,
-        )
-        .eq('tracking_code', code)
-        .maybeSingle()
+      // Public visitors have no row access to deliveries; this security-definer
+      // function returns only the one delivery matching the tracking code.
+      const { data, error } = await supabase.rpc('get_tracked_delivery', { p_code: code })
 
       if (cancelled) return
       if (error || !data) {
@@ -118,27 +110,18 @@ export default function TrackingPage() {
 
     void load()
 
-    // Subscribe to real-time updates on this specific delivery
-      const channel = supabase
-      .channel(`delivery-track-${code}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'deliveries',
-          filter: `tracking_code=eq.${code}`,
-        },
-        (payload: unknown) => {
-          if (cancelled) return
-          // Reload full delivery with joins when status changes
-          void load()
-        },
-      )
+    // Database triggers broadcast to this topic on every status change, so
+    // visitors get instant updates without row access to deliveries.
+    const channel = supabase
+      .channel(`track:${code}`)
+      .on('broadcast', { event: 'delivery' }, () => {
+        if (!cancelled) void load()
+      })
       .subscribe()
 
-    // Fallback polling every 30s in case realtime connection drops
-    const interval = setInterval(load, 30000)
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') void load()
+    }, 60000)
 
     return () => {
       cancelled = true
@@ -165,48 +148,39 @@ export default function TrackingPage() {
     const supabase = createClient()
 
     const loadLocation = async () => {
-      const { data } = await supabase
-        .from('driver_locations')
-        .select('lat, lng, heading, recorded_at')
-        .eq('driver_id', driverId)
-        .order('recorded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data } = await supabase.rpc('get_tracked_driver_location', { p_code: code })
       if (cancelled || !data) return
-      setLiveLocation(data as LiveLocation)
+      const row = data as { lat: number | string; lng: number | string; heading: number | string | null; recorded_at: string }
+      setLiveLocation({
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        heading: row.heading == null ? null : Number(row.heading),
+        recorded_at: row.recorded_at,
+      })
     }
 
     void loadLocation()
 
+    // Each GPS fix from the driver is broadcast to this topic by a trigger.
     const channel = supabase
-      .channel(`driver-loc-${driverId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'driver_locations',
-          filter: `driver_id=eq.${driverId}`,
-        },
-        (payload: { new?: Partial<LiveLocation> }) => {
-          if (cancelled) return
-          const row = payload.new
-          if (row && typeof row.lat === 'number' && typeof row.lng === 'number') {
-            setLiveLocation({
-              lat: row.lat,
-              lng: row.lng,
-              heading: row.heading ?? null,
-              recorded_at: row.recorded_at ?? new Date().toISOString(),
-            })
-          } else {
-            void loadLocation()
-          }
-        },
-      )
+      .channel(`track-loc:${code}`)
+      .on('broadcast', { event: 'location' }, (msg: { payload?: Record<string, unknown> }) => {
+        if (cancelled) return
+        const p = msg.payload
+        if (p && p.lat != null && p.lng != null) {
+          setLiveLocation({
+            lat: Number(p.lat),
+            lng: Number(p.lng),
+            heading: p.heading == null ? null : Number(p.heading),
+            recorded_at: typeof p.recorded_at === 'string' ? p.recorded_at : new Date().toISOString(),
+          })
+        }
+      })
       .subscribe()
 
-    // Fallback poll every 15s in case realtime drops.
-    const interval = setInterval(loadLocation, 15000)
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') void loadLocation()
+    }, 30000)
 
     return () => {
       cancelled = true
@@ -320,7 +294,7 @@ export default function TrackingPage() {
               we&apos;ll help.
             </p>
             <p className="text-sm text-muted-foreground">
-              Contact LV Courier:{' '}
+              Contact DOMS By Atria360:{' '}
               <a href="tel:5875759699" className="text-primary font-medium">
                 587-575-9699
               </a>
@@ -345,7 +319,7 @@ export default function TrackingPage() {
               This delivery doesn&apos;t exist or the link has expired.
             </p>
             <p className="text-sm text-muted-foreground">
-              Contact LV Courier:{' '}
+              Contact DOMS By Atria360:{' '}
               <a href="tel:5875759699" className="text-primary font-medium">
                 587-575-9699
               </a>
@@ -674,8 +648,8 @@ function TrackingHeader() {
     <header className="border-b border-border bg-card">
       <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-1">
-          <span className="text-xl font-bold text-primary">LV</span>
-          <span className="text-xl font-bold">COURIER</span>
+          <span className="text-xl font-bold text-primary">DOMS</span>
+          <span className="text-xl font-bold">by Atria360</span>
         </div>
         <a
           href="tel:5875759699"

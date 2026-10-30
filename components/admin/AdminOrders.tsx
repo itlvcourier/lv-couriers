@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import useSWR from 'swr'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -37,7 +37,15 @@ import {
   Sliders,
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { getAllDeliveries, type DbDelivery } from '@/lib/db'
+import {
+  getDeliveriesPage,
+  getAllDeliveriesMatching,
+  getDeliveryStatusCounts,
+  type DbDelivery,
+} from '@/lib/db'
+import { ListPager } from '@/components/shared/ListPager'
+
+const PAGE_SIZE = 25
 import type { DeliveryStatus } from '@/lib/types'
 import { OrderLabelPrint } from './OrderLabelPrint'
 import { Button } from '@/components/ui/button'
@@ -50,7 +58,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
-import { updateDeliveryFields } from '@/lib/db-extended'
+import { updateDeliveryFields, loadDeliveryMedia } from '@/lib/db-extended'
 import { useApp } from '@/lib/context'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { getZones, type Zone } from '@/lib/zones'
@@ -85,10 +93,38 @@ export function AdminOrders() {
     { revalidateOnFocus: false },
   )
 
-  // Fetch deliveries from Supabase
-  const { data: deliveries = [], isLoading, mutate } = useSWR('all-deliveries', () => getAllDeliveries(), {
-    refreshInterval: 60000,
-  })
+  const [page, setPage] = useState(0)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+  useEffect(() => {
+    setPage(0)
+    setSelectedIds(new Set())
+  }, [debouncedSearch, statusFilter])
+
+  // Only the visible page is fetched; filtering happens in SQL.
+  const { data: pageData, isLoading, mutate } = useSWR(
+    ['admin-deliveries-page', page, statusFilter, debouncedSearch],
+    () => getDeliveriesPage(page, PAGE_SIZE, { status: statusFilter, search: debouncedSearch }),
+    { refreshInterval: 60000, keepPreviousData: true },
+  )
+  const { data: statusCounts, mutate: mutateCounts } = useSWR(
+    'admin-delivery-status-counts',
+    () => getDeliveryStatusCounts(),
+    { refreshInterval: 60000 },
+  )
+  // Photos are excluded from the page query; load them only for the open order.
+  const { data: selectedMedia } = useSWR(
+    selectedDelivery ? ['delivery-media', selectedDelivery.id] : null,
+    ([, id]) => loadDeliveryMedia(id),
+    { revalidateOnFocus: false },
+  )
+  const selectedProofPhoto = selectedDelivery?.proof_photo_url || selectedMedia?.proofPhotoUrl || null
+  const filteredDeliveries = pageData?.rows ?? []
+  const totalMatching = pageData?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(totalMatching / PAGE_SIZE))
 
   const openDelivery = useCallback((d: DbDelivery) => {
     setSelectedDelivery(d)
@@ -139,7 +175,7 @@ export function AdminOrders() {
       // Optimistically patch local data
       const updated = { ...selectedDelivery, ...patch } as DbDelivery
       setSelectedDelivery(updated)
-      await mutate()
+      await Promise.all([mutate(), mutateCounts()])
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed')
     } finally {
@@ -147,28 +183,10 @@ export function AdminOrders() {
     }
   }
 
-  // Filter deliveries (memoized to avoid re-computing on every keystroke state change)
-  const filteredDeliveries = useMemo(() => {
-    const q = search.toLowerCase()
-    return deliveries.filter((d: DbDelivery) => {
-      const matchesSearch = !q ||
-        d.id.toLowerCase().includes(q) ||
-        d.pickup_address.toLowerCase().includes(q) ||
-        d.dropoff_address.toLowerCase().includes(q) ||
-        (d.tracking_code?.toLowerCase().includes(q)) ||
-        (d.recipient_name?.toLowerCase().includes(q))
-      const matchesStatus = statusFilter === 'all' || d.status === statusFilter
-      return matchesSearch && matchesStatus
-    }).sort((a: DbDelivery, b: DbDelivery) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  }, [deliveries, search, statusFilter])
-
-  // Stats
-  const postedCount = deliveries.filter((d: DbDelivery) => d.status === 'posted').length
-  const activeCount = deliveries.filter((d: DbDelivery) => 
-    ['claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff'].includes(d.status)
-  ).length
-  const completedCount = deliveries.filter((d: DbDelivery) => d.status === 'delivered').length
-  const flaggedCount = deliveries.filter((d: DbDelivery) => d.status === 'flagged').length
+  const postedCount = statusCounts?.posted ?? 0
+  const activeCount = statusCounts?.active ?? 0
+  const completedCount = statusCounts?.delivered ?? 0
+  const flaggedCount = statusCounts?.flagged ?? 0
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -189,9 +207,24 @@ export function AdminOrders() {
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   }
 
-  const handleExportCSV = () => {
+  const [exporting, setExporting] = useState(false)
+  const handleExportCSV = async (onlySelected = false) => {
+    let source: DbDelivery[]
+    if (onlySelected) {
+      source = filteredDeliveries.filter((d: DbDelivery) => selectedIds.has(d.id))
+    } else {
+      setExporting(true)
+      try {
+        source = await getAllDeliveriesMatching({ status: statusFilter, search: debouncedSearch })
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Export failed')
+        return
+      } finally {
+        setExporting(false)
+      }
+    }
     const headers = ['ID', 'Tracking Code', 'Status', 'Pickup Address', 'Dropoff Address', 'Recipient', 'Priority', 'Created', 'Delivered']
-    const rows = filteredDeliveries.map((d: DbDelivery) => [
+    const rows = source.map((d: DbDelivery) => [
       d.id.slice(-8),
       d.tracking_code || '',
       d.status,
@@ -211,7 +244,7 @@ export function AdminOrders() {
     link.download = `deliveries-${statusFilter}-${new Date().toISOString().split('T')[0]}.csv`
     link.click()
     URL.revokeObjectURL(url)
-    toast.success(`Exported ${filteredDeliveries.length} deliveries`)
+    toast.success(`Exported ${source.length} deliveries`)
   }
 
   // Bulk selection handlers
@@ -263,10 +296,10 @@ export function AdminOrders() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold">Deliveries</h2>
-          <p className="text-sm text-muted-foreground">{deliveries.length} total deliveries</p>
+          <p className="text-sm text-muted-foreground">{totalMatching} matching deliveries</p>
         </div>
-        <Button onClick={handleExportCSV} variant="outline">
-          <Download className="h-4 w-4 mr-2" />
+        <Button onClick={() => handleExportCSV(false)} variant="outline" disabled={exporting}>
+          {exporting ? <Spinner className="h-4 w-4 mr-2" /> : <Download className="h-4 w-4 mr-2" />}
           Export CSV
         </Button>
       </div>
@@ -360,7 +393,7 @@ export function AdminOrders() {
                 size="sm"
                 label="Print labels"
               />
-              <Button size="sm" variant="outline" onClick={handleExportCSV}>
+              <Button size="sm" variant="outline" onClick={() => handleExportCSV(true)}>
                 <Download className="w-4 h-4 mr-1" />
                 Export Selected
               </Button>
@@ -486,6 +519,17 @@ export function AdminOrders() {
           ))}
         </div>
       )}
+
+      <ListPager
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={totalMatching}
+        onPageChange={(p) => {
+          setPage(p)
+          setSelectedIds(new Set())
+        }}
+        itemLabel="deliveries"
+      />
 
       {/* Delivery Detail Sheet */}
       <Sheet open={!!selectedDelivery} onOpenChange={() => { setSelectedDelivery(null); setEditMode(false) }}>
@@ -749,7 +793,7 @@ export function AdminOrders() {
               </div>
 
               {/* Proof of Delivery Section */}
-              {(selectedDelivery.proof_photo_url || selectedDelivery.recipient_note) && (
+              {(selectedProofPhoto || selectedDelivery.recipient_note) && (
                 <>
                   <Separator />
                   <div className="space-y-4">
@@ -759,7 +803,7 @@ export function AdminOrders() {
                     </h4>
                     
                     {/* Delivery Photo */}
-                    {selectedDelivery.proof_photo_url && (
+                    {selectedProofPhoto && (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <ImageIcon className="w-3 h-3" />
@@ -767,7 +811,7 @@ export function AdminOrders() {
                         </p>
                         <div className="relative rounded-lg overflow-hidden border border-border">
                           <img 
-                            src={selectedDelivery.proof_photo_url} 
+                            src={selectedProofPhoto} 
                             alt="Delivery proof" 
                             className="w-full h-40 object-cover"
                           />

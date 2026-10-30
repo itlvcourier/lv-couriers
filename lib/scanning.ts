@@ -32,14 +32,14 @@ export type ScanOutcome =
   | { kind: 'already_done'; delivery: Delivery; message: string }
   | { kind: 'error'; message: string }
 
-const SCAN_TOKEN_RE = /^LV-[A-Z0-9]{5,}$/i
+const SCAN_TOKEN_RE = /^DM-[A-Z0-9]{5,}$/i
 
 /** Normalize raw decoded text into a scan token, or null if it isn't ours. */
 export function parseScanPayload(raw: string): string | null {
   if (!raw) return null
   let text = raw.trim()
-  // Allow URLs that embed the token, e.g. https://app/scan/LV-7K3P9
-  const urlMatch = text.match(/LV-[A-Z0-9]{5,}/i)
+  // Allow URLs that embed the token, e.g. https://app/scan/DM-7K3P9
+  const urlMatch = text.match(/DM-[A-Z0-9]{5,}/i)
   if (urlMatch) text = urlMatch[0]
   text = text.toUpperCase()
   return SCAN_TOKEN_RE.test(text) ? text : null

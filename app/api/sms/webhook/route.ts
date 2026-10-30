@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { setOptOut, sendSms } from '@/lib/twilio'
 
@@ -23,6 +24,24 @@ export async function POST(req: Request) {
 
   // Parse x-www-form-urlencoded
   const params = new URLSearchParams(body)
+
+  // Reject requests that weren't signed by Twilio, so nobody can opt numbers
+  // in or out (or trigger outbound SMS) by posting to this URL.
+  const authToken = process.env.TWILIO_AUTH_TOKEN
+  const signature = req.headers.get('x-twilio-signature') || ''
+  if (!authToken || !signature) {
+    return new Response('Forbidden', { status: 403 })
+  }
+  const forwardedProto = req.headers.get('x-forwarded-proto')
+  const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host')
+  const url = new URL(req.url)
+  const publicUrl = forwardedHost
+    ? `${forwardedProto || 'https'}://${forwardedHost}${url.pathname}${url.search}`
+    : req.url
+  if (!twilio.validateRequest(authToken, signature, publicUrl, Object.fromEntries(params))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
   const from = params.get('From') || ''
   const rawMsg = (params.get('Body') || '').trim().toUpperCase()
 
@@ -51,7 +70,7 @@ export async function POST(req: Request) {
     // Send confirmation (skip opt-out check on the confirmation itself)
     await sendSms({
       to: from,
-      body: 'You have been unsubscribed from LV Couriers SMS notifications. Reply START to re-subscribe.',
+      body: 'You have been unsubscribed from DOMS By Atria360 SMS notifications. Reply START to re-subscribe.',
       type: 'opt_out_confirm',
       skipOptOutCheck: true,
       skipLog: false,
@@ -60,7 +79,7 @@ export async function POST(req: Request) {
     await setOptOut(from, false)
     await sendSms({
       to: from,
-      body: 'You have re-subscribed to LV Couriers SMS notifications. Reply STOP at any time to unsubscribe.',
+      body: 'You have re-subscribed to DOMS By Atria360 SMS notifications. Reply STOP at any time to unsubscribe.',
       type: 'opt_out_confirm',
       skipOptOutCheck: true,
       skipLog: false,

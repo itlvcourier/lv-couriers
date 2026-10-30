@@ -16,7 +16,7 @@ let cached: Hub[] | null = null
 let inflight: Promise<Hub[]> | null = null
 const listeners = new Set<() => void>()
 let pollTimer: ReturnType<typeof setInterval> | null = null
-const POLL_MS = 30000
+const POLL_MS = 300_000
 
 function emit() {
   listeners.forEach((l) => l())
@@ -43,6 +43,7 @@ function fetchHubs(): Promise<Hub[]> {
 function ensurePolling() {
   if (pollTimer || typeof window === 'undefined') return
   pollTimer = setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     fetchHubs().catch(() => {})
   }, POLL_MS)
 }
