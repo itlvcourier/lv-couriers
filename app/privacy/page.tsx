@@ -27,7 +27,7 @@ export default function PrivacyPolicyPage() {
       <main className="max-w-4xl mx-auto px-4 py-8 pb-16">
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-6 sm:p-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Privacy Policy</h1>
-          <p className="text-sm text-muted-foreground mb-8">Last updated: January 2025</p>
+          <p className="text-sm text-muted-foreground mb-8">Last updated: October 2026</p>
 
           <div className="prose prose-neutral dark:prose-invert max-w-none space-y-6">
             <section>
@@ -131,8 +131,8 @@ export default function PrivacyPolicyPage() {
               </p>
               <div className="mt-3 p-4 bg-[var(--bg-card-2)] rounded-lg">
                 <p className="text-foreground font-medium">DOMS By Atria360</p>
-                <p className="text-muted-foreground text-sm">Email: privacy@atria360.ca</p>
-                <p className="text-muted-foreground text-sm">Phone: (604) 555-0123</p>
+                <p className="text-muted-foreground text-sm">Email: info@atria360.ca</p>
+                <p className="text-muted-foreground text-sm">Website: atria360.ca</p>
               </div>
             </section>
           </div>

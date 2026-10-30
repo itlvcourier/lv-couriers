@@ -246,8 +246,8 @@ function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
       </div>
 
       <footer class="legal">
-        Handle per privacy policy. Contains personal delivery info — do not photograph or share.
-        Misdelivered? Return to DOMS By Atria360. atria360.ca
+        Contains personal delivery info. Handle per DOMS By Atria360 Privacy Policy &amp; Terms of Service — do not photograph or share.
+        Misdelivered? Contact DOMS By Atria360 · info@atria360.ca · atria360.ca
       </footer>
     </div>`
 }
