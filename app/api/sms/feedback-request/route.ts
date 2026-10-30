@@ -3,6 +3,7 @@ import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
 import { createFeedbackToken } from '@/lib/db-extended'
+import { feedbackLink } from '@/lib/app-url'
 
 /**
  * Send a post-delivery feedback request to the recipient.
@@ -63,8 +64,7 @@ export async function POST(req: NextRequest) {
   try {
     // Create feedback token and get the link
     const token = await createFeedbackToken(delivery.id, delivery.driver_id, delivery.business_id, delivery.location_id)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://atria360.ca'
-    const feedbackUrl = `${baseUrl}/feedback/${token}`
+  const feedbackUrl = feedbackLink(token)
     
     const businessName = delivery.businesses?.name || 'DOMS By Atria360'
     const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'

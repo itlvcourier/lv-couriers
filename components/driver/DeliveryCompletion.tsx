@@ -10,6 +10,8 @@ import { X, CheckCircle, PenLine, AlertCircle } from 'lucide-react'
 import type { Delivery } from '@/lib/types'
 import { SignaturePad } from '@/components/shared/SignaturePad'
 import { CameraCapture } from '@/components/shared/CameraCapture'
+import { ReceivedByFields, type ReceiverValue } from './ReceivedByFields'
+import { authedJson, getPosition } from '@/lib/api-client'
 
 interface DeliveryCompletionProps {
   delivery: Delivery
@@ -24,6 +26,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
   const [recipientNote, setRecipientNote] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const [receiver, setReceiver] = useState<ReceiverValue>({ type: null, name: '', relationship: '', idType: '', idLast4: '' })
 
   const minPhotos = Math.max(1, settings.minDeliveryPhotos ?? 3)
   const photoCount = photoUrls.length
@@ -84,7 +87,24 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
       return
     }
 
+    if (!receiver.type) {
+      toast.error('Select who received the delivery')
+      return
+    }
+
     setIsUploading(true)
+
+    try {
+      const pos = await getPosition()
+      await authedJson(`/api/deliveries/${delivery.id}/received-by`, {
+        method: 'POST',
+        body: JSON.stringify({ ...receiver, lat: pos?.lat, lng: pos?.lng }),
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not record who received it')
+      setIsUploading(false)
+      return
+    }
 
     try {
       // Upload signature if exists
@@ -124,6 +144,8 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
         </SheetHeader>
 
         <div className="space-y-6">
+          <ReceivedByFields delivery={delivery} value={receiver} onChange={setReceiver} />
+
           {/* Photo capture - REQUIRED (minimum configurable by admin) */}
           <div>
             <div className="flex items-center justify-between gap-2 mb-3">

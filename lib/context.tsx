@@ -87,6 +87,7 @@ import {
   updateDeliverySequence,
 } from './db-extended'
 import { claimDelivery as claimDeliveryInDb } from './db'
+import { trackingLink } from './app-url'
 
 // Default settings used before system_settings has been loaded from the DB.
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -1302,6 +1303,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isOutOfTown: data.isOutOfTown ?? false,
         requireSignature: data.requireSignature ?? false,
         requirePhoto: data.requirePhoto ?? true,
+        handoffRule: data.handoffRule ?? 'door',
+        handoffRequireId: data.handoffRequireId ?? false,
+        handoffNamedPerson: data.handoffNamedPerson ?? null,
+        handoffNamedRelationship: data.handoffNamedRelationship ?? null,
+        handoffLocationNote: data.handoffLocationNote ?? null,
         distanceKm: data.distanceKm ?? null,
         manifest: (data.manifest || []).map(m => ({
           type: m.type,
@@ -2839,7 +2845,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       recipientName: 'Recipient',
       recipientPhone,
       type: 'tracking_link',
-      message: `Your DOMS By Atria360 delivery is on the way! Track: atria360.ca/track/${trackingCode}`,
+      message: `Your DOMS By Atria360 delivery is on the way! Track: ${trackingLink(trackingCode)}`,
       status: 'sent',
       sentAt: new Date().toISOString(),
       deliveredAt: null,

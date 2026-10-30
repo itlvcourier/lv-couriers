@@ -124,6 +124,17 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
       pickupPhotoUrl: d.pickupPhotoUrl || null,
       signatureUrl: d.signatureUrl || null,
       recipientNote: d.recipientNote || null,
+      handoff: {
+        handoffRule: d.handoffRule ?? null,
+        handoffRequireId: d.handoffRequireId ?? false,
+        handoffNamedPerson: d.handoffNamedPerson ?? null,
+        handoffNamedRelationship: d.handoffNamedRelationship ?? null,
+        handoffLocationNote: d.handoffLocationNote ?? null,
+        receivedByType: d.receivedByType ?? null,
+        receivedByName: d.receivedByName ?? null,
+        receivedByRelationship: d.receivedByRelationship ?? null,
+      },
+      rawStatus: d.status,
       }
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

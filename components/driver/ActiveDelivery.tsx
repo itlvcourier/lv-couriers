@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { PickupVerification } from './PickupVerification'
 import { DeliveryCompletion } from './DeliveryCompletion'
+import { HandoffPanel } from './HandoffPanel'
 import { UpdateAddressSheet } from './UpdateAddressSheet'
 import { RoutePlanCard } from './RoutePlanCard'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
@@ -1235,6 +1236,10 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
             />
           </CardContent>
         </Card>
+
+        {(delivery.status === 'en_route_dropoff' || delivery.status === 'picked_up') && role !== 'pickup_to_hub' && (
+          <HandoffPanel delivery={delivery} />
+        )}
 
         {/* Action Button */}
         {actionButton && (

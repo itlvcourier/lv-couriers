@@ -209,6 +209,14 @@ export function mapDeliveryRow(row: Row): Delivery {
     recipientNote: (row.recipient_note as string | null) ?? null,
     requireSignature: !!(row.require_signature as boolean | null),
     requirePhoto: (row.require_photo as boolean | null) ?? true,
+    handoffRule: ((row.handoff_rule as string | null) ?? 'door') as Delivery['handoffRule'],
+    handoffRequireId: !!(row.handoff_require_id as boolean | null),
+    handoffNamedPerson: (row.handoff_named_person as string | null) ?? null,
+    handoffNamedRelationship: (row.handoff_named_relationship as string | null) ?? null,
+    handoffLocationNote: (row.handoff_location_note as string | null) ?? null,
+    receivedByType: (row.received_by_type as Delivery['receivedByType']) ?? null,
+    receivedByName: (row.received_by_name as string | null) ?? null,
+    receivedByRelationship: (row.received_by_relationship as string | null) ?? null,
     trackingCode: (row.tracking_code as string | null) ?? null,
     trackingExpiresAt: (row.tracking_expires_at as string | null) ?? null,
     cancelledAt: (row.cancelled_at as string | null) ?? null,
@@ -605,6 +613,11 @@ export async function createDeliveryInDb(input: {
   isUrgent?: boolean
   requireSignature?: boolean
   requirePhoto?: boolean
+  handoffRule?: Delivery['handoffRule']
+  handoffRequireId?: boolean
+  handoffNamedPerson?: string | null
+  handoffNamedRelationship?: string | null
+  handoffLocationNote?: string | null
   manifest: Array<{ type: ManifestItem['type']; quantity: number; notes?: string }>
   distanceKm?: number | null
 }): Promise<Delivery> {
@@ -634,6 +647,13 @@ export async function createDeliveryInDb(input: {
       is_out_of_town: input.isOutOfTown,
       require_signature: input.requireSignature ?? false,
       require_photo: input.requirePhoto ?? true,
+      handoff_rule: input.handoffRule ?? 'door',
+      handoff_require_id: input.handoffRequireId ?? false,
+      handoff_named_person: input.handoffNamedPerson ?? null,
+      handoff_named_relationship: input.handoffNamedRelationship ?? null,
+      handoff_location_note: input.handoffLocationNote ?? null,
+      handoff_set_by: 'business',
+      handoff_updated_at: new Date().toISOString(),
       distance_km: input.distanceKm ?? null,
       posted_at: new Date().toISOString(),
       retry_count: 0,
