@@ -13,12 +13,19 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { authedJson } from '@/lib/api-client'
 import {
   BUSINESS_TAGS,
+  CUSTOMER_TAGS,
   SMS_SIGNATURE_MAX_LENGTH,
   composeSms,
   validateSmsSignature,
 } from '@/lib/sms-templates'
 
-type Settings = { email: string | null; website: string | null; sms_signature: string | null; sms_note: string | null }
+type Settings = {
+  email: string | null
+  website: string | null
+  google_review_link: string | null
+  sms_signature: string | null
+  sms_note: string | null
+}
 type Response = { settings: Settings; defaultSignature: string }
 
 export function BusinessSmsSettings({
@@ -97,6 +104,7 @@ function SmsSettingsForm({
 }) {
   const [email, setEmail] = useState(initial.email ?? '')
   const [website, setWebsite] = useState(initial.website ?? '')
+  const [googleReviewLink, setGoogleReviewLink] = useState(initial.google_review_link ?? '')
   const [note, setNote] = useState(initial.sms_note ?? '')
   const [signature, setSignature] = useState(initial.sms_signature ?? '')
   const [saving, setSaving] = useState(false)
@@ -108,7 +116,13 @@ function SmsSettingsForm({
     ...tagValues,
     business_email: email,
     business_website: website,
+    google_review_link: googleReviewLink,
     business_note: note,
+    recipient_name: 'Jane Doe',
+    recipient_first_name: 'Jane',
+    recipient_last_name: 'Doe',
+    dropoff_address: '88 Queen Ave',
+    tracking_url: 'https://atria360.ca/track/ABC123',
     location_name: 'Main location',
     location_phone: tagValues.business_phone,
     location_address: '',
@@ -132,7 +146,7 @@ function SmsSettingsForm({
     try {
       await authedJson('/api/business/sms-settings', {
         method: 'PUT',
-        body: JSON.stringify({ businessId, email, website, smsNote: note, smsSignature: signature }),
+        body: JSON.stringify({ businessId, email, website, googleReviewLink, smsNote: note, smsSignature: signature }),
       })
       toast.success('Text message settings saved')
       onSaved()
@@ -163,6 +177,17 @@ function SmsSettingsForm({
           onChange={(e) => setWebsite(e.target.value)}
           placeholder="yourbusiness.com"
         />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="sms-google-review">Google review link</Label>
+        <Input
+          id="sms-google-review"
+          type="url"
+          value={googleReviewLink}
+          onChange={(e) => setGoogleReviewLink(e.target.value)}
+          placeholder="https://g.page/r/your-business/review"
+        />
+        <p className="text-xs text-muted-foreground">Add the link from your Google Business Profile. Use {'{google_review_link}'} in a customer message.</p>
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="sms-biz-note">Short note</Label>
@@ -201,7 +226,23 @@ function SmsSettingsForm({
         <p id="sms-biz-signature-hint" className={sigError ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
           {sigError ?? 'Leave empty to use the default. Blank details are skipped automatically.'}
         </p>
-        <ul className="flex flex-wrap gap-1.5" aria-label="Insert a tag">
+        <p className="text-xs font-medium text-muted-foreground">Customer details</p>
+        <ul className="flex flex-wrap gap-1.5" aria-label="Insert customer tag">
+          {CUSTOMER_TAGS.map((t) => (
+            <li key={t.name}>
+              <button
+                type="button"
+                onClick={() => insertTag(t.name)}
+                title={t.description}
+                className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs text-foreground transition-colors hover:border-brand hover:text-brand"
+              >
+                {`{${t.name}}`}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs font-medium text-muted-foreground">Business details</p>
+        <ul className="flex flex-wrap gap-1.5" aria-label="Insert a business tag">
           {BUSINESS_TAGS.map((t) => (
             <li key={t.name}>
               <button
