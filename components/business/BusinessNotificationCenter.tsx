@@ -42,13 +42,13 @@ const NOTIFICATION_ICONS: Record<BusinessNotification['type'], React.ElementType
 }
 
 const NOTIFICATION_COLORS: Record<BusinessNotification['type'], string> = {
-  delivery_posted: 'text-blue-400 bg-blue-500/10',
-  delivery_claimed: 'text-yellow-400 bg-yellow-500/10',
-  delivery_picked_up: 'text-orange-400 bg-orange-500/10',
-  delivery_completed: 'text-green-400 bg-green-500/10',
+  delivery_posted: 'text-muted-foreground bg-muted-foreground/10',
+  delivery_claimed: 'text-warning bg-warning/10',
+  delivery_picked_up: 'text-brand bg-brand/10',
+  delivery_completed: 'text-success bg-success/10',
   delivery_cancelled: 'text-gray-400 bg-gray-500/10',
-  delivery_failed: 'text-red-400 bg-red-500/10',
-  invoice_ready: 'text-purple-400 bg-purple-500/10',
+  delivery_failed: 'text-destructive bg-destructive/10',
+  invoice_ready: 'text-muted-foreground bg-muted-foreground/10',
 }
 
 export function BusinessNotificationCenter() {
@@ -190,7 +190,7 @@ export function BusinessNotificationCenter() {
         >
           <Bell className="h-5 w-5 text-muted-foreground" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[var(--accent-orange)] text-white text-xs font-medium flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[var(--brand)] text-white text-xs font-medium flex items-center justify-center">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -250,7 +250,7 @@ export function BusinessNotificationCenter() {
                           {notification.title}
                         </p>
                         {!notification.read && (
-                          <span className="w-2 h-2 rounded-full bg-[var(--accent-orange)] shrink-0 mt-1.5" />
+                          <span className="w-2 h-2 rounded-full bg-[var(--brand)] shrink-0 mt-1.5" />
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">

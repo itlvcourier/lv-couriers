@@ -50,8 +50,8 @@ export function LocationSwitcher() {
   if (!userIsOwner && accessibleLocations.length === 1) {
     return (
       <div className="flex flex-col min-w-0">
-        <span className="text-xs sm:text-sm font-semibold text-foreground">DOMS</span>
-        <span className="text-[10px] sm:text-xs text-muted-foreground truncate max-w-[100px] sm:max-w-[140px]">
+        <span className="text-[11px] text-muted-foreground">Location</span>
+        <span className="truncate text-sm font-medium text-foreground max-w-[140px] sm:max-w-[180px]">
           {accessibleLocations[0].name}
         </span>
       </div>
@@ -73,21 +73,21 @@ export function LocationSwitcher() {
       value={activeLocationId === 'all' ? 'all' : (activeLocationId || accessibleLocations[0]?.id || '')}
       onValueChange={(value) => setActiveLocation(value as string | 'all')}
     >
-      <SelectTrigger className="w-auto max-w-[120px] sm:max-w-[160px] h-auto border-0 bg-transparent shadow-none p-0 gap-1 hover:bg-transparent focus:ring-0">
+      <SelectTrigger className="w-full min-w-0 max-w-[180px] lg:max-w-none h-auto border-0 !bg-transparent shadow-none p-0 gap-2 justify-between hover:bg-transparent focus:ring-0">
         <div className="flex flex-col items-start min-w-0">
           <div className="flex items-center gap-1">
-            <span className="text-xs sm:text-sm font-semibold text-foreground">DOMS</span>
+            <span className="text-[11px] text-muted-foreground">Location</span>
           </div>
           <SelectValue placeholder="Location">
             {activeLocationId === 'all' ? (
-              <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <span>All Locations</span>
-                <Badge variant="secondary" className="text-[9px] py-0 px-1 h-3.5">
+                <Badge variant="secondary" className="h-4 px-1.5 py-0 text-[10px] tabular">
                   {accessibleLocations.length}
                 </Badge>
               </span>
             ) : (
-              <span className="truncate text-[10px] sm:text-xs text-muted-foreground">
+              <span className="truncate text-sm font-medium text-foreground">
                 {currentLocation?.name || accessibleLocations[0]?.name || 'Location'}
               </span>
             )}

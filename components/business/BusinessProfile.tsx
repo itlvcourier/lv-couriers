@@ -390,11 +390,11 @@ export function BusinessProfile() {
     <div className="space-y-6 pb-8">
       {/* Profile Header */}
       <Card className="overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+        <div className="h-24 border-b border-border bg-muted [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:24px_24px]" />
         <CardContent className="relative pt-0 pb-6">
           <div className="flex flex-col items-center -mt-12">
-            <Avatar className="w-24 h-24 border-4 border-background shadow-lg">
-              <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+            <Avatar className="w-24 h-24 border-4 border-card">
+              <AvatarFallback className="bg-foreground text-background font-[family-name:var(--font-display)] text-xl font-light">
                 {getInitials(business.name)}
               </AvatarFallback>
             </Avatar>
@@ -714,9 +714,9 @@ export function BusinessProfile() {
           
           {createdUserCredentials ? (
             <div className="mt-6 space-y-4">
-              <Card className="bg-green-500/10 border-green-500/30">
+              <Card className="bg-success/10 border-success/30">
                 <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <div className="flex items-center gap-2 text-success dark:text-success">
                     <UserPlus className="w-5 h-5" />
                     <span className="font-medium">Account Created</span>
                   </div>

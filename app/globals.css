@@ -109,9 +109,218 @@
   --sidebar-ring: #f97316;
 }
 
+:root {
+  --success: #16a34a;
+  --warning: #ca8a04;
+}
+
+.dark {
+  --success: #22c55e;
+  --warning: #eab308;
+}
+
+/* Business portal — scoped design system. Overrides the shared tokens only
+   inside the business shell so admin/driver views are unaffected.
+   Direction: ink-on-porcelain, single brand signal (orange) reserved for
+   live/in-motion states. */
+.business-theme {
+  --background: #f5f6f8;
+  --foreground: #0b0d10;
+  --card: #ffffff;
+  --card-foreground: #0b0d10;
+  --popover: #ffffff;
+  --popover-foreground: #0b0d10;
+  --primary: #0b0d10;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0f3;
+  --secondary-foreground: #0b0d10;
+  --muted: #f0f1f4;
+  --muted-foreground: #6b717c;
+  --accent: #eef0f3;
+  --accent-foreground: #0b0d10;
+  --border: #e5e7eb;
+  --input: #dfe2e7;
+  --ring: #ff6a1a;
+  --brand: #f2611a;
+  --brand-foreground: #ffffff;
+  --success: #12805c;
+  --warning: #a96300;
+  --destructive: #cf3a2f;
+  --radius: 0.75rem;
+  --surface-rail: #f5f6f8;
+  --surface-rail-foreground: #0b0d10;
+  --surface-rail-muted: #6b717c;
+  --surface-rail-border: #e5e7eb;
+  --elevation: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 1px rgb(16 24 40 / 0.02);
+}
+
+.dark .business-theme,
+.dark.business-theme {
+  --background: #08090b;
+  --foreground: #eceef1;
+  --card: #0f1114;
+  --card-foreground: #eceef1;
+  --popover: #131519;
+  --popover-foreground: #eceef1;
+  --primary: #f2f3f5;
+  --primary-foreground: #08090b;
+  --secondary: #16181c;
+  --secondary-foreground: #eceef1;
+  --muted: #14161a;
+  --muted-foreground: #8b909a;
+  --accent: #1a1d22;
+  --accent-foreground: #eceef1;
+  --border: #1d2025;
+  --input: #25282e;
+  --ring: #ff7a33;
+  --brand: #ff7a33;
+  --brand-foreground: #08090b;
+  --success: #3ecf8e;
+  --warning: #f2b544;
+  --destructive: #f0564a;
+  --surface-rail: #08090b;
+  --surface-rail-foreground: #eceef1;
+  --surface-rail-muted: #8b909a;
+  --surface-rail-border: #1d2025;
+  --elevation: 0 0 0 1px rgb(255 255 255 / 0.02);
+}
+
+.business-theme {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+
+.business-theme h1,
+.business-theme h2,
+.business-theme h3,
+.business-theme [data-slot='card-title'] {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.business-theme .font-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0;
+}
+
+.business-theme .tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.business-theme [data-slot='card'] {
+  border-radius: 14px;
+  border-color: var(--border);
+  box-shadow: var(--elevation);
+}
+
+.business-theme [data-slot='tabs-list'] {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.business-theme [data-slot='tabs-trigger'] {
+  border-radius: 7px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.business-theme [data-slot='tabs-trigger'][data-state='active'] {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--elevation), 0 0 0 1px var(--border);
+}
+
+.business-theme [data-slot='input'],
+.business-theme [data-slot='textarea'],
+.business-theme [data-slot='select-trigger'] {
+  background: var(--card);
+}
+
+.business-theme [data-slot='badge'] {
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.business-theme [data-slot='button'] {
+  font-weight: 500;
+}
+
+/* Status: quiet dot + label instead of colored pills. */
+.business-theme [data-slot='status-badge'] {
+  gap: 0.4rem;
+  border-radius: 999px;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  padding: 0.2rem 0.6rem 0.2rem 0.5rem;
+  white-space: nowrap;
+}
+
+.business-theme [data-slot='status-badge']::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.business-theme [data-slot='status-badge'][data-tone='moving']::before {
+  background: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand) 20%, transparent);
+}
+
+.business-theme [data-slot='status-badge'][data-tone='done']::before {
+  background: var(--success);
+}
+
+.business-theme [data-slot='status-badge'][data-tone='alert'] {
+  color: var(--destructive);
+}
+
+.business-theme [data-slot='status-badge'][data-tone='alert']::before {
+  background: var(--destructive);
+}
+
+.business-theme [data-slot='status-badge'][data-tone='muted'] {
+  color: var(--muted-foreground);
+}
+
+@keyframes route-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--brand) 0%, transparent);
+  }
+}
+
+.animate-route-pulse {
+  animation: route-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-route-pulse {
+    animation: none;
+  }
+}
+
 @theme inline {
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-surface-rail: var(--surface-rail);
+  --color-surface-rail-foreground: var(--surface-rail-foreground);
+  --color-surface-rail-muted: var(--surface-rail-muted);
+  --color-surface-rail-border: var(--surface-rail-border);
   --font-sans: 'Inter', 'Inter Fallback', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

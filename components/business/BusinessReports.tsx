@@ -195,11 +195,11 @@ export function BusinessReports() {
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">Success</CardTitle>
               {successRate >= 95 ? (
-                <TrendingUp className="h-4 w-4 text-green-500" />
+                <TrendingUp className="h-4 w-4 text-success" />
               ) : successRate >= 85 ? (
-                <TrendingUp className="h-4 w-4 text-yellow-500" />
+                <TrendingUp className="h-4 w-4 text-warning" />
               ) : (
-                <TrendingDown className="h-4 w-4 text-red-500" />
+                <TrendingDown className="h-4 w-4 text-destructive" />
               )}
             </CardHeader>
             <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
@@ -253,7 +253,7 @@ export function BusinessReports() {
                   : 'N/A'
                 }
                 {businessRatings?.avgOverallRating && (
-                  <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 fill-yellow-400" />
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5 text-warning fill-warning" />
                 )}
               </div>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
@@ -307,10 +307,10 @@ export function BusinessReports() {
                         className={cn(
                           "shrink-0 text-xs",
                           locSuccessRate >= 95 
-                            ? 'bg-green-500/10 text-green-500 border-green-500/20' 
+                            ? 'bg-success/10 text-success border-success/20' 
                             : locSuccessRate >= 85
-                              ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                              : 'bg-red-500/10 text-red-500 border-red-500/20'
+                              ? 'bg-warning/10 text-warning border-warning/20'
+                              : 'bg-destructive/10 text-destructive border-destructive/20'
                         )}
                       >
                         {locSuccessRate}%
@@ -323,7 +323,7 @@ export function BusinessReports() {
                       {loc.issues.length > 0 && (
                         <>
                           <span className="text-muted-foreground">·</span>
-                          <span className="text-orange-500">
+                          <span className="text-brand">
                             {loc.issues.reduce((sum, i) => sum + i.count, 0)} issues
                           </span>
                         </>

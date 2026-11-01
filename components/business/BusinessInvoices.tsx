@@ -29,11 +29,11 @@ import { toast } from 'sonner'
 
 const statusStyles: Record<string, string> = {
   draft: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
-  sent: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  paid: 'bg-green-500/10 text-green-400 border-green-500/20',
-  overdue: 'bg-red-500/10 text-red-400 border-red-500/20',
-  disputed: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  escalated: 'bg-red-500/10 text-red-500 border-red-500/20 font-bold',
+  sent: 'bg-muted-foreground/10 text-muted-foreground border-muted-foreground/20',
+  paid: 'bg-success/10 text-success border-success/20',
+  overdue: 'bg-destructive/10 text-destructive border-destructive/20',
+  disputed: 'bg-warning/10 text-warning border-warning/20',
+  escalated: 'bg-destructive/10 text-destructive border-destructive/20 font-bold',
 }
 
 export function BusinessInvoices() {
@@ -99,17 +99,18 @@ export function BusinessInvoices() {
   return (
     <div className="space-y-6">
       {/* Current Month Running Total */}
-      <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+      <Card className="relative overflow-hidden border-border">
+        <span className="absolute inset-x-0 top-0 h-px bg-primary" aria-hidden="true" />
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })} - Running Total
+          <CardTitle className="flex items-center gap-2 text-[11px] font-normal uppercase tracking-[0.16em] text-muted-foreground">
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })} · Running total
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-3xl font-bold">{formatCurrency(runningTotalWithGst)}</p>
+              <p className="tabular font-[family-name:var(--font-display)] text-4xl font-light">{formatCurrency(runningTotalWithGst)}</p>
               <p className="text-sm text-muted-foreground mt-1">
                 {monthDeliveries.length} deliveries this month
               </p>
@@ -149,7 +150,7 @@ export function BusinessInvoices() {
                         <p className="font-medium">{invoice.invoiceNumber}</p>
                         <Badge variant="outline" className={statusStyles[invoice.status]}>
                           {invoice.status === 'overdue' && (
-                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-1" />
+                            <span className="w-2 h-2 rounded-full bg-destructive animate-pulse mr-1" />
                           )}
                           {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                         </Badge>
@@ -376,13 +377,13 @@ function InvoiceDetailView({
 
       {/* Status Banner */}
       {invoice.status === 'overdue' && (
-        <Card className="border-red-500/50 bg-red-500/10">
+        <Card className="border-destructive/50 bg-destructive/10">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <AlertTriangle className="h-5 w-5 text-destructive" />
               <div>
-                <p className="font-medium text-red-400">Payment Overdue</p>
-                <p className="text-sm text-red-400/80">
+                <p className="font-medium text-destructive">Payment Overdue</p>
+                <p className="text-sm text-destructive/80">
                   This invoice was due on {new Date(invoice.dueDate).toLocaleDateString()}
                 </p>
               </div>

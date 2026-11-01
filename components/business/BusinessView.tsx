@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { useApp } from '@/lib/context'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { CreateOrderForm } from './CreateOrderForm'
 import { BusinessOrders } from './BusinessOrders'
 import { BusinessLiveTracking } from './BusinessLiveTracking'
@@ -14,131 +13,141 @@ import { BusinessReports } from './BusinessReports'
 import { LocationSwitcher } from './LocationSwitcher'
 import { BusinessNotificationCenter } from './BusinessNotificationCenter'
 import { HelpGuide } from '@/components/shared/HelpGuide'
+import { BusinessSidebar } from './shell/BusinessSidebar'
+import { BusinessMobileNav } from './shell/BusinessMobileNav'
 import {
-  Plus,
-  Package,
-  Building2,
-  User,
-  FileText,
-  Radio,
-  BarChart3,
-} from 'lucide-react'
+  ACTIVE_DELIVERY_STATUSES,
+  BUSINESS_NAV,
+  IN_TRANSIT_STATUSES,
+  type BusinessSection,
+} from './shell/nav-items'
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function greeting(date: Date) {
+  const h = date.getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+const dateFormatter = new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })
 
 export function BusinessView() {
-  const [activeTab, setActiveTab] = useState('orders')
-  const { currentUser, businesses } = useApp()
-  
-  const business = businesses.find(b => b.id === currentUser?.businessId)
+  const [activeTab, setActiveTab] = useState<BusinessSection>('orders')
+  const { currentUser, deliveries, logout } = useApp()
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  // Portaled overlays (dialogs, selects, sheets) render on <body>, outside
+  // the shell, so the scoped theme must live there too while mounted.
+  useEffect(() => {
+    document.body.classList.add('business-theme')
+    return () => document.body.classList.remove('business-theme')
+  }, [])
+
+  const { activeCount, inTransitCount } = useMemo(() => {
+    const mine = deliveries.filter(d => d.businessId === currentUser?.businessId)
+    return {
+      activeCount: mine.filter(d => ACTIVE_DELIVERY_STATUSES.has(d.status)).length,
+      inTransitCount: mine.filter(d => IN_TRANSIT_STATUSES.has(d.status)).length,
+    }
+  }, [deliveries, currentUser?.businessId])
+
+  const navigate = (section: string) => {
+    setActiveTab(section as BusinessSection)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const section = BUSINESS_NAV.find(item => item.id === activeTab) ?? BUSINESS_NAV[0]
+  const initials = currentUser?.name ? getInitials(currentUser.name) : 'U'
+  const firstName = currentUser?.name?.split(' ')[0]
+  const now = new Date()
+  const isOverview = activeTab === 'orders'
+
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border safe-area-top">
-        <div className="px-3 py-2.5 sm:px-4 sm:py-3">
-          <div className="flex items-center justify-between gap-2 max-w-7xl mx-auto">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shrink-0">
-                <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
-              </div>
+    <div className="business-theme min-h-screen overflow-x-hidden bg-background text-foreground">
+      <BusinessSidebar
+        active={activeTab}
+        onNavigate={navigate}
+        activeCount={activeCount}
+        inTransitCount={inTransitCount}
+        userName={currentUser?.name ?? 'Account'}
+        userEmail={currentUser?.email ?? ''}
+        initials={initials}
+        onLogout={() => {
+          void logout()
+        }}
+      />
+
+      <div className="flex min-h-screen flex-col lg:pl-64">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl safe-area-top">
+          <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:h-16 lg:px-10">
+            <div className="flex min-w-0 items-center gap-3 lg:hidden">
+              <span className="text-base font-bold tracking-tight text-brand">DOMS</span>
+              <span className="h-6 w-px bg-border" aria-hidden="true" />
               <LocationSwitcher />
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+
+            <div className="hidden min-w-0 items-center gap-2 text-sm lg:flex">
+              <span className="text-muted-foreground">{section.group}</span>
+              <span className="text-muted-foreground/50" aria-hidden="true">
+                {'/'}
+              </span>
+              <span className="font-medium text-foreground">{section.label}</span>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              {inTransitCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('live')}
+                  className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground transition-colors hover:border-foreground/20 sm:flex"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand animate-route-pulse" aria-hidden="true" />
+                  <span className="tabular">{inTransitCount}</span> on the road
+                </button>
+              )}
               <HelpGuide role="business" />
               <BusinessNotificationCenter />
-              <Avatar className="w-8 h-8 sm:w-9 sm:h-9">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs sm:text-sm">
-                  {currentUser?.name ? getInitials(currentUser.name) : 'U'}
-                </AvatarFallback>
-              </Avatar>
+              {activeTab !== 'create' && (
+                <Button size="sm" onClick={() => navigate('create')} className="ml-1 hidden h-9 gap-1.5 rounded-full px-4 lg:inline-flex">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New delivery
+                </Button>
+              )}
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Content Area */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="max-w-7xl mx-auto px-4 py-4 pb-24">
-            <TabsContent value="orders" className="mt-0 m-0">
-              <BusinessOrders onNavigate={setActiveTab} />
-            </TabsContent>
+        <main className="flex-1">
+          <div className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-16 lg:pt-10">
+            <div className="flex flex-col gap-1.5 pb-6 lg:pb-8">
+              {isOverview && (
+                <span className="text-xs text-muted-foreground">{dateFormatter.format(now)}</span>
+              )}
+              <h1 className="text-balance text-2xl text-foreground lg:text-[32px] lg:leading-tight">
+                {isOverview && firstName ? `${greeting(now)}, ${firstName}` : section.label}
+              </h1>
+              <p className="text-pretty text-sm leading-relaxed text-muted-foreground">{section.description}</p>
+            </div>
 
-            <TabsContent value="live" className="mt-0 m-0">
-              <BusinessLiveTracking />
-            </TabsContent>
-
-            <TabsContent value="create" className="mt-0 m-0">
-              <CreateOrderForm onSuccess={() => setActiveTab('orders')} />
-            </TabsContent>
-
-            <TabsContent value="invoices" className="mt-0 m-0">
-              <BusinessInvoices />
-            </TabsContent>
-            
-            <TabsContent value="reports" className="mt-0 m-0">
-              <BusinessReports />
-            </TabsContent>
-            
-            <TabsContent value="profile" className="mt-0 m-0">
-              <BusinessProfile />
-            </TabsContent>
+            {activeTab === 'orders' && <BusinessOrders onNavigate={navigate} />}
+            {activeTab === 'live' && <BusinessLiveTracking />}
+            {activeTab === 'create' && <CreateOrderForm onSuccess={() => navigate('orders')} />}
+            {activeTab === 'invoices' && <BusinessInvoices />}
+            {activeTab === 'reports' && <BusinessReports />}
+            {activeTab === 'profile' && <BusinessProfile />}
           </div>
-        </div>
+        </main>
+      </div>
 
-        {/* Bottom Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border safe-area-bottom z-40">
-          <TabsList className="w-full h-16 rounded-none bg-transparent p-0 grid grid-cols-6 max-w-xl mx-auto">
-            <TabsTrigger
-              value="orders"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
-            >
-              <Package className="w-5 h-5" />
-              <span className="text-[9px] sm:text-[10px] font-medium">Orders</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="live"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
-            >
-              <Radio className="w-5 h-5" />
-              <span className="text-[9px] sm:text-[10px] font-medium">Live</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="create"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary flex items-center justify-center -mt-4 shadow-lg">
-                <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
-              </div>
-              <span className="text-[9px] sm:text-[10px] font-medium -mt-1">Create</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="invoices"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
-            >
-              <FileText className="w-5 h-5" />
-              <span className="text-[9px] sm:text-[10px] font-medium">Bills</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="reports"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
-            >
-              <BarChart3 className="w-5 h-5" />
-              <span className="text-[9px] sm:text-[10px] font-medium">Reports</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="profile"
-              className="h-full rounded-none flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-transparent data-[state=active]:text-primary text-muted-foreground px-1"
-            >
-              <User className="w-5 h-5" />
-              <span className="text-[9px] sm:text-[10px] font-medium">Profile</span>
-            </TabsTrigger>
-          </TabsList>
-        </div>
-      </Tabs>
+      <BusinessMobileNav active={activeTab} onNavigate={navigate} />
     </div>
   )
 }

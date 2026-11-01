@@ -55,10 +55,10 @@ function statusLabel(status: DeliveryStatus): string {
 function statusTone(status: DeliveryStatus): string {
   switch (status) {
     case 'en_route_pickup':
-      return 'bg-blue-500/15 text-blue-500 border-blue-500/30'
+      return 'bg-muted-foreground/15 text-muted-foreground border-muted-foreground/30'
     case 'picked_up':
     case 'en_route_dropoff':
-      return 'bg-orange-500/15 text-orange-500 border-orange-500/30'
+      return 'bg-brand/15 text-brand border-brand/30'
     default:
       return 'bg-muted text-muted-foreground border-border'
   }
@@ -247,14 +247,14 @@ export function BusinessLiveTracking() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-green-500" />
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-success" />
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Pickup</p>
                       <p className="truncate text-foreground">{delivery.pickupAddress}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
+                    <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Drop-off</p>
                       <p className="truncate text-foreground">{delivery.dropoffAddress}</p>
@@ -412,14 +412,14 @@ function TrackingDetailSheet({
             </CardHeader>
             <CardContent className="pt-0 space-y-3 text-sm">
               <div className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-green-500" />
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-success" />
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Pickup</p>
                   <p className="text-foreground">{delivery.pickupAddress}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
+                <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Drop-off</p>
                   <p className="text-foreground">{delivery.dropoffAddress}</p>

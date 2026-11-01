@@ -48,7 +48,11 @@ import type { Delivery } from '@/lib/types'
 import { estimateDeliveryPrice } from '@/lib/billing'
 import { editDeliveryDetails } from '@/lib/db'
 import { LabelPrintButton } from '@/components/shared/LabelPrintButton'
-import { CheckCircle2 } from 'lucide-react'
+import { ArrowRight, CheckCircle2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { RouteTrack } from './RouteTrack'
+
+const orderTimeFormatter = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 interface BusinessOrdersProps {
   onNavigate?: (tab: string) => void
@@ -263,258 +267,264 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
 
   if (businessOrders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-4">
-        <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-          <Package className="w-10 h-10 text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center gap-5 rounded-2xl border border-dashed border-border bg-card px-6 py-20 text-center">
+        <div className="w-full max-w-xs">
+          <RouteTrack status="en_route_pickup" />
         </div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">No Orders Yet</h3>
-        <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Create your first delivery order to get started
-        </p>
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-lg text-foreground">No deliveries yet</h3>
+          <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
+            Book your first pickup and you&apos;ll see every package move here in real time.
+          </p>
+        </div>
+        {onNavigate && (
+          <Button onClick={() => onNavigate('create')} className="rounded-full px-5">
+            Book a delivery
+          </Button>
+        )}
       </div>
     )
   }
 
+  const spend = deliveredOrders.reduce((sum, o) => sum + (o.price || 0), 0)
+  const kpis = [
+    { label: 'In progress', value: String(activeOrders.length), live: activeOrders.length > 0 },
+    { label: 'Delivered', value: String(deliveredOrders.length), live: false },
+    { label: 'Total orders', value: String(businessOrders.length), live: false },
+    {
+      label: 'Delivered spend',
+      value: `$${spend.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      live: false,
+    },
+  ]
+  const filters: { id: typeof filter; label: string; count: number }[] = [
+    { id: 'all', label: 'All', count: businessOrders.length },
+    { id: 'active', label: 'Active', count: activeOrders.length },
+    { id: 'delivered', label: 'Delivered', count: deliveredOrders.length },
+    { id: 'cancelled', label: 'Cancelled', count: cancelledOrders.length },
+  ]
+
   return (
-    <div className="space-y-4 overflow-x-hidden">
-      {/* Stats Summary */}
-      <div className="grid grid-cols-4 gap-2">
-        <Card className="bg-primary/10 border-primary/20">
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-lg sm:text-2xl font-bold text-primary">{businessOrders.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Total</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-warning/10 border-warning/20">
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-lg sm:text-2xl font-bold text-warning">{activeOrders.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Active</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-success/10 border-success/20">
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-lg sm:text-2xl font-bold text-success">
-              {deliveredOrders.length}
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Done</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-destructive/10 border-destructive/20">
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-lg sm:text-2xl font-bold text-destructive">
-              {cancelledOrders.length}
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Cancel</p>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="flex flex-col gap-6 overflow-x-hidden">
+      <dl className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--elevation)] lg:grid-cols-4">
+        {kpis.map((kpi, i) => (
+          <div
+            key={kpi.label}
+            className={cn(
+              'flex flex-col gap-3 p-5',
+              i % 2 === 1 && 'border-l border-border',
+              i >= 2 && 'border-t border-border lg:border-t-0',
+              i === 2 && 'lg:border-l',
+            )}
+          >
+            <dt className="flex items-center gap-2 text-xs text-muted-foreground">
+              {kpi.live && <span className="h-1.5 w-1.5 rounded-full bg-brand animate-route-pulse" aria-hidden="true" />}
+              {kpi.label}
+            </dt>
+            <dd className="tabular text-2xl font-semibold tracking-tight text-foreground lg:text-[28px]">{kpi.value}</dd>
+          </div>
+        ))}
+      </dl>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={searchQuery}
-          onChange={e => {
-            setSearchQuery(e.target.value)
-            setOrderPage(0)
-          }}
-          placeholder="Search orders, addresses, recipients..."
-          className="pl-9 h-9 text-sm"
-        />
-      </div>
-
-      {/* Filter Tabs */}
-      <Tabs value={filter} onValueChange={v => {
-        setFilter(v as typeof filter)
-        setOrderPage(0)
-      }}>
-        <TabsList className="w-full h-auto grid grid-cols-4">
-          <TabsTrigger value="all" className="text-[10px] sm:text-sm px-1 sm:px-3">
-            All ({businessOrders.length})
-          </TabsTrigger>
-          <TabsTrigger value="active" className="text-[10px] sm:text-sm px-1 sm:px-3">
-            Active ({activeOrders.length})
-          </TabsTrigger>
-          <TabsTrigger value="delivered" className="text-[10px] sm:text-sm px-1 sm:px-3">
-            Done ({deliveredOrders.length})
-          </TabsTrigger>
-          <TabsTrigger value="cancelled" className="text-[10px] sm:text-sm px-1 sm:px-3">
-            Cancel ({cancelledOrders.length})
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Orders List */}
-      <div className="space-y-3">
-        {pagedOrders.map(order => {
-          const driver = getDriver(order.driverId)
-          const delivery = getDelivery(order.id)
-          const canCancel = order.status === 'posted' && !order.driverId
-
-          return (
-            <Card
-              key={order.id}
-              className="overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => setSelectedOrder(order)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3 gap-2">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm font-mono text-muted-foreground">
-                      #{order.id.slice(-6).toUpperCase()}
-                    </span>
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {order.priority}
-                    </Badge>
-                  </div>
-                  <StatusBadge status={order.status} />
-                </div>
-
-                {/* Recipient line */}
-                {delivery?.recipientName && (
-                  <div className="flex items-center gap-1.5 text-sm text-foreground mb-2">
-                    <UserRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate">{delivery.recipientName}</span>
-                    {delivery.buzzCode && (
-                      <Badge variant="outline" className="h-5 text-xs font-normal">
-                        Buzz {delivery.buzzCode}
-                      </Badge>
-                    )}
-                  </div>
+      <section aria-label="Orders" className="overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--elevation)]">
+        <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div role="tablist" aria-label="Filter orders" className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1">
+            {filters.map(f => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={filter === f.id}
+                onClick={() => {
+                  setFilter(f.id)
+                  setOrderPage(0)
+                }}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  filter === f.id
+                    ? 'bg-card font-medium text-foreground shadow-[var(--elevation)]'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
+              >
+                {f.label}
+                <span className="tabular text-xs text-muted-foreground">{f.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative sm:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value)
+                setOrderPage(0)
+              }}
+              placeholder="Search ID, address, recipient"
+              aria-label="Search orders"
+              className="h-9 rounded-lg pl-9 text-sm"
+            />
+          </div>
+        </div>
 
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                    <p className="text-sm text-foreground line-clamp-1">
-                      {order.pickupAddress}
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-success mt-1.5 shrink-0" />
-                    <p className="text-sm text-foreground line-clamp-1">
-                      {order.dropoffAddress}
-                    </p>
-                  </div>
-                </div>
+        <div className="hidden grid-cols-[120px_minmax(0,1fr)_180px_150px_96px] gap-6 border-b border-border px-5 py-2.5 text-xs text-muted-foreground lg:grid">
+          <span>Order</span>
+          <span>Route</span>
+          <span>Recipient</span>
+          <span>Status</span>
+          <span className="text-right">Amount</span>
+        </div>
 
-                {/* Cancellation info for cancelled orders */}
-                {order.status === 'cancelled' && delivery?.cancellationReason && (
-                  <div className="mb-3 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 text-xs text-destructive">
-                    <span className="font-medium">Cancelled:</span>{' '}
-                    {delivery.cancellationReason}
-                  </div>
-                )}
+        {pagedOrders.length === 0 ? (
+          <p className="px-5 py-12 text-center text-sm text-muted-foreground">No orders match this view.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {pagedOrders.map(order => {
+              const driver = getDriver(order.driverId)
+              const delivery = getDelivery(order.id)
+              const canCancel = order.status === 'posted' && !order.driverId
+              const printed = !!delivery && (!!delivery.labelPrintedAt || printedIds.has(delivery.id))
+              const showReorder = !!delivery && order.status !== 'posted'
+              const hasActions = !!delivery?.scanToken || canCancel || showReorder
 
-                <div className="pt-3 border-t border-border space-y-2">
-                  {/* Driver info row */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {driver ? (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm text-muted-foreground truncate">
-                            {driver.name}
-                          </span>
-                        </div>
-                      ) : order.status === 'posted' ? (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="w-3.5 h-3.5" />
-                          Awaiting driver
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-primary">
-                        ${order.price.toFixed(2)}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                  {/* Label row (§11): print / reprint shipping label */}
-                  {delivery?.scanToken && (
-                    <div
-                      className="flex items-center justify-between gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {delivery.labelPrintedAt || printedIds.has(delivery.id) ? (
-                        <span className="flex items-center gap-1 text-xs text-success">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Label printed
+              return (
+                <li key={order.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedOrder(order)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedOrder(order)
+                      }
+                    }}
+                    className="group flex cursor-pointer flex-col gap-4 px-4 py-4 transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:px-5 lg:grid lg:grid-cols-[120px_minmax(0,1fr)_180px_150px_96px] lg:items-center lg:gap-6"
+                  >
+                    <div className="flex items-start justify-between gap-3 lg:flex-col lg:items-start lg:gap-1">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-sm font-medium text-foreground">
+                          #{order.id.slice(-6).toUpperCase()}
                         </span>
-                      ) : (
                         <span className="text-xs text-muted-foreground">
-                          Label ready
+                          {order.createdAt ? orderTimeFormatter.format(new Date(order.createdAt)) : ''}
+                          {order.priority !== 'standard' && (
+                            <span className="ml-1.5 font-medium capitalize text-brand">{order.priority}</span>
+                          )}
                         </span>
-                      )}
-                      <LabelPrintButton
-                        deliveries={[delivery]}
-                        defaultSize="halfA4"
-                        variant="outline"
-                        className="h-7 px-2 text-xs"
-                        label={
-                          delivery.labelPrintedAt || printedIds.has(delivery.id)
-                            ? 'Reprint label'
-                            : 'Print label'
-                        }
-                        onPrinted={markPrinted}
-                      />
+                      </div>
+                      <div className="lg:hidden">
+                        <StatusBadge status={order.status} />
+                      </div>
                     </div>
-                  )}
-                  {/* Action buttons row */}
-                  {(canCancel || (delivery && order.status !== 'posted')) && (
-                    <div className="flex items-center gap-2">
-                      {canCancel && delivery && (
+
+                    <div className="flex min-w-0 flex-col gap-2.5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 text-sm">
+                        <span className="truncate text-foreground" title={order.pickupAddress}>
+                          {order.pickupAddress}
+                        </span>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                        <span className="truncate text-foreground" title={order.dropoffAddress}>
+                          {order.dropoffAddress}
+                        </span>
+                      </div>
+                      <RouteTrack status={order.status} />
+                      {order.status === 'cancelled' && order.cancellationReason && (
+                        <p className="truncate text-xs text-muted-foreground">Cancelled: {order.cancellationReason}</p>
+                      )}
+                    </div>
+
+                    <div className="flex min-w-0 items-center justify-between gap-3 lg:flex-col lg:items-start lg:justify-center lg:gap-1">
+                      <span className="truncate text-sm text-foreground">
+                        {order.recipientName || 'No recipient name'}
+                        {order.buzzCode && (
+                          <span className="ml-1.5 text-xs text-muted-foreground">Buzz {order.buzzCode}</span>
+                        )}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {driver ? driver.name : order.status === 'posted' ? 'Finding a courier' : 'No courier'}
+                      </span>
+                    </div>
+
+                    <div className="hidden lg:block">
+                      <StatusBadge status={order.status} />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 lg:justify-end">
+                      <span className="text-xs text-muted-foreground lg:hidden">Amount</span>
+                      <span className="flex items-center gap-1 tabular text-sm font-semibold text-foreground">
+                        ${order.price.toFixed(2)}
+                        <ChevronRight
+                          className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    </div>
+                  </div>
+
+                  {hasActions && delivery && (
+                    <div className="flex flex-wrap items-center gap-2 px-4 pb-4 sm:px-5 lg:pl-[calc(120px+2.75rem)]">
+                      {delivery.scanToken && (
+                        <>
+                          <span
+                            className={cn(
+                              'flex items-center gap-1 text-xs',
+                              printed ? 'text-success' : 'text-muted-foreground',
+                            )}
+                          >
+                            {printed && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />}
+                            {printed ? 'Label printed' : 'Label ready'}
+                          </span>
+                          <LabelPrintButton
+                            deliveries={[delivery]}
+                            defaultSize="halfA4"
+                            variant="outline"
+                            className="h-7 rounded-full px-3 text-xs"
+                            label={printed ? 'Reprint' : 'Print label'}
+                            onPrinted={markPrinted}
+                          />
+                        </>
+                      )}
+                      {canCancel && (
                         <>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs px-2"
-                            onClick={e => {
-                              e.stopPropagation()
-                              openEditDialog(delivery)
-                            }}
+                            className="h-7 rounded-full px-3 text-xs"
+                            onClick={() => openEditDialog(delivery)}
                           >
-                            <Pencil className="w-3 h-3 mr-1" />
+                            <Pencil className="h-3 w-3" aria-hidden="true" />
                             Edit
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="h-7 text-xs px-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                            onClick={e => {
-                              e.stopPropagation()
-                              openCancelDialog(delivery)
-                            }}
+                            variant="ghost"
+                            className="h-7 rounded-full px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => openCancelDialog(delivery)}
                           >
-                            <XCircle className="w-3 h-3 mr-1" />
+                            <XCircle className="h-3 w-3" aria-hidden="true" />
                             Cancel
                           </Button>
                         </>
                       )}
-                      {delivery && order.status !== 'posted' && (
+                      {showReorder && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs px-2"
-                          onClick={e => {
-                            e.stopPropagation()
-                            openDuplicateDialog(delivery)
-                          }}
+                          className="h-7 rounded-full px-3 text-xs"
+                          onClick={() => openDuplicateDialog(delivery)}
                         >
-                          <Copy className="w-3 h-3 mr-1" />
+                          <Copy className="h-3 w-3" aria-hidden="true" />
                           Reorder
                         </Button>
                       )}
                     </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
       <ListPager
         page={safeOrderPage}

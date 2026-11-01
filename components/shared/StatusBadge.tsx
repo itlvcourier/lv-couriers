@@ -40,12 +40,30 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 }
 
+const statusTones: Record<string, 'moving' | 'done' | 'alert' | 'muted' | 'idle'> = {
+  posted: 'idle',
+  pending: 'idle',
+  claimed: 'moving',
+  assigned: 'moving',
+  en_route_pickup: 'moving',
+  picked_up: 'moving',
+  en_route_dropoff: 'moving',
+  in_transit: 'moving',
+  delivered: 'done',
+  failed_retry: 'alert',
+  failed_permanent: 'alert',
+  flagged: 'alert',
+  cancelled: 'muted',
+}
+
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const style = statusStyles[status] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'
   const label = statusLabels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   
   return (
     <span
+      data-slot="status-badge"
+      data-tone={statusTones[status] ?? 'idle'}
       className={cn(
         'inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border transition-all duration-200',
         style,

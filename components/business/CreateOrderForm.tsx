@@ -685,8 +685,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
           <CardHeader className="pb-3 px-3 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-                  <UserRound className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-success/10 flex items-center justify-center shrink-0">
+                  <UserRound className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-success" />
                 </div>
                 <span>Recipient</span>
               </CardTitle>
@@ -695,8 +695,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
           </CardHeader>
           <CardContent className="space-y-3 px-3 sm:px-6 pt-0">
             {fromSavedContactId && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-2 py-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 min-w-0">
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-success/30 bg-success/5 px-2 py-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-success dark:text-success min-w-0">
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">Using saved recipient</span>
                 </div>
@@ -838,8 +838,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         <Card>
           <CardHeader className="pb-3 px-3 sm:px-6">
             <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-orange-500/10 flex items-center justify-center">
-                <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500" />
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-brand/10 flex items-center justify-center">
+                <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-brand" />
               </div>
               Package Details
             </CardTitle>
@@ -941,7 +941,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                     zoneTier={previewBreakdown.zoneTier}
                   />
                 ) : (
-                  <p className="text-xs text-yellow-500 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+                  <p className="text-xs text-warning rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
                     No rate card is set for this location — your admin must add one before this delivery can be billed.
                   </p>
                 )}
@@ -954,8 +954,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         <Card>
           <CardHeader className="pb-3 px-3 sm:px-6">
             <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-muted-foreground/10 flex items-center justify-center">
+                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-muted-foreground" />
               </div>
               Delivery Options
             </CardTitle>
@@ -1028,7 +1028,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-orange-500" />
+              <AlertCircle className="w-5 h-5 text-brand" />
               Duplicate Address Found
             </DialogTitle>
             <DialogDescription>
@@ -1063,7 +1063,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   className="w-full h-12 justify-start px-4"
                   variant="outline"
                 >
-                  <Copy className="w-5 h-5 mr-3 text-green-500" />
+                  <Copy className="w-5 h-5 mr-3 text-success" />
                   <div className="text-left">
                     <p className="font-medium">Combine with existing delivery</p>
                     <p className="text-xs text-muted-foreground">
@@ -1077,7 +1077,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                   className="w-full h-12 justify-start px-4"
                   variant="outline"
                 >
-                  <FilePlus className="w-5 h-5 mr-3 text-blue-500" />
+                  <FilePlus className="w-5 h-5 mr-3 text-muted-foreground" />
                   <div className="text-left">
                     <p className="font-medium">Keep as separate delivery</p>
                     <p className="text-xs text-muted-foreground">Separate billing</p>
@@ -1115,7 +1115,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-orange-500" />
+              <Clock className="w-5 h-5 text-brand" />
               Past today&apos;s cutoff
             </DialogTitle>
             <DialogDescription>
@@ -1171,7 +1171,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Printer className="w-5 h-5 text-[var(--accent-orange)]" />
+              <Printer className="w-5 h-5 text-[var(--brand)]" />
               Print delivery label
             </DialogTitle>
             <DialogDescription>
