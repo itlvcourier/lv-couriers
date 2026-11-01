@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       recipient_contact:
         (delivery.recipient_name || 'N/A') + (delivery.recipient_phone ? ` (${delivery.recipient_phone})` : ''),
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
 
     sends.push(
       sendSms({
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       dropoff_area: delivery.dropoff_area || 'dropoff',
       recipient_name: delivery.recipient_name || 'N/A',
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
 
     sends.push(
       sendSms({
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       business_name: businessName,
       driver_name: driver.name,
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
 
     sends.push(
       sendSms({

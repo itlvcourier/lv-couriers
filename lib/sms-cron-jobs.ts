@@ -1,7 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
-import { renderSms, getSmsTemplateBody } from '@/lib/sms-templates-server'
-import { renderSmsTemplate } from '@/lib/sms-templates'
+import { renderSms } from '@/lib/sms-templates-server'
 import { createFeedbackToken } from '@/lib/db-extended'
 import { feedbackLink } from '@/lib/app-url'
 
@@ -133,7 +132,7 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
           greeting,
           business_name: businessName,
           feedback_url: feedbackUrl,
-        }),
+        }, { deliveryId: delivery.id, businessId: delivery.business_id, locationId: delivery.location_id }),
         type: 'feedback_request',
         deliveryId: delivery.id,
       })
@@ -211,21 +210,21 @@ export async function runWeeklySmsSummary(): Promise<WeeklySummaryResult> {
 
   const weekLabel = `${since.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} – ${new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}`
 
-  const weeklyTemplate = await getSmsTemplateBody('weekly_summary.business')
   const sends: Array<Promise<{ ok: boolean; businessId: string }>> = []
   for (const biz of (businesses ?? []) as Array<{ id: string; name: string; phone: string | null }>) {
-    if (!biz.phone) continue
+    const phone = biz.phone
+    if (!phone) continue
     const count = byBusiness.get(biz.id) ?? 0
     sends.push(
-      sendSms({
-        to: biz.phone,
-        body: renderSmsTemplate(weeklyTemplate, {
+      (async () => sendSms({
+        to: phone,
+        body: await renderSms('weekly_summary.business', {
           business_name: biz.name,
           week_label: weekLabel,
           count_label: `${count} ${count !== 1 ? 'deliveries' : 'delivery'}`,
-        }),
+        }, { businessId: biz.id }),
         type: 'weekly_summary',
-      }).then((r) => ({ ok: r.ok, businessId: biz.id })),
+      }))().then((r) => ({ ok: r.ok, businessId: biz.id })),
     )
   }
 

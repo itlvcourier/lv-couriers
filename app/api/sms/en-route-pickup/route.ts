@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     driver_name: driverName,
     pickup_address: delivery.pickup_address || 'your location',
     tracking_url: trackingUrl,
-  })
+  }, { deliveryId })
 
   const result = await sendSms({
     to: businessPhone,

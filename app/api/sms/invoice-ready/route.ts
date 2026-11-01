@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('id, invoice_number, total, due_date, status, billing_email, recipient_phone, businesses(name)')
+    .select('id, invoice_number, total, due_date, status, billing_email, recipient_phone, business_id, businesses(name)')
     .eq('id', invoiceId)
     .maybeSingle<{
       id: string
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       status: string
       billing_email: string
       recipient_phone: string | null
+      business_id: string | null
       businesses: { name: string } | null
     }>()
 
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
       business_name: businessName,
       total,
       due_date: dueDate,
-    }),
+    }, { businessId: invoice.business_id }),
     type: 'invoice_ready',
     invoiceId,
   })

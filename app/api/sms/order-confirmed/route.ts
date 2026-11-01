@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       dropoff_area: delivery.dropoff_area || 'dropoff',
       recipient_name: delivery.recipient_name || 'N/A',
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
 
     sends.push(
       sendSms({
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       recipient_name: delivery.recipient_name || 'there',
       business_name: businessName,
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
 
     sends.push(
       sendSms({

@@ -25,7 +25,75 @@ export type SmsTemplateDef = {
   trigger: string
   defaultBody: string
   vars: SmsTemplateVar[]
+  /** Append the audience signature by default. Off for codes, legal replies and logins. */
+  signature?: boolean
 }
+
+/**
+ * Business contact tags, usable in every message and signature. Filled in per
+ * business at send time. When one is blank, its " | " segment (or its whole
+ * line) is dropped so customers never see an empty "Email: ".
+ */
+export const BUSINESS_TAGS: SmsTemplateVar[] = [
+  { name: 'business_name', description: 'Business name', example: 'Main St Pharmacy' },
+  { name: 'business_phone', description: 'Business phone', example: '(555) 201-3344' },
+  { name: 'business_email', description: 'Business email', example: 'hello@mainstpharmacy.ca' },
+  { name: 'business_website', description: 'Business website', example: 'mainstpharmacy.ca' },
+  { name: 'business_note', description: "Business's own short note", example: 'Open until 9pm' },
+  { name: 'location_name', description: 'Branch the delivery came from', example: 'Downtown branch' },
+  { name: 'location_phone', description: 'Branch phone', example: '(555) 201-9900' },
+  { name: 'location_address', description: 'Branch address', example: '12 King St' },
+]
+
+const BUSINESS_TAG_NAMES = new Set(BUSINESS_TAGS.map((t) => t.name))
+
+export type SmsSignatureKey = 'signature.recipient' | 'signature.business' | 'signature.driver'
+
+export type SmsSignatureDef = {
+  key: SmsSignatureKey
+  label: string
+  audience: Exclude<SmsAudience, 'Any'>
+  description: string
+  defaultBody: string
+}
+
+export const SMS_SIGNATURES: SmsSignatureDef[] = [
+  {
+    key: 'signature.recipient',
+    label: 'Customer signature',
+    audience: 'Recipient',
+    description: 'Added to texts sent to delivery recipients. Businesses can replace it with their own.',
+    defaultBody: 'Questions? {business_phone} | {business_email}\n— {business_name} via DOMS By Atria360',
+  },
+  {
+    key: 'signature.business',
+    label: 'Business signature',
+    audience: 'Business',
+    description: 'Added to texts sent to business owners and managers.',
+    defaultBody: '— DOMS By Atria360',
+  },
+  {
+    key: 'signature.driver',
+    label: 'Driver signature',
+    audience: 'Driver',
+    description: 'Added to texts sent to drivers. Leave empty for no footer.',
+    defaultBody: '— DOMS By Atria360 Dispatch',
+  },
+]
+
+export const SMS_SIGNATURE_MAP = Object.fromEntries(SMS_SIGNATURES.map((s) => [s.key, s])) as Record<
+  SmsSignatureKey,
+  SmsSignatureDef
+>
+
+export function signatureKeyFor(audience: SmsAudience): SmsSignatureKey | null {
+  if (audience === 'Recipient') return 'signature.recipient'
+  if (audience === 'Business') return 'signature.business'
+  if (audience === 'Driver') return 'signature.driver'
+  return null
+}
+
+export const SMS_SIGNATURE_MAX_LENGTH = 200
 
 export const SMS_TEMPLATE_GROUPS: Record<SmsTemplateGroup, string> = {
   delivery: 'Delivery updates',
@@ -65,7 +133,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Recipient',
     trigger: 'A new delivery is posted',
     defaultBody:
-      'Hi {recipient_name}, {business_name} has scheduled a delivery for you. Track your package: {tracking_url}\n\n— DOMS By Atria360',
+      'Hi {recipient_name}, {business_name} has scheduled a delivery for you. Track your package: {tracking_url}',
     vars: [V.recipient, V.business, V.tracking],
   },
   {
@@ -121,7 +189,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Driver starts heading to the pickup',
     defaultBody:
-      '{driver_name} is on the way to pick up your package at {pickup_address}. Track: {tracking_url} — DOMS By Atria360',
+      '{driver_name} is on the way to pick up your package at {pickup_address}. Track: {tracking_url}',
     vars: [V.driver, V.pickupAddress, V.tracking],
   },
   {
@@ -131,7 +199,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Driver picks up the package',
     defaultBody:
-      'Package picked up by {driver_name}. Now heading to {recipient_name} at {dropoff_address}. Track: {tracking_url} — DOMS By Atria360',
+      'Package picked up by {driver_name}. Now heading to {recipient_name} at {dropoff_address}. Track: {tracking_url}',
     vars: [V.driver, V.recipient, V.dropoffAddress, V.tracking],
   },
   {
@@ -161,7 +229,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Recipient',
     trigger: 'Delivery is completed',
     defaultBody:
-      '{greeting}, your package from {business_name} has been delivered. View proof: {tracking_url}\n\n— DOMS By Atria360',
+      '{greeting}, your package from {business_name} has been delivered. View proof: {tracking_url}',
     vars: [V.greeting, V.business, V.tracking],
   },
   {
@@ -171,7 +239,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Delivery is completed',
     defaultBody:
-      'Delivery to {recipient_name} completed. View proof of delivery (photo + signature): {tracking_url}\n\n— DOMS By Atria360',
+      'Delivery to {recipient_name} completed. View proof of delivery (photo + signature): {tracking_url}',
     vars: [V.recipient, V.tracking],
   },
   {
@@ -181,7 +249,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Recipient',
     trigger: 'After delivery (scheduled review request)',
     defaultBody:
-      '{greeting}, how was your delivery from {business_name}? Share your feedback here: {feedback_url} (link expires in 7 days)\nReply STOP to unsubscribe. — DOMS By Atria360',
+      '{greeting}, how was your delivery from {business_name}? Share your feedback here: {feedback_url} (link expires in 7 days)\nReply STOP to unsubscribe.',
     vars: [
       V.greeting,
       V.business,
@@ -195,7 +263,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Recipient',
     trigger: 'Delivery attempt fails with attempts remaining',
     defaultBody:
-      '{greeting}, we attempted delivery from {business_name} but were unable to complete it. {attempts_left_label} remaining. Track your delivery: {tracking_url} — DOMS By Atria360',
+      '{greeting}, we attempted delivery from {business_name} but were unable to complete it. {attempts_left_label} remaining. Track your delivery: {tracking_url}',
     vars: [
       V.greeting,
       V.business,
@@ -210,7 +278,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Recipient',
     trigger: 'Final delivery attempt fails',
     defaultBody:
-      '{greeting}, we were unable to complete your delivery from {business_name} after {retries_label}. Please contact us to arrange redelivery. Track: {tracking_url} — DOMS By Atria360',
+      '{greeting}, we were unable to complete your delivery from {business_name} after {retries_label}. Please contact us to arrange redelivery. Track: {tracking_url}',
     vars: [V.greeting, V.business, { name: 'retries_label', description: 'e.g. "3 attempts"', example: '3 attempts' }, V.tracking],
   },
   {
@@ -220,7 +288,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Delivery attempt fails with attempts remaining',
     defaultBody:
-      'Delivery to {recipient_name} failed (attempt {retries}/{max_retries}). Driver will retry. Track: {tracking_url} — DOMS By Atria360',
+      'Delivery to {recipient_name} failed (attempt {retries}/{max_retries}). Driver will retry. Track: {tracking_url}',
     vars: [
       V.recipient,
       { name: 'retries', description: 'Attempts so far', example: '1' },
@@ -235,7 +303,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Final delivery attempt fails',
     defaultBody:
-      'Delivery to {recipient_name} permanently failed after {retries} attempts. Admin review required. Track: {tracking_url} — DOMS By Atria360',
+      'Delivery to {recipient_name} permanently failed after {retries} attempts. Admin review required. Track: {tracking_url}',
     vars: [V.recipient, { name: 'retries', description: 'Attempts so far', example: '3' }, V.tracking],
   },
   {
@@ -245,7 +313,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Recipient',
     trigger: 'Delivery is cancelled',
     defaultBody:
-      '{greeting}, your delivery from {business_name} has been cancelled. If this is unexpected, please contact {business_name} directly. — DOMS By Atria360',
+      '{greeting}, your delivery from {business_name} has been cancelled. If this is unexpected, please contact {business_name} directly.',
     vars: [V.greeting, V.business],
   },
   {
@@ -255,7 +323,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Delivery is cancelled',
     defaultBody:
-      'Your delivery to {recipient_name} has been cancelled. Contact DOMS By Atria360 if you have questions. — DOMS By Atria360',
+      'Your delivery to {recipient_name} has been cancelled. Contact DOMS By Atria360 if you have questions.',
     vars: [V.recipient],
   },
   {
@@ -265,7 +333,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Driver',
     trigger: 'An assigned delivery is cancelled',
     defaultBody:
-      '{driver_name}, the delivery you were assigned has been cancelled. Please check the app for your updated job list. — DOMS By Atria360',
+      '{driver_name}, the delivery you were assigned has been cancelled. Please check the app for your updated job list.',
     vars: [V.driver],
   },
   {
@@ -275,7 +343,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Driver',
     trigger: 'Admin reassigns a delivery',
     defaultBody:
-      "Hi {driver_name}, you've been assigned a delivery for {business_name}. Pickup: {pickup_address}. Dropoff: {dropoff_address} ({recipient_name}). Track: {tracking_url} — DOMS By Atria360",
+      "Hi {driver_name}, you've been assigned a delivery for {business_name}. Pickup: {pickup_address}. Dropoff: {dropoff_address} ({recipient_name}). Track: {tracking_url}",
     vars: [V.driver, V.business, V.pickupAddress, V.dropoffAddress, V.recipient, V.tracking],
   },
   {
@@ -285,7 +353,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Driver',
     trigger: 'Admin reassigns a delivery',
     defaultBody:
-      'Hi {driver_name}, the delivery to {recipient_name} has been reassigned to another driver. Check the app for your current jobs. — DOMS By Atria360',
+      'Hi {driver_name}, the delivery to {recipient_name} has been reassigned to another driver. Check the app for your current jobs.',
     vars: [V.driver, V.recipient],
   },
   {
@@ -295,11 +363,12 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'Admin reassigns a delivery',
     defaultBody:
-      'Driver update: {driver_name} is now handling the delivery to {recipient_name}. Track: {tracking_url} — DOMS By Atria360',
+      'Driver update: {driver_name} is now handling the delivery to {recipient_name}. Track: {tracking_url}',
     vars: [V.driver, V.recipient, V.tracking],
   },
   {
     key: 'consent_request.recipient',
+    signature: false,
     label: 'Handoff approval request',
     group: 'exceptions',
     audience: 'Recipient',
@@ -317,6 +386,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'consent_reply.approved',
+    signature: false,
     label: 'Approval confirmed',
     group: 'exceptions',
     audience: 'Recipient',
@@ -326,6 +396,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'consent_reply.declined',
+    signature: false,
     label: 'Decline confirmed',
     group: 'exceptions',
     audience: 'Recipient',
@@ -335,6 +406,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'consent_reply.unknown_code',
+    signature: false,
     label: 'Unrecognized reply code',
     group: 'exceptions',
     audience: 'Recipient',
@@ -345,6 +417,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'consent_reply.multiple_pending',
+    signature: false,
     label: 'Several approvals waiting',
     group: 'exceptions',
     audience: 'Recipient',
@@ -363,7 +436,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'An invoice is issued',
     defaultBody:
-      'Invoice #{invoice_number} for {business_name} is ready. Total: {total}, due {due_date}. Log in to view and pay. — DOMS By Atria360',
+      'Invoice #{invoice_number} for {business_name} is ready. Total: {total}, due {due_date}. Log in to view and pay.',
     vars: [
       { name: 'invoice_number', description: 'Invoice number', example: 'INV-202610-ab12cd34' },
       V.business,
@@ -378,7 +451,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     audience: 'Business',
     trigger: 'An invoice is marked paid',
     defaultBody:
-      'Payment received for Invoice #{invoice_number} ({business_name}). Amount: {amount} on {paid_date}. Thank you! — DOMS By Atria360',
+      'Payment received for Invoice #{invoice_number} ({business_name}). Amount: {amount} on {paid_date}. Thank you!',
     vars: [
       { name: 'invoice_number', description: 'Invoice number', example: 'INV-202610-ab12cd34' },
       V.business,
@@ -392,7 +465,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
     group: 'billing',
     audience: 'Business',
     trigger: 'Weekly scheduled summary',
-    defaultBody: '{business_name} weekly summary ({week_label}): {count_label} completed. Log in for details. — DOMS By Atria360',
+    defaultBody: '{business_name} weekly summary ({week_label}): {count_label} completed. Log in for details.',
     vars: [
       V.business,
       { name: 'week_label', description: 'Date range', example: 'Oct 25 – Nov 1' },
@@ -401,6 +474,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'driver_invite.driver',
+    signature: false,
     label: 'Driver invite',
     group: 'account',
     audience: 'Driver',
@@ -416,6 +490,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'opt_out.confirm',
+    signature: false,
     label: 'Unsubscribed (STOP)',
     group: 'account',
     audience: 'Any',
@@ -425,6 +500,7 @@ export const SMS_TEMPLATES: SmsTemplateDef[] = [
   },
   {
     key: 'opt_in.confirm',
+    signature: false,
     label: 'Re-subscribed (START)',
     group: 'account',
     audience: 'Any',
@@ -444,11 +520,53 @@ export const SMS_TEMPLATE_MAX_LENGTH = 1600
 
 const PLACEHOLDER = /\{([a-z_]+)\}/g
 
+const EMPTY = '\u0000'
+
 export function renderSmsTemplate(body: string, vars: Record<string, string | number | null | undefined>): string {
-  return body.replace(PLACEHOLDER, (match, name: string) => {
+  const filled = body.replace(PLACEHOLDER, (match, name: string) => {
     const value = vars[name]
+    if (BUSINESS_TAG_NAMES.has(name) && (value === undefined || value === null || String(value).trim() === '')) {
+      return EMPTY
+    }
     return value === undefined || value === null ? match : String(value)
   })
+  if (!filled.includes(EMPTY)) return filled
+
+  // Drop the " | " segment holding a blank business tag; drop the line if nothing is left.
+  return filled
+    .split('\n')
+    .flatMap((line) => {
+      if (!line.includes(EMPTY)) return [line]
+      const kept = line.split(' | ').filter((part) => !part.includes(EMPTY))
+      return kept.length ? [kept.join(' | ')] : []
+    })
+    .join('\n')
+}
+
+/** Message body plus its signature (if any), rendered with blank-tag cleanup. */
+export function composeSms(
+  body: string,
+  signature: string | null,
+  vars: Record<string, string | number | null | undefined>,
+): string {
+  const full = signature?.trim() ? `${body.trimEnd()}\n${signature.trim()}` : body
+  return renderSmsTemplate(full, vars).trim()
+}
+
+/** Validation for signatures (admin defaults and per-business overrides). */
+export function validateSmsSignature(body: string): string | null {
+  if (body.length > SMS_SIGNATURE_MAX_LENGTH) return `Signature must be ${SMS_SIGNATURE_MAX_LENGTH} characters or fewer.`
+  const unknown = findPlaceholders(body).filter((p) => !BUSINESS_TAG_NAMES.has(p))
+  if (unknown.length) return `Unknown tag${unknown.length > 1 ? 's' : ''}: ${unknown.map((u) => `{${u}}`).join(', ')}`
+  return null
+}
+
+export function businessTagExamples(): Record<string, string> {
+  return Object.fromEntries(BUSINESS_TAGS.map((t) => [t.name, t.example]))
+}
+
+export function usesSignatureByDefault(def: SmsTemplateDef): boolean {
+  return def.signature !== false && signatureKeyFor(def.audience) !== null
 }
 
 export function findPlaceholders(body: string): string[] {
@@ -459,7 +577,7 @@ export function findPlaceholders(body: string): string[] {
 export function validateSmsTemplate(def: SmsTemplateDef, body: string): string | null {
   if (!body.trim()) return 'Message cannot be empty.'
   if (body.length > SMS_TEMPLATE_MAX_LENGTH) return `Message must be ${SMS_TEMPLATE_MAX_LENGTH} characters or fewer.`
-  const known = new Set(def.vars.map((v) => v.name))
+  const known = new Set([...def.vars.map((v) => v.name), ...BUSINESS_TAG_NAMES])
   const unknown = findPlaceholders(body).filter((p) => !known.has(p))
   if (unknown.length) return `Unknown variable${unknown.length > 1 ? 's' : ''}: ${unknown.map((u) => `{${u}}`).join(', ')}`
   const missing = def.vars.filter((v) => v.required && !body.includes(`{${v.name}}`))
@@ -468,7 +586,7 @@ export function validateSmsTemplate(def: SmsTemplateDef, body: string): string |
 }
 
 export function exampleVars(def: SmsTemplateDef): Record<string, string> {
-  return Object.fromEntries(def.vars.map((v) => [v.name, v.example]))
+  return { ...businessTagExamples(), ...Object.fromEntries(def.vars.map((v) => [v.name, v.example])) }
 }
 
 /** SMS segments (GSM-7 = 160/153 chars, Unicode = 70/67). Rough guide for cost. */

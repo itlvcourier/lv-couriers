@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       business_name: businessName,
       dropoff_address: delivery.dropoff_address || 'your address',
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       business_name: businessName,
       dropoff_address: delivery.dropoff_address || 'recipient address',
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
     sends.push(
       sendSms({
         to: businessPhone,

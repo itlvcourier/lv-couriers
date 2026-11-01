@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         greeting,
         business_name: businessName,
         feedback_url: feedbackUrl,
-      }),
+      }, { deliveryId }),
       type: 'feedback_request',
       deliveryId,
     })

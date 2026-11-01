@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       greeting,
       business_name: businessName,
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     const bizMsg = await renderSms('delivered.business', {
       recipient_name: recipientLabel,
       tracking_url: trackingUrl,
-    })
+    }, { deliveryId })
     sends.push(
       sendSms({
         to: businessPhone,

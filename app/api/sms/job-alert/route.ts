@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     business_name: businessName,
     pickup_area: delivery.pickup_area || 'pickup',
     dropoff_area: delivery.dropoff_area || 'dropoff',
-  })
+  }, { deliveryId })
 
   let sent = 0
   let failed = 0

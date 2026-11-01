@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Spinner } from '@/components/ui/spinner'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
+import { BusinessSmsSettings } from '@/components/business/BusinessSmsSettings'
 import {
   Sheet, 
   SheetContent, 
@@ -661,6 +662,16 @@ export function BusinessProfile() {
             <Switch defaultChecked />
           </div>
           <Separator />
+          {userIsOwner && (
+            <>
+              <BusinessSmsSettings
+                businessId={business.id}
+                businessName={business.name}
+                businessPhone={primaryLocation?.phone}
+              />
+              <Separator />
+            </>
+          )}
           <ThemeToggleRow id="business-dark-mode" />
           <Separator />
           <div className="flex items-center justify-between py-3">

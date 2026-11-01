@@ -72,13 +72,13 @@ export async function POST(req: NextRequest) {
           business_name: businessName,
           attempts_left_label: `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''}`,
           tracking_url: trackingUrl,
-        })
+        }, { deliveryId })
       : await renderSms('failed_attempt.recipient_final', {
           greeting,
           business_name: businessName,
           retries_label: `${retries} attempt${retries !== 1 ? 's' : ''}`,
           tracking_url: trackingUrl,
-        })
+        }, { deliveryId })
     sends.push(
       sendSms({ to: delivery.recipient_phone, body: recipMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -94,12 +94,12 @@ export async function POST(req: NextRequest) {
           retries,
           max_retries: maxRetries,
           tracking_url: trackingUrl,
-        })
+        }, { deliveryId })
       : await renderSms('failed_attempt.business_final', {
           recipient_name: recipientLabel,
           retries,
           tracking_url: trackingUrl,
-        })
+        }, { deliveryId })
     sends.push(
       sendSms({ to: businessPhone, body: bizMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'business' })),

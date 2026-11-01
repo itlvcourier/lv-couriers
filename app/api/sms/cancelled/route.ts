@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
-        body: await renderSms('cancelled.recipient', { greeting, business_name: businessName }),
+        body: await renderSms('cancelled.recipient', { greeting, business_name: businessName }, { deliveryId }),
         type: 'order_cancelled',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: businessPhone,
-        body: await renderSms('cancelled.business', { recipient_name: recipientLabel }),
+        body: await renderSms('cancelled.business', { recipient_name: recipientLabel }, { deliveryId }),
         type: 'order_cancelled',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'business' })),
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: driverPhone,
-        body: await renderSms('cancelled.driver', { driver_name: driverName }),
+        body: await renderSms('cancelled.driver', { driver_name: driverName }, { deliveryId }),
         type: 'order_cancelled',
         deliveryId,
         driverId: delivery.driver_id,

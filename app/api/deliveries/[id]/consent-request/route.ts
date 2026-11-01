@@ -156,7 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     id_notice: delivery.handoff_require_id ? ' The person receiving it must show photo ID.' : '',
     reply_code: replyCode,
     expires_minutes: CONSENT_REQUEST_TTL_MINUTES,
-  })
+  }, { deliveryId: delivery.id })
 
   const phone = normalizePhone(delivery.recipient_phone)
   const expiresAt = new Date(Date.now() + CONSENT_REQUEST_TTL_MINUTES * 60_000).toISOString()
