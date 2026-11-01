@@ -101,38 +101,76 @@ export async function POST(req: Request) {
   return new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } })
 }
 
-function parseConsentReply(msg: string): 'approved' | 'declined' | null {
+type ConsentReply = { decision: 'approved' | 'declined'; code: string | null }
+
+function parseConsentReply(msg: string): ConsentReply | null {
   const word = msg.replace(/[^A-Z]/g, '')
-  if (['YES', 'Y', 'APPROVE', 'APPROVED', 'OK', 'OKAY'].includes(word)) return 'approved'
-  if (['NO', 'N', 'DECLINE', 'DECLINED', 'DENY'].includes(word)) return 'declined'
+  const code = msg.match(/\b(\d{4})\b/)?.[1] ?? null
+  if (['YES', 'Y', 'APPROVE', 'APPROVED', 'OK', 'OKAY'].includes(word)) return { decision: 'approved', code }
+  if (['NO', 'N', 'DECLINE', 'DECLINED', 'DENY'].includes(word)) return { decision: 'declined', code }
   return null
 }
 
-/** Resolve the newest pending handoff approval for this phone. Returns true when one was answered. */
+type PendingConsent = {
+  id: string
+  delivery_id: string
+  proposed_receiver_name: string | null
+  proposed_relationship: string | null
+  request_type: ConsentRequestType
+  reply_code: string | null
+}
+
+/**
+ * Resolve a pending handoff approval for this phone. A bare YES/NO is only
+ * accepted when exactly one request is waiting; otherwise the reply must
+ * include the 4-digit code from the text. Returns true when the reply was consumed.
+ */
 async function handleConsentReply(
   supabase: ReturnType<typeof createAdminClient>,
   from: string,
-  decision: 'approved' | 'declined',
+  reply: ConsentReply,
   rawBody: string,
 ): Promise<boolean> {
+  const decision = reply.decision
   const phone = normalizePhone(from)
   const now = new Date().toISOString()
-  const { data: request } = await supabase
+  const { data: pending } = await supabase
     .from('delivery_consent_requests')
-    .select('id, delivery_id, proposed_receiver_name, proposed_relationship, request_type')
+    .select('id, delivery_id, proposed_receiver_name, proposed_relationship, request_type, reply_code')
     .eq('recipient_phone', phone)
     .eq('status', 'pending')
     .gt('expires_at', now)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle<{
-      id: string
-      delivery_id: string
-      proposed_receiver_name: string | null
-      proposed_relationship: string | null
-      request_type: ConsentRequestType
-    }>()
-  if (!request) return false
+    .limit(10)
+    .returns<PendingConsent[]>()
+  if (!pending || pending.length === 0) return false
+
+  let request: PendingConsent | undefined
+  if (reply.code) {
+    request = pending.find((p) => p.reply_code === reply.code)
+    if (!request) {
+      await sendSms({
+        to: phone,
+        body: `DOMS By Atria360: We couldn't match code ${reply.code}. Reply YES or NO followed by the 4-digit code from the delivery text.`,
+        type: 'consent_result',
+        skipOptOutCheck: true,
+        dedupeWindowMinutes: 0,
+      })
+      return true
+    }
+  } else if (pending.length === 1) {
+    request = pending[0]
+  } else {
+    const codes = pending.map((p) => p.reply_code).filter(Boolean).join(', ')
+    await sendSms({
+      to: phone,
+      body: `DOMS By Atria360: You have ${pending.length} delivery approvals waiting. Reply YES or NO with the code from the text you're answering (codes: ${codes}).`,
+      type: 'consent_result',
+      skipOptOutCheck: true,
+      dedupeWindowMinutes: 0,
+    })
+    return true
+  }
 
   // Guard against a double reply racing: only flip if still pending.
   const { data: updated } = await supabase

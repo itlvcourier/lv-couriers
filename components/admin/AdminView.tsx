@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/context'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AdminDashboard } from './AdminDashboard'
 import { AdminDrivers } from './AdminDrivers'
 import { AdminBusinesses } from './AdminBusinesses'
@@ -19,6 +18,7 @@ import { AdminDriverReports } from './AdminDriverReports'
 import { AdminAuditLog } from './AdminAuditLog'
 import { DispatchBoard } from './DispatchBoard'
 import { ApprovalQueue } from './ApprovalQueue'
+import { AdminIssues } from './AdminIssues'
 import { getPendingCount } from '@/lib/dispatch-requests'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { NotificationCenter } from './NotificationCenter'
@@ -33,10 +33,8 @@ import {
   FileText,
   Settings,
   LogOut,
-  Shield,
   Menu,
   X,
-  Bell,
   MessageSquare,
   BarChart3,
   Radio,
@@ -45,9 +43,10 @@ import {
   Map as MapIcon,
   Boxes,
   ArrowLeftRight,
+  LifeBuoy,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'issues' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
 type NavItem = { id: AdminPage; label: string; icon: React.ElementType }
 
@@ -64,6 +63,7 @@ const navGroups: { heading: string; items: NavItem[] }[] = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'dispatch', label: 'Dispatch', icon: Radio },
       { id: 'requests', label: 'Requests', icon: Inbox },
+      { id: 'issues', label: 'Problems', icon: LifeBuoy },
       { id: 'orders', label: 'Orders', icon: Package },
     ],
   },
@@ -157,6 +157,12 @@ export function AdminView() {
     }
   }, [activePage])
 
+  // Portaled overlays render on <body>, so the scoped theme lives there too.
+  useEffect(() => {
+    document.body.classList.add('portal-theme')
+    return () => document.body.classList.remove('portal-theme')
+  }, [])
+
   // Lock body scroll when mobile sidebar is open.
   useEffect(() => {
     if (sidebarOpen) {
@@ -188,6 +194,7 @@ export function AdminView() {
       case 'dashboard': return <AdminDashboard />
       case 'dispatch': return <DispatchBoard />
       case 'requests': return <ApprovalQueue />
+      case 'issues': return <AdminIssues />
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />
@@ -204,133 +211,143 @@ export function AdminView() {
     }
   }
 
+  const initials = admin?.name ? getInitials(admin.name) : 'A'
+  const activeGroup = visibleGroups.find(g => g.items.some(i => i.id === activePage))?.heading ?? 'Operations'
+
+  const sidebar = (
+    <>
+      <div className="flex h-16 items-center justify-between px-6">
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-bold tracking-tight text-brand">DOMS</span>
+          <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            Admin
+          </span>
+        </div>
+        <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
+          <X className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only">Close menu</span>
+        </Button>
+      </div>
+
+      <nav aria-label="Admin navigation" className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-6 pt-2">
+        {visibleGroups.map(group => (
+          <div key={group.heading} className="flex flex-col gap-1">
+            <p className="px-3 pb-1 text-xs font-medium text-muted-foreground">{group.heading}</p>
+            <ul className="flex flex-col gap-0.5">
+              {group.items.map(item => {
+                const isActive = activePage === item.id
+                const Icon = item.icon
+                return (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => {
+                        setActivePage(item.id)
+                        setSidebarOpen(false)
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        isActive
+                          ? 'border-border bg-card font-medium text-foreground shadow-[var(--elevation)]'
+                          : 'border-transparent text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {item.id === 'requests' && pendingRequests > 0 && (
+                        <span className="flex items-center gap-1.5 text-xs tabular text-foreground">
+                          <span className="h-1.5 w-1.5 rounded-full bg-brand animate-route-pulse" aria-hidden="true" />
+                          {pendingRequests}
+                          <span className="sr-only">pending</span>
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <div className="flex items-center gap-3 border-t border-border px-5 py-4">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">
+          {initials}
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium">{admin?.name || 'Admin'}</span>
+          <span className="truncate text-xs text-muted-foreground">{admin?.email}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            void logout()
+          }}
+          className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">Sign out</span>
+        </button>
+      </div>
+    </>
+  )
+
   return (
-    <div className="min-h-screen bg-background flex overflow-x-hidden">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border flex flex-col transition-transform duration-200 lg:translate-x-0 shrink-0",
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        {/* Sidebar Header */}
-        <div className="h-16 border-b border-border flex items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
-              <Shield className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-semibold text-foreground">DOMS</h1>
-              <p className="text-xs text-muted-foreground">Admin Panel</p>
-            </div>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-4 overflow-y-auto flex flex-col gap-5">
-          {visibleGroups.map((group) => (
-            <div key={group.heading} className="flex flex-col gap-1">
-              <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {group.heading}
-              </p>
-              {group.items.map((item) => (
-                <Button
-                  key={item.id}
-                  variant={activePage === item.id ? 'secondary' : 'ghost'}
-                  aria-current={activePage === item.id ? 'page' : undefined}
-                  className={cn(
-                    "w-full justify-start gap-3 h-11",
-                    activePage === item.id && "bg-primary/10 text-primary hover:bg-primary/15"
-                  )}
-                  onClick={() => {
-                    setActivePage(item.id)
-                    setSidebarOpen(false)
-                  }}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
-                  {item.id === 'requests' && pendingRequests > 0 && (
-                    <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold">
-                      {pendingRequests}
-                    </span>
-                  )}
-                </Button>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-3 mb-4">
-            <Avatar className="w-10 h-10">
-              <AvatarImage src={admin?.avatar} />
-              <AvatarFallback className="bg-primary/10 text-primary">
-                {admin?.name ? getInitials(admin.name) : 'A'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{admin?.name || 'Admin'}</p>
-              <p className="text-xs text-muted-foreground truncate">{admin?.email}</p>
-            </div>
-          </div>
-          <Button 
-            variant="outline" 
-            className="w-full gap-2"
-            onClick={() => { void logout() }}
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </Button>
-        </div>
+    <div className="portal-theme min-h-screen overflow-x-hidden bg-background text-foreground">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-background lg:flex">
+        {sidebar}
       </aside>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 h-16 bg-card/95 backdrop-blur border-b border-border flex items-center justify-between px-4 lg:px-6 shrink-0">
-          <div className="flex items-center gap-4 min-w-0">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="lg:hidden shrink-0"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-            <h2 className="text-lg font-semibold truncate">{PAGE_LABELS[activePage]}</h2>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <HelpGuide role="admin" />
-            <NotificationCenter />
-            <Avatar className="w-9 h-9 lg:hidden">
-              <AvatarImage src={admin?.avatar} />
-              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                {admin?.name ? getInitials(admin.name) : 'A'}
-              </AvatarFallback>
-            </Avatar>
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Admin navigation">
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-background">
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-h-screen min-w-0 flex-col lg:pl-64">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
+          <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6 lg:h-16 lg:px-10">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button variant="ghost" size="icon" className="shrink-0 lg:hidden" onClick={() => setSidebarOpen(true)}>
+                <Menu className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+              <div className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="hidden text-muted-foreground sm:inline">{activeGroup}</span>
+                <span className="hidden text-muted-foreground/50 sm:inline" aria-hidden="true">
+                  {'/'}
+                </span>
+                <h1 className="truncate font-medium text-foreground">{PAGE_LABELS[activePage]}</h1>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              {pendingRequests > 0 && activePage !== 'requests' && (
+                <button
+                  type="button"
+                  onClick={() => setActivePage('requests')}
+                  className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground transition-colors hover:border-foreground/20 sm:flex"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand animate-route-pulse" aria-hidden="true" />
+                  <span className="tabular">{pendingRequests}</span> awaiting approval
+                </button>
+              )}
+              <HelpGuide role="admin" />
+              <NotificationCenter />
+            </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto overflow-x-hidden">
-          <div className="max-w-full">
-            {renderPage()}
-          </div>
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-8">
+          {renderPage()}
         </main>
       </div>
     </div>

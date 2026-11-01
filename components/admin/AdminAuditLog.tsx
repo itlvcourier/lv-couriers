@@ -57,35 +57,35 @@ type AuditLog = {
 }
 
 const ACTION_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  create:        { icon: Plus,         color: 'text-green-400',  bg: 'bg-green-500/10' },
-  update:        { icon: Edit,         color: 'text-blue-400',   bg: 'bg-blue-500/10' },
-  delete:        { icon: Trash2,       color: 'text-red-400',    bg: 'bg-red-500/10' },
-  send:          { icon: Send,         color: 'text-purple-400', bg: 'bg-purple-500/10' },
-  approve:       { icon: Check,        color: 'text-green-400',  bg: 'bg-green-500/10' },
-  reject:        { icon: X,            color: 'text-red-400',    bg: 'bg-red-500/10' },
-  cancel:        { icon: X,            color: 'text-orange-400', bg: 'bg-orange-500/10' },
-  assign:        { icon: User,         color: 'text-blue-400',   bg: 'bg-blue-500/10' },
-  status_change: { icon: AlertTriangle,color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-  login:         { icon: LogIn,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10' },
+  create:        { icon: Plus,         color: 'text-success',  bg: 'bg-success/10' },
+  update:        { icon: Edit,         color: 'text-info',   bg: 'bg-info/10' },
+  delete:        { icon: Trash2,       color: 'text-destructive',    bg: 'bg-destructive/10' },
+  send:          { icon: Send,         color: 'text-info', bg: 'bg-info/10' },
+  approve:       { icon: Check,        color: 'text-success',  bg: 'bg-success/10' },
+  reject:        { icon: X,            color: 'text-destructive',    bg: 'bg-destructive/10' },
+  cancel:        { icon: X,            color: 'text-brand', bg: 'bg-brand/10' },
+  assign:        { icon: User,         color: 'text-info',   bg: 'bg-info/10' },
+  status_change: { icon: AlertTriangle,color: 'text-warning', bg: 'bg-warning/10' },
+  login:         { icon: LogIn,        color: 'text-info',   bg: 'bg-info/10' },
   logout:        { icon: LogOut,       color: 'text-gray-400',   bg: 'bg-gray-500/10' },
-  export:        { icon: Download,     color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-  retry:         { icon: RotateCcw,    color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-  deactivate:    { icon: Ban,          color: 'text-red-400',    bg: 'bg-red-500/10' },
+  export:        { icon: Download,     color: 'text-info', bg: 'bg-info/10' },
+  retry:         { icon: RotateCcw,    color: 'text-warning', bg: 'bg-warning/10' },
+  deactivate:    { icon: Ban,          color: 'text-destructive',    bg: 'bg-destructive/10' },
 }
 
 const ENTITY_CONFIG: Record<string, { icon: React.ElementType; color: string }> = {
   delivery:      { icon: Package,   color: 'text-[var(--accent-orange)]' },
-  invoice:       { icon: FileText,  color: 'text-blue-400' },
-  business:      { icon: Building2, color: 'text-purple-400' },
-  driver:        { icon: Truck,     color: 'text-green-400' },
-  user:          { icon: User,      color: 'text-cyan-400' },
+  invoice:       { icon: FileText,  color: 'text-info' },
+  business:      { icon: Building2, color: 'text-info' },
+  driver:        { icon: Truck,     color: 'text-success' },
+  user:          { icon: User,      color: 'text-info' },
   system:        { icon: Settings,  color: 'text-gray-400' },
 }
 
 const ROLE_COLORS: Record<string, string> = {
   admin:    'bg-[var(--accent-orange)]/10 text-[var(--accent-orange)] border-[var(--accent-orange)]/20',
-  driver:   'bg-green-500/10 text-green-400 border-green-500/20',
-  business: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  driver:   'bg-success/10 text-success border-success/20',
+  business: 'bg-info/10 text-info border-info/20',
   system:   'bg-gray-500/10 text-gray-400 border-gray-500/20',
 }
 

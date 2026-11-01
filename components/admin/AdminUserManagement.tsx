@@ -264,7 +264,7 @@ export function AdminUserManagement() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-foreground">{user.name}</span>
-                        <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-500 border-purple-500/30">
+                        <Badge variant="outline" className="text-xs bg-info/10 text-info border-info/30">
                           <Shield className="w-3 h-3 mr-1" />
                           Admin
                         </Badge>
@@ -292,7 +292,7 @@ export function AdminUserManagement() {
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => setDeleteConfirm(user)}
-                        className="text-red-500 focus:text-red-500"
+                        className="text-destructive focus:text-destructive"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete
@@ -449,7 +449,7 @@ export function AdminUserManagement() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteUser}
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-destructive hover:bg-destructive"
               disabled={isDeleting}
             >
               {isDeleting ? 'Deleting...' : 'Delete'}

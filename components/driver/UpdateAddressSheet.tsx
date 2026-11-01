@@ -311,7 +311,7 @@ export function UpdateAddressSheet({
             </div>
 
             {blockedByHardValidation && (
-              <p className="text-xs text-red-500 flex items-center gap-1.5">
+              <p className="text-xs text-destructive flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Hard validation is on — validate to a confirmed address before saving.
               </p>

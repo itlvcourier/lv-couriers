@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { AppProvider } from '@/lib/context'
@@ -8,6 +8,8 @@ import { NativeAppProvider } from '@/components/native/NativeAppProvider'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+const geist = Geist({ subsets: ['latin'], variable: '--font-display' })
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 export const metadata: Metadata = {
   title: 'DOMS - Delivery Operations Management System',
@@ -34,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.className} bg-background`}
+      className={`${inter.className} ${geist.variable} ${geistMono.variable} bg-background`}
       suppressHydrationWarning
     >
       <body className="font-sans antialiased bg-background text-foreground min-h-screen">

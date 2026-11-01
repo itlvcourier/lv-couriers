@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import type { Delivery, Driver, DeliveryStatus } from '@/lib/types'
+import { LiveDriversMap } from './LiveDriversMap'
 
 export function DispatchBoard() {
   const {
@@ -126,13 +127,13 @@ export function DispatchBoard() {
   const getStatusColor = (status: DeliveryStatus) => {
     switch (status) {
       case 'claimed':
-        return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+        return 'bg-info/10 text-info border-info/20'
       case 'en_route_pickup':
-        return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+        return 'bg-warning/10 text-warning border-warning/20'
       case 'picked_up':
-        return 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+        return 'bg-brand/10 text-brand border-brand/20'
       case 'en_route_dropoff':
-        return 'bg-purple-500/10 text-purple-600 border-purple-500/20'
+        return 'bg-info/10 text-info border-info/20'
       default:
         return 'bg-gray-500/10 text-gray-600 border-gray-500/20'
     }
@@ -150,22 +151,22 @@ export function DispatchBoard() {
       return { color: 'bg-gray-400', text: 'Off Duty' }
     }
     if (driver.status === 'on_delivery') {
-      return { color: 'bg-yellow-500', text: 'On Delivery' }
+      return { color: 'bg-warning', text: 'On Delivery' }
     }
     if (activeJobs >= maxJobs) {
-      return { color: 'bg-orange-500', text: 'At Capacity' }
+      return { color: 'bg-brand', text: 'At Capacity' }
     }
-    return { color: 'bg-green-500', text: 'Available' }
+    return { color: 'bg-success', text: 'Available' }
   }
 
   // Show dispatch mode warning if self-claim is enabled
   if (settings.allowDriverSelfClaim) {
     return (
       <div className="space-y-6">
-        <Card className="border-yellow-500/50 bg-yellow-500/5">
+        <Card className="border-warning/50 bg-warning/5">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <AlertCircle className="w-6 h-6 text-yellow-500 shrink-0 mt-0.5" />
+              <AlertCircle className="w-6 h-6 text-warning shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-foreground mb-1">
                   Driver Self-Claim Mode Active
@@ -267,6 +268,8 @@ function DispatchBoardContent({
 }: DispatchBoardContentProps) {
   return (
   <div className="space-y-6 overflow-x-hidden">
+      <LiveDriversMap />
+
       {/* Top Row: Unassigned + Drivers */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Unassigned Jobs Column */}
@@ -274,7 +277,7 @@ function DispatchBoardContent({
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="w-5 h-5 text-orange-500" />
+                <Package className="w-5 h-5 text-brand" />
                 Unassigned Jobs
                 <Badge variant="secondary" className="ml-2">
                   {unassignedDeliveries.length}
@@ -294,7 +297,7 @@ function DispatchBoardContent({
                   <div
                     key={delivery.id}
                     className={`border rounded-lg p-4 bg-card hover:bg-accent/50 transition-colors ${
-                      delivery.isRush ? 'border-red-500/50 bg-red-500/5' : ''
+                      delivery.isRush ? 'border-destructive/50 bg-destructive/5' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -304,7 +307,7 @@ function DispatchBoardContent({
                             {delivery.businessName}
                           </span>
                           {delivery.isRush && (
-                            <Badge className="bg-red-500 text-white shrink-0">
+                            <Badge className="bg-destructive text-white shrink-0">
                               <Zap className="w-3 h-3 mr-1" />
                               RUSH
                             </Badge>
@@ -373,7 +376,7 @@ function DispatchBoardContent({
                                   <span
                                     className={`text-xs ${
                                       atCapacity
-                                        ? 'text-orange-500'
+                                        ? 'text-brand'
                                         : 'text-muted-foreground'
                                     }`}
                                   >
@@ -402,7 +405,7 @@ function DispatchBoardContent({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-500" />
+              <Users className="w-5 h-5 text-info" />
               Drivers
             </CardTitle>
           </CardHeader>
@@ -449,7 +452,7 @@ function DispatchBoardContent({
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Truck className="w-5 h-5 text-green-500" />
+              <Truck className="w-5 h-5 text-success" />
               Active Deliveries
               <Badge variant="secondary" className="ml-2">
                 {activeDeliveries.length}

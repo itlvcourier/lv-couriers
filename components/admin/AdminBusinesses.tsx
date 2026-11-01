@@ -765,9 +765,9 @@ export function AdminBusinesses() {
   }
 
     const statusColors: Record<DbBusiness['invite_status'], string> = {
-      pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
-      active: 'bg-green-500/10 text-green-500 border-green-500/30',
-      deactivated: 'bg-red-500/10 text-red-500 border-red-500/30',
+      pending: 'bg-warning/10 text-warning border-warning/30',
+      active: 'bg-success/10 text-success border-success/30',
+      deactivated: 'bg-destructive/10 text-destructive border-destructive/30',
     }
 
   if (isLoading) {
@@ -831,7 +831,7 @@ export function AdminBusinesses() {
           </Card>
           <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
             <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-green-500">{businessStats.completed}</div>
+              <div className="text-xl sm:text-2xl font-bold text-success">{businessStats.completed}</div>
               <div className="text-xs sm:text-sm text-muted-foreground">Done</div>
             </CardContent>
           </Card>
@@ -1002,9 +1002,9 @@ export function AdminBusinesses() {
             </div>
             
             {/* Role Hierarchy Info */}
-            <Card className="bg-blue-500/5 border-blue-500/20">
+            <Card className="bg-info/5 border-info/20">
               <CardContent className="p-4">
-                <h4 className="text-sm font-medium text-blue-400 mb-2">User Roles</h4>
+                <h4 className="text-sm font-medium text-info mb-2">User Roles</h4>
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p><strong className="text-foreground">Owner:</strong> Full access to all locations, can view combined reports, manage team</p>
                   <p><strong className="text-foreground">Manager:</strong> Can post deliveries and view reports for assigned locations only</p>
@@ -1068,7 +1068,7 @@ export function AdminBusinesses() {
                               member.business_role === 'owner' 
                                 ? 'bg-primary/10 text-primary border-primary/20'
                                 : member.business_role === 'manager'
-                                ? 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                ? 'bg-brand/10 text-brand border-brand/20'
                                 : 'bg-muted text-muted-foreground'
                             }
                           >
@@ -1366,7 +1366,7 @@ export function AdminBusinesses() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleToggleStatus(detailBusiness)}
-                    className={detailBusiness.invite_status === 'active' ? 'text-destructive border-destructive/30' : 'text-green-500 border-green-500/30'}
+                    className={detailBusiness.invite_status === 'active' ? 'text-destructive border-destructive/30' : 'text-success border-success/30'}
                   >
                     <Ban className="w-4 h-4 mr-2" />
                     {detailBusiness.invite_status === 'active' ? 'Suspend' : 'Activate'}
@@ -1572,9 +1572,9 @@ export function AdminBusinesses() {
             {createdUserCredentials ? (
               // Show credentials after successful creation
               <div className="mt-6 space-y-4">
-                <Card className="bg-green-500/10 border-green-500/30">
+                <Card className="bg-success/10 border-success/30">
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-green-400">
+                    <div className="flex items-center gap-2 text-success">
                       <UserPlus className="w-5 h-5" />
                       <span className="font-medium">Account Created</span>
                     </div>
@@ -1870,7 +1870,7 @@ export function AdminBusinesses() {
                 <Store className="w-4 h-4" />
                 Store Requests
                 {pendingRequests.length > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-orange-500 text-white text-xs">
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-brand text-white text-xs">
                     {pendingRequests.length}
                   </Badge>
                 )}
@@ -1924,8 +1924,8 @@ export function AdminBusinesses() {
                       <div className="flex items-start gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                           request.request_type === 'add' 
-                            ? 'bg-green-500/10 text-green-500' 
-                            : 'bg-red-500/10 text-red-500'
+                            ? 'bg-success/10 text-success' 
+                            : 'bg-destructive/10 text-destructive'
                         }`}>
                           {request.request_type === 'add' ? <Plus className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
                         </div>
@@ -1935,9 +1935,9 @@ export function AdminBusinesses() {
                               {request.request_type === 'add' ? 'Add Store' : 'Remove Store'}
                             </span>
                             <Badge variant="outline" className={
-                              request.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' :
-                              request.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/30' :
-                              'bg-red-500/10 text-red-500 border-red-500/30'
+                              request.status === 'pending' ? 'bg-warning/10 text-warning border-warning/30' :
+                              request.status === 'approved' ? 'bg-success/10 text-success border-success/30' :
+                              'bg-destructive/10 text-destructive border-destructive/30'
                             }>
                               {request.status}
                             </Badge>
@@ -1973,7 +1973,7 @@ export function AdminBusinesses() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-green-500 border-green-500/30 hover:bg-green-500/10"
+                            className="text-success border-success/30 hover:bg-success/10"
                             onClick={() => handleStoreRequestAction(request.id, 'approved', request)}
                           >
                             <Check className="w-4 h-4 mr-1" />
@@ -1982,7 +1982,7 @@ export function AdminBusinesses() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-red-500 border-red-500/30 hover:bg-red-500/10"
+                            className="text-destructive border-destructive/30 hover:bg-destructive/10"
                             onClick={() => handleStoreRequestAction(request.id, 'rejected', request)}
                           >
                             <X className="w-4 h-4 mr-1" />
@@ -2422,7 +2422,7 @@ function InlineCutoffEditor({
             )}
           </div>
           {status?.hasCutoff ? (
-            <Badge variant={status.isPastCutoff ? 'destructive' : 'outline'} className={!status.isPastCutoff ? 'bg-green-500/10 text-green-500 border-green-500/30' : ''}>
+            <Badge variant={status.isPastCutoff ? 'destructive' : 'outline'} className={!status.isPastCutoff ? 'bg-success/10 text-success border-success/30' : ''}>
               {status.isPastCutoff ? 'Past cutoff' : 'Open'} — {status.cutoffTime}
             </Badge>
           ) : (

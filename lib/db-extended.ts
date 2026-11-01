@@ -208,6 +208,7 @@ export function mapDeliveryRow(row: Row): Delivery {
     signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
     requireSignature: !!(row.require_signature as boolean | null),
+    requirePin: !!(row.require_pin as boolean | null),
     requirePhoto: (row.require_photo as boolean | null) ?? true,
     handoffRule: ((row.handoff_rule as string | null) ?? 'door') as Delivery['handoffRule'],
     handoffRequireId: !!(row.handoff_require_id as boolean | null),
@@ -217,6 +218,9 @@ export function mapDeliveryRow(row: Row): Delivery {
     receivedByType: (row.received_by_type as Delivery['receivedByType']) ?? null,
     receivedByName: (row.received_by_name as string | null) ?? null,
     receivedByRelationship: (row.received_by_relationship as string | null) ?? null,
+    receivedByIdType: (row.received_by_id_type as string | null) ?? null,
+    receivedByIdLast4: (row.received_by_id_last4 as string | null) ?? null,
+    pinVerifiedAt: (row.pin_verified_at as string | null) ?? null,
     trackingCode: (row.tracking_code as string | null) ?? null,
     trackingExpiresAt: (row.tracking_expires_at as string | null) ?? null,
     cancelledAt: (row.cancelled_at as string | null) ?? null,
@@ -919,37 +923,31 @@ export async function createDriverInDb(driver: Omit<Driver, 'id'>): Promise<Driv
   return mapDriverRow(data as Row)
 }
 
+export type PickupPriceResult = { rate: number; gst: number; total: number; rate_card_id: string | null }
+
+/**
+ * Confirms pickup on the server. The database writes the confirmed counts and
+ * recalculates the price from the location's rate card, so the phone never
+ * decides what the business is billed.
+ */
 export async function applyPickupVerifications(
   deliveryId: string,
   verifications: PickupVerification[],
-  calculatedRate: number,
-  gstAmount: number,
-  totalAmount: number,
-  rateCardId: string | null,
-): Promise<void> {
+): Promise<PickupPriceResult> {
   const supabase = createClient()
-  // DB has only `quantity` on manifest_items — we overwrite it with the
-  // confirmed count at pickup. Verification photos are stored in
-  // delivery_flags (qty_adjusted) rather than per-item.
-  for (const v of verifications) {
-    const { error } = await supabase
-      .from('manifest_items')
-      .update({ quantity: v.confirmedQty })
-      .eq('id', v.itemId)
-    if (error) throw error
+  const { data, error } = await supabase.rpc('confirm_pickup', {
+    p_delivery_id: deliveryId,
+    p_items: verifications.map(v => ({ itemId: v.itemId, confirmedQty: v.confirmedQty })),
+    p_out_of_town: verifications.some(v => v.outOfTown),
+  })
+  if (error) throw friendlyDbError(error)
+  const r = data as Record<string, unknown>
+  return {
+    rate: Number(r.rate) || 0,
+    gst: Number(r.gst) || 0,
+    total: Number(r.total) || 0,
+    rate_card_id: (r.rate_card_id as string | null) ?? null,
   }
-  const { error: dErr } = await supabase
-    .from('deliveries')
-    .update({
-      status: 'picked_up',
-      picked_up_at: new Date().toISOString(),
-      calculated_rate: calculatedRate,
-      gst_amount: gstAmount,
-      total_amount: totalAmount,
-      rate_card_id: rateCardId,
-    })
-    .eq('id', deliveryId)
-  if (dErr) throw dErr
 }
 
 export async function insertDeliveryFlag(flag: {
@@ -974,41 +972,143 @@ export async function insertDeliveryFlag(flag: {
   if (dErr) throw dErr
 }
 
-export async function insertFailureAndFinalize(
-  deliveryId: string,
-  reason: FailReason,
-  notes: string | undefined,
-  permanent: boolean,
-): Promise<void> {
-  const supabase = createClient()
-  const { error } = await supabase
-    .from('deliveries')
-    .update({
-      status: permanent ? 'failed_permanent' : 'failed_retry',
-      cancellation_reason: notes ? `${reason}: ${notes}` : reason,
-    })
-    .eq('id', deliveryId)
-  if (error) throw error
+export type FailureResult = {
+  status: 'failed_retry' | 'failed_permanent' | 'en_route_dropoff'
+  retry_count: number
+  note?: string
 }
 
+/** Turns `CODE: message` DB exceptions into the human message part. */
+function friendlyDbError(error: { message?: string } | null): Error {
+  const msg = error?.message ?? 'Could not save. Check your connection and try again.'
+  const idx = msg.indexOf(': ')
+  return new Error(/^[A-Z_]+$/.test(msg.slice(0, idx)) ? msg.slice(idx + 2) : msg)
+}
+
+/**
+ * Records a failed attempt atomically on the server. The database decides
+ * whether this is the retry (attempt 1) or the escalation (attempt 2), so a
+ * stale client or a second device cannot reset the counter.
+ */
+export async function recordDeliveryFailure(input: {
+  deliveryId: string
+  reason: FailReason | 'released_by_driver'
+  notes?: string
+  release?: boolean
+  lat?: number | null
+  lng?: number | null
+}): Promise<FailureResult> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('record_delivery_failure', {
+    p_delivery_id: input.deliveryId,
+    p_reason: input.reason,
+    p_notes: input.notes?.trim() || null,
+    p_release: input.release ?? false,
+    p_lat: input.lat ?? null,
+    p_lng: input.lng ?? null,
+  })
+  if (error) throw friendlyDbError(error)
+  return data as FailureResult
+}
+
+export async function resumeFailedDelivery(deliveryId: string): Promise<FailureResult> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('resume_failed_delivery', { p_delivery_id: deliveryId })
+  if (error) throw friendlyDbError(error)
+  return data as FailureResult
+}
+
+/** Business cancel. The database checks ownership/status and sets the fee from the rate card. */
 export async function cancelDeliveryInDb(
   deliveryId: string,
-  stage: 'before_depart' | 'en_route_pickup' | 'after_pickup',
-  fee: number,
   reason: string | null,
-): Promise<void> {
+): Promise<{ fee: number; reason: string }> {
   const supabase = createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase.rpc('cancel_delivery_by_business', {
+    p_delivery_id: deliveryId,
+    p_reason: reason,
+  })
+  if (error) throw friendlyDbError(error)
+  const r = data as Record<string, unknown>
+  return { fee: Number(r.fee) || 0, reason: String(r.reason ?? reason ?? '') }
+}
+
+export interface DeliveryEditInput {
+  pickupAddress: string
+  pickupPostalCode: string | null
+  pickupLat: number | null
+  pickupLng: number | null
+  dropoffAddress: string
+  dropoffArea: string
+  dropoffPostalCode: string | null
+  dropoffLat: number | null
+  dropoffLng: number | null
+  recipientName: string | null
+  recipientPhone: string | null
+  buzzCode: string | null
+  recipientNote: string | null
+  isRush: boolean
+  isOutOfTown: boolean
+  requireSignature: boolean
+  requirePhoto: boolean
+  handoffRule: NonNullable<Delivery['handoffRule']>
+  handoffRequireId: boolean
+  handoffNamedPerson: string | null
+  handoffNamedRelationship: string | null
+  handoffLocationNote: string | null
+  distanceKm: number | null
+  smallPackages: number
+  bigPackages: number
+  packageDescription: string | null
+}
+
+/**
+ * Edits every field a business sets at creation. Runs as one locked transaction
+ * that re-checks ownership and that no courier has started the order, so a
+ * claim landing mid-edit can't be overwritten.
+ */
+export async function editDeliveryInDb(deliveryId: string, input: DeliveryEditInput): Promise<Delivery> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('business_edit_delivery', {
+    p_delivery_id: deliveryId,
+    p_fields: {
+      pickup_address: input.pickupAddress,
+      pickup_postal_code: input.pickupPostalCode,
+      pickup_lat: input.pickupLat,
+      pickup_lng: input.pickupLng,
+      dropoff_address: input.dropoffAddress,
+      dropoff_area: input.dropoffArea,
+      dropoff_postal_code: input.dropoffPostalCode,
+      dropoff_lat: input.dropoffLat,
+      dropoff_lng: input.dropoffLng,
+      recipient_name: input.recipientName,
+      recipient_phone: input.recipientPhone,
+      buzz_code: input.buzzCode,
+      recipient_note: input.recipientNote,
+      is_rush: input.isRush,
+      is_out_of_town: input.isOutOfTown,
+      require_signature: input.requireSignature,
+      require_photo: input.requirePhoto,
+      handoff_rule: input.handoffRule,
+      handoff_require_id: input.handoffRequireId,
+      handoff_named_person: input.handoffNamedPerson,
+      handoff_named_relationship: input.handoffNamedRelationship,
+      handoff_location_note: input.handoffLocationNote,
+      distance_km: input.distanceKm,
+    },
+    p_small: input.smallPackages,
+    p_big: input.bigPackages,
+    p_description: input.packageDescription,
+  })
+  if (error) throw friendlyDbError(error)
+
+  const { data: full, error: readErr } = await supabase
     .from('deliveries')
-    .update({
-      status: 'cancelled',
-      cancelled_at: new Date().toISOString(),
-      cancellation_stage: stage,
-      cancellation_fee: fee,
-      cancellation_reason: reason,
-    })
+    .select('*, manifest_items(*)')
     .eq('id', deliveryId)
-  if (error) throw error
+    .single()
+  if (readErr || !full) return mapDeliveryRow(data as Row)
+  return mapDeliveryRow(full as Row)
 }
 
 // ============================================================================

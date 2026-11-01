@@ -34,7 +34,9 @@ interface Props {
 export function ReceivedByFields({ delivery, value, onChange }: Props) {
   const rule = isHandoffRule(delivery.handoffRule) ? delivery.handoffRule : 'door'
   const allowed = new Set(allowedReceiversForRule(rule))
-  const options = RECEIVED_BY_TYPES.filter(t => t !== 'named_person' || !!delivery.handoffNamedPerson)
+  const options = RECEIVED_BY_TYPES.filter(
+    t => (t !== 'named_person' || !!delivery.handoffNamedPerson) && !(delivery.handoffRequireId && t === 'door'),
+  )
   const set = <K extends keyof ReceiverValue>(k: K, v: ReceiverValue[K]) => onChange({ ...value, [k]: v })
   const showId = !!value.type && value.type !== 'door'
 
@@ -65,13 +67,13 @@ export function ReceivedByFields({ delivery, value, onChange }: Props) {
               )}
             >
               <span className="font-medium">{RECEIVED_BY_LABELS[t]}</span>
-              {!ok && <span className="text-xs text-amber-500">Needs approval</span>}
+              {!ok && <span className="text-xs text-warning">Needs approval</span>}
             </button>
           )
         })}
       </div>
       {value.type && !allowed.has(value.type) && (
-        <p className="text-xs leading-relaxed text-amber-500">
+        <p className="text-xs leading-relaxed text-warning">
           Not allowed by the instructions unless the recipient approved it (by text, phone, or in person) in the handoff panel.
         </p>
       )}

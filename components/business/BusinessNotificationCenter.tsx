@@ -1,29 +1,24 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { 
-  Bell,
-  Package,
-  CheckCircle,
-  XCircle,
-  Truck,
-  Clock,
-  FileText,
-  AlertTriangle,
-} from 'lucide-react'
+import { Bell, Package, CheckCircle, XCircle, Truck, Clock, FileText, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useApp } from '@/lib/context'
+import { useNotificationState } from '@/lib/use-notification-state'
 
 type BusinessNotification = {
   id: string
-  type: 'delivery_posted' | 'delivery_claimed' | 'delivery_picked_up' | 'delivery_completed' | 'delivery_cancelled' | 'delivery_failed' | 'invoice_ready'
+  type:
+    | 'delivery_posted'
+    | 'delivery_claimed'
+    | 'delivery_picked_up'
+    | 'delivery_completed'
+    | 'delivery_cancelled'
+    | 'delivery_failed'
+    | 'invoice_ready'
   title: string
   message: string
   deliveryId?: string
@@ -42,231 +37,211 @@ const NOTIFICATION_ICONS: Record<BusinessNotification['type'], React.ElementType
 }
 
 const NOTIFICATION_COLORS: Record<BusinessNotification['type'], string> = {
-  delivery_posted: 'text-blue-400 bg-blue-500/10',
-  delivery_claimed: 'text-yellow-400 bg-yellow-500/10',
-  delivery_picked_up: 'text-orange-400 bg-orange-500/10',
-  delivery_completed: 'text-green-400 bg-green-500/10',
-  delivery_cancelled: 'text-gray-400 bg-gray-500/10',
-  delivery_failed: 'text-red-400 bg-red-500/10',
-  invoice_ready: 'text-purple-400 bg-purple-500/10',
+  delivery_posted: 'text-muted-foreground bg-muted-foreground/10',
+  delivery_claimed: 'text-warning bg-warning/10',
+  delivery_picked_up: 'text-brand bg-brand/10',
+  delivery_completed: 'text-success bg-success/10',
+  delivery_cancelled: 'text-muted-foreground bg-muted-foreground/10',
+  delivery_failed: 'text-destructive bg-destructive/10',
+  invoice_ready: 'text-muted-foreground bg-muted-foreground/10',
+}
+
+const WINDOW_DAYS = 7
+const MAX_EARLIER = 30
+
+function formatTime(timestamp: string) {
+  const diff = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000)
+  if (diff < 60) return 'Just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
 }
 
 export function BusinessNotificationCenter() {
   const { deliveries, currentUser } = useApp()
   const [open, setOpen] = useState(false)
-  const STORAGE_KEY = `biz_notif_read_${currentUser?.businessId ?? 'unknown'}`
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set()
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>()
-    } catch {
-      return new Set<string>()
-    }
-  })
+  const [showEarlier, setShowEarlier] = useState(false)
+  const { ready, isRead, markRead, markAllRead } = useNotificationState(currentUser?.id)
 
-  // Persist readIds to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...readIds]))
-    } catch {
-      // storage quota exceeded or private mode — fail silently
-    }
-  }, [readIds, STORAGE_KEY])
-  
-  // Generate notifications from delivery status changes
   const notifications = useMemo(() => {
-    if (!currentUser?.businessId) return []
-    
-    const businessDeliveries = deliveries.filter(d => d.businessId === currentUser.businessId)
+    if (!currentUser?.businessId || !ready) return []
+    const cutoff = Date.now() - WINDOW_DAYS * 86400_000
     const notifs: BusinessNotification[] = []
-    
-    // Generate notifications from recent deliveries (last 7 days)
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    
-    businessDeliveries.forEach(delivery => {
-      const deliveryDate = new Date(delivery.postedAt)
-      if (deliveryDate < sevenDaysAgo) return
-      
-      // Delivery completed
+    const push = (n: Omit<BusinessNotification, 'read'>) => {
+      if (!n.timestamp || new Date(n.timestamp).getTime() < cutoff) return
+      notifs.push({ ...n, read: isRead(n.id, n.timestamp) })
+    }
+
+    for (const delivery of deliveries) {
+      if (delivery.businessId !== currentUser.businessId) continue
+      const ref = `#${delivery.id.slice(-6).toUpperCase()}`
+
       if (delivery.status === 'delivered' && delivery.deliveredAt) {
-        notifs.push({
+        push({
           id: `${delivery.id}-delivered`,
           type: 'delivery_completed',
-          title: 'Delivery Completed',
-          message: `Order #${delivery.id.slice(-6).toUpperCase()} delivered to ${delivery.recipientName || delivery.dropoffAddress.split(',')[0]}`,
+          title: 'Delivery completed',
+          message: `Order ${ref} delivered to ${delivery.recipientName || delivery.dropoffAddress.split(',')[0]}`,
           deliveryId: delivery.id,
           timestamp: delivery.deliveredAt,
-          read: readIds.has(`${delivery.id}-delivered`),
         })
       }
-      
-      // Delivery picked up
       if (delivery.pickedUpAt && delivery.status !== 'posted') {
-        notifs.push({
+        push({
           id: `${delivery.id}-picked_up`,
           type: 'delivery_picked_up',
-          title: 'Order Picked Up',
-          message: `Order #${delivery.id.slice(-6).toUpperCase()} is on the way`,
+          title: 'Order picked up',
+          message: `Order ${ref} is on the way`,
           deliveryId: delivery.id,
           timestamp: delivery.pickedUpAt,
-          read: readIds.has(`${delivery.id}-picked_up`),
         })
       }
-      
-      // Delivery claimed by driver
       if (delivery.driverId && delivery.claimedAt) {
-        notifs.push({
+        push({
           id: `${delivery.id}-claimed`,
           type: 'delivery_claimed',
-          title: 'Driver Assigned',
-          message: `A driver is heading to pick up order #${delivery.id.slice(-6).toUpperCase()}`,
+          title: 'Driver assigned',
+          message: `A driver is heading to pick up order ${ref}`,
           deliveryId: delivery.id,
           timestamp: delivery.claimedAt,
-          read: readIds.has(`${delivery.id}-claimed`),
         })
       }
-      
-      // Delivery cancelled
       if (delivery.status === 'cancelled' && delivery.cancelledAt) {
-        notifs.push({
+        push({
           id: `${delivery.id}-cancelled`,
           type: 'delivery_cancelled',
-          title: 'Delivery Cancelled',
-          message: `Order #${delivery.id.slice(-6).toUpperCase()} was cancelled`,
+          title: 'Delivery cancelled',
+          message: `Order ${ref} was cancelled`,
           deliveryId: delivery.id,
           timestamp: delivery.cancelledAt,
-          read: readIds.has(`${delivery.id}-cancelled`),
         })
       }
-      
-      // Delivery failed
       if (delivery.status === 'failed_permanent') {
-        notifs.push({
+        push({
           id: `${delivery.id}-failed`,
           type: 'delivery_failed',
-          title: 'Delivery Failed',
-          message: `Order #${delivery.id.slice(-6).toUpperCase()} could not be completed`,
+          title: 'Delivery failed',
+          message: `Order ${ref} could not be completed`,
           deliveryId: delivery.id,
           timestamp: delivery.cancelledAt || delivery.postedAt,
-          read: readIds.has(`${delivery.id}-failed`),
         })
       }
-    })
-    
-    // Sort by timestamp descending (newest first)
+    }
+
     return notifs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-  }, [deliveries, currentUser?.businessId, readIds])
-  
-  const unreadCount = notifications.filter(n => !n.read).length
+  }, [deliveries, currentUser?.businessId, ready, isRead])
 
-  const handleNotificationClick = (notificationId: string) => {
-    setReadIds(prev => new Set([...prev, notificationId]))
-  }
-
-  const markAllRead = () => {
-    setReadIds(new Set(notifications.map(n => n.id)))
-  }
-
-  const formatTime = (timestamp: string) => {
-    const now = new Date()
-    const time = new Date(timestamp)
-    const diff = Math.floor((now.getTime() - time.getTime()) / 1000)
-    
-    if (diff < 60) return 'Just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
-  }
+  const unread = notifications.filter(n => !n.read)
+  const earlier = notifications.filter(n => n.read).slice(0, MAX_EARLIER)
+  const visible = showEarlier ? [...unread, ...earlier] : unread
+  const unreadCount = unread.length
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={next => {
+        setOpen(next)
+        if (!next) setShowEarlier(false)
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           className="relative h-9 w-9"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
         >
           <Bell className="h-5 w-5 text-muted-foreground" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[var(--accent-orange)] text-white text-xs font-medium flex items-center justify-center">
+            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-xs font-medium text-primary-foreground">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent 
-        className="w-80 p-0 bg-card border-border"
-        align="end"
-      >
-        <div className="flex items-center justify-between p-3 border-b border-border">
-          <h4 className="font-semibold text-sm">Notifications</h4>
+      <PopoverContent className="w-80 border-border bg-card p-0" align="end">
+        <div className="flex items-center justify-between border-b border-border p-3">
+          <h4 className="text-sm font-semibold">Notifications</h4>
           {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-xs h-7 text-muted-foreground hover:text-foreground"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground hover:text-foreground"
               onClick={markAllRead}
             >
               Mark all read
             </Button>
           )}
         </div>
-        
-        <ScrollArea className="h-[320px]">
-          {notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <Bell className="w-8 h-8 mb-2 opacity-50" />
-              <p className="text-sm">No notifications yet</p>
+
+        <ScrollArea className="h-80">
+          {visible.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+              <Bell className="h-8 w-8 opacity-50" aria-hidden="true" />
+              <p className="text-sm">{"You're all caught up"}</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
-              {notifications.slice(0, 20).map((notification) => {
+            <ul className="divide-y divide-border">
+              {visible.map(notification => {
                 const Icon = NOTIFICATION_ICONS[notification.type]
-                const colorClass = NOTIFICATION_COLORS[notification.type]
-                
                 return (
-                  <button
-                    key={notification.id}
-                    className={cn(
-                      "w-full p-3 text-left hover:bg-muted/50 transition-colors flex items-start gap-3",
-                      !notification.read && "bg-muted/30"
-                    )}
-                    onClick={() => handleNotificationClick(notification.id)}
-                  >
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                      colorClass
-                    )}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={cn(
-                          "text-sm",
-                          !notification.read ? "font-medium text-foreground" : "text-muted-foreground"
-                        )}>
-                          {notification.title}
-                        </p>
-                        {!notification.read && (
-                          <span className="w-2 h-2 rounded-full bg-[var(--accent-orange)] shrink-0 mt-1.5" />
+                  <li key={notification.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-muted/50',
+                        !notification.read && 'bg-muted/30',
+                      )}
+                      onClick={() => markRead(notification.id)}
+                    >
+                      <div
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                          NOTIFICATION_COLORS[notification.type],
                         )}
+                      >
+                        <Icon className="h-4 w-4" aria-hidden="true" />
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                        {notification.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatTime(notification.timestamp)}
-                      </p>
-                    </div>
-                  </button>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p
+                            className={cn(
+                              'text-sm',
+                              notification.read ? 'text-muted-foreground' : 'font-medium text-foreground',
+                            )}
+                          >
+                            {notification.title}
+                          </p>
+                          {!notification.read && (
+                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" aria-label="Unread" />
+                          )}
+                        </div>
+                        <p className="line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" aria-hidden="true" />
+                          {formatTime(notification.timestamp)}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           )}
         </ScrollArea>
+
+        {earlier.length > 0 && (
+          <div className="border-t border-border p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowEarlier(v => !v)}
+            >
+              {showEarlier ? 'Hide earlier' : `Show earlier (${earlier.length})`}
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   )

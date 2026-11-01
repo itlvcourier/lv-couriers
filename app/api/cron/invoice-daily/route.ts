@@ -8,6 +8,7 @@ import {
   runMarkOverdue,
 } from '@/lib/invoice-cron-jobs'
 import { runReviewRequests, runWeeklySmsSummary } from '@/lib/sms-cron-jobs'
+import { runRecurringSweep } from '@/lib/recurring-runner'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -75,6 +76,12 @@ export async function GET(req: NextRequest) {
     jobs.reviewRequests = await runReviewRequests()
   } catch (e) {
     jobs.reviewRequests = { ok: false, error: (e as Error).message }
+  }
+
+  try {
+    jobs.recurring = await runRecurringSweep()
+  } catch (e) {
+    jobs.recurring = { ok: false, error: (e as Error).message }
   }
 
   // Weekly per-business delivery summary (Mondays only).

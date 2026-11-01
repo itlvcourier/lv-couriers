@@ -192,13 +192,13 @@ export function AdminOrders() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'posted': return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-      case 'claimed': return 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-      case 'en_route_pickup': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-      case 'picked_up': return 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-      case 'en_route_dropoff': return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-      case 'delivered': return 'bg-green-500/10 text-green-400 border-green-500/20'
-      case 'flagged': return 'bg-red-500/10 text-red-400 border-red-500/20'
-      case 'failed_permanent': return 'bg-red-500/10 text-red-400 border-red-500/20'
+      case 'claimed': return 'bg-info/10 text-info border-info/20'
+      case 'en_route_pickup': return 'bg-warning/10 text-warning border-warning/20'
+      case 'picked_up': return 'bg-brand/10 text-brand border-brand/20'
+      case 'en_route_dropoff': return 'bg-info/10 text-info border-info/20'
+      case 'delivered': return 'bg-success/10 text-success border-success/20'
+      case 'flagged': return 'bg-destructive/10 text-destructive border-destructive/20'
+      case 'failed_permanent': return 'bg-destructive/10 text-destructive border-destructive/20'
       case 'cancelled': return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
       default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
     }
@@ -308,38 +308,38 @@ export function AdminOrders() {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card 
-          className="bg-yellow-500/5 border-yellow-500/20 cursor-pointer hover:bg-yellow-500/10 transition-colors" 
+          className="bg-warning/5 border-warning/20 cursor-pointer hover:bg-warning/10 transition-colors" 
           onClick={() => setStatusFilter('posted')}
         >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-400">{postedCount}</p>
+            <p className="text-2xl font-bold text-warning">{postedCount}</p>
             <p className="text-xs text-muted-foreground">Posted</p>
           </CardContent>
         </Card>
         <Card 
-          className="bg-blue-500/5 border-blue-500/20 cursor-pointer hover:bg-blue-500/10 transition-colors" 
+          className="bg-info/5 border-info/20 cursor-pointer hover:bg-info/10 transition-colors" 
           onClick={() => setStatusFilter('all')}
         >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-blue-400">{activeCount}</p>
+            <p className="text-2xl font-bold text-info">{activeCount}</p>
             <p className="text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
         <Card 
-          className="bg-green-500/5 border-green-500/20 cursor-pointer hover:bg-green-500/10 transition-colors" 
+          className="bg-success/5 border-success/20 cursor-pointer hover:bg-success/10 transition-colors" 
           onClick={() => setStatusFilter('delivered')}
         >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-green-400">{completedCount}</p>
+            <p className="text-2xl font-bold text-success">{completedCount}</p>
             <p className="text-xs text-muted-foreground">Delivered</p>
           </CardContent>
         </Card>
         <Card 
-          className="bg-red-500/5 border-red-500/20 cursor-pointer hover:bg-red-500/10 transition-colors" 
+          className="bg-destructive/5 border-destructive/20 cursor-pointer hover:bg-destructive/10 transition-colors" 
           onClick={() => setStatusFilter('flagged')}
         >
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-red-400">{flaggedCount}</p>
+            <p className="text-2xl font-bold text-destructive">{flaggedCount}</p>
             <p className="text-xs text-muted-foreground">Flagged</p>
           </CardContent>
         </Card>
@@ -433,7 +433,7 @@ export function AdminOrders() {
                         {delivery.tracking_code || `#${delivery.id.slice(0, 8).toUpperCase()}`}
                       </span>
                       {delivery.is_rush && (
-                        <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-400 border-orange-500/20">
+                        <Badge variant="outline" className="text-xs bg-brand/10 text-brand border-brand/20">
                           <Zap className="w-3 h-3 mr-1" />
                           Rush
                         </Badge>
@@ -444,7 +444,7 @@ export function AdminOrders() {
                         </Badge>
                       )}
                       {delivery.is_out_of_town && (
-                        <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/20">
+                        <Badge variant="outline" className="text-xs bg-info/10 text-info border-info/20">
                           <Globe className="w-3 h-3 mr-1" />
                           OOT
                         </Badge>
@@ -558,8 +558,8 @@ export function AdminOrders() {
 
           {/* Admin Edit Panel */}
           {editMode && selectedDelivery && (
-            <div className="mt-4 space-y-4 border border-yellow-500/30 rounded-lg p-4 bg-yellow-500/5">
-              <div className="flex items-center gap-2 text-yellow-500 text-sm font-medium">
+            <div className="mt-4 space-y-4 border border-warning/30 rounded-lg p-4 bg-warning/5">
+              <div className="flex items-center gap-2 text-warning text-sm font-medium">
                 <Sliders className="w-4 h-4" />
                 Admin Override Controls
               </div>
@@ -668,7 +668,7 @@ export function AdminOrders() {
                   {formatStatus(selectedDelivery.status)}
                 </Badge>
                 {selectedDelivery.is_rush && (
-                  <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20">
+                  <Badge variant="outline" className="bg-brand/10 text-brand border-brand/20">
                     <Zap className="w-3 h-3 mr-1" />
                     Rush
                   </Badge>
@@ -677,7 +677,7 @@ export function AdminOrders() {
                   <Badge variant="destructive">Urgent</Badge>
                 )}
                 {selectedDelivery.is_out_of_town && (
-                  <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+                  <Badge variant="outline" className="bg-info/10 text-info border-info/20">
                     <Globe className="w-3 h-3 mr-1" />
                     OOT
                   </Badge>
@@ -718,14 +718,14 @@ export function AdminOrders() {
                 <h4 className="text-sm font-medium text-foreground">Route</h4>
                 <div className="space-y-2">
                   <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
+                    <div className="w-2 h-2 rounded-full bg-success mt-1.5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">Pickup</p>
                       <p className="text-xs text-muted-foreground break-words">{selectedDelivery.pickup_address}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-card-2)]">
-                    <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5" />
+                    <div className="w-2 h-2 rounded-full bg-destructive mt-1.5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">Dropoff</p>
                       <p className="text-xs text-muted-foreground break-words">{selectedDelivery.dropoff_address}</p>
@@ -823,7 +823,7 @@ export function AdminOrders() {
                             alt="Delivery proof" 
                             className="w-full h-40 object-cover"
                           />
-                          <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
+                          <div className="absolute top-2 left-2 px-2 py-1 rounded bg-success/90 text-white text-xs font-medium">
                             Delivered
                           </div>
                         </div>

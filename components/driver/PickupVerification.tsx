@@ -145,8 +145,12 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
         outOfTown: verifications[item.id]?.outOfTown ?? false,
       }))
 
-      verifyPickup(delivery.id, pickupVerifications)
+      await verifyPickup(delivery.id, pickupVerifications)
       setShowConfirmation(true)
+    } catch (err) {
+      toast.error('Pickup not saved', {
+        description: err instanceof Error ? err.message : 'Check your connection and try again.',
+      })
     } finally {
       setConfirming(false)
     }
@@ -223,7 +227,7 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
               <div className="flex items-center gap-2">
                 <Camera className="w-5 h-5 text-muted-foreground" />
                 <span className="font-medium text-foreground">Pickup Photo</span>
-                <span className="text-xs text-red-500 font-medium">Required</span>
+                <span className="text-xs text-destructive font-medium">Required</span>
               </div>
             </div>
             
@@ -266,7 +270,7 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
             )}
             
             {!pickupPhoto && (
-              <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
+              <p className="text-xs text-warning mt-2 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
                 Photo required before confirming pickup
               </p>

@@ -207,7 +207,7 @@ export function ApprovalQueue() {
               className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${tab === 'expired' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
             >
               Expired
-              {expiredCount > 0 && <span className="text-xs bg-yellow-500/20 text-yellow-500 rounded-full px-1.5 py-0.5 leading-none">{expiredCount}</span>}
+              {expiredCount > 0 && <span className="text-xs bg-warning/20 text-warning rounded-full px-1.5 py-0.5 leading-none">{expiredCount}</span>}
             </button>
             <button
               onClick={() => setTab('all')}
@@ -308,7 +308,7 @@ export function ApprovalQueue() {
                   {canAct && (
                     <div className="space-y-2">
                       {isExpired && (
-                        <div className="flex items-center gap-2 rounded-md bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 text-xs text-yellow-500">
+                        <div className="flex items-center gap-2 rounded-md bg-warning/10 border border-warning/30 px-3 py-2 text-xs text-warning">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                           This request expired. You can still force-approve or reject it as an admin override.
                         </div>
@@ -325,7 +325,7 @@ export function ApprovalQueue() {
                           size="sm"
                           onClick={() => decide(req, 'approve')}
                           disabled={busyId === req.id}
-                          className={isExpired ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : ''}
+                          className={isExpired ? 'bg-warning hover:bg-warning text-white' : ''}
                         >
                           <Check className="w-4 h-4 mr-1.5" />
                           {isExpired ? 'Force Approve' : 'Approve'}

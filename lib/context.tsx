@@ -56,7 +56,9 @@ import {
   updateDeliveryFields,
   applyPickupVerifications,
   insertDeliveryFlag,
-  insertFailureAndFinalize,
+  recordDeliveryFailure,
+  resumeFailedDelivery,
+  type FailureResult,
   cancelDeliveryInDb,
   saveRateCardToDb,
   saveSettingsToDb,
@@ -207,20 +209,20 @@ interface AppContextType {
   
   // Delivery functions
   claimDelivery: (deliveryId: string, driverId: string) => Promise<{ success: boolean; error?: string }>
-  verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => void
+  verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => Promise<void>
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (
     deliveryId: string,
     photoUrls: string[],
     recipientNote: string | null,
     signatureUrl?: string | null,
-  ) => void
-  failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => void
+  ) => Promise<void>
+  failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => Promise<FailureResult>
   flagDelivery: (deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => void
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
   postDelivery: (data: Partial<Delivery>) => Promise<Delivery | null>
   reassignDriver: (deliveryId: string, newDriverId: string) => void
-  cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
+  cancelOrderByBusiness: (deliveryId: string, reason?: string) => Promise<{ ok: boolean; error?: string; fee?: number }>
   patchDelivery: (deliveryId: string, fields: Partial<Delivery>) => void
   // Admin dispatch assignment (bypasses driver limits, records who assigned)
   assignDelivery: (deliveryId: string, driverId: string, adminUserId: string) => void
@@ -320,8 +322,8 @@ interface AppContextType {
   addJobToTrip: (tripId: string, deliveryId: string) => void
   reorderTrip: (tripId: string, newOrder: string[]) => void
   setDriverSequence: (orderedDeliveryIds: string[]) => Promise<boolean>
-  retryDelivery: (deliveryId: string) => void
-  escalateDelivery: (deliveryId: string) => void
+  retryDelivery: (deliveryId: string) => Promise<void>
+  escalateDelivery: (deliveryId: string, reason?: FailReason, notes?: string) => Promise<FailureResult>
   checkDuplicateAddress: (dropoffAddress: string, businessId: string, locationId: string) => Delivery | null
   combineDeliveries: (existingDeliveryId: string, newManifestItems: ManifestItem[]) => void
   dismissTimeout: (timeoutId: string) => void
@@ -338,6 +340,20 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | null>(null)
+
+// Best-effort GPS stamp for a failed attempt. Never blocks the driver for more
+// than ~3s and never throws (permission denied / no signal → null).
+function getQuickPosition(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return Promise.resolve(null)
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(null), 3000)
+    navigator.geolocation.getCurrentPosition(
+      pos => { clearTimeout(timer); resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }) },
+      () => { clearTimeout(timer); resolve(null) },
+      { enableHighAccuracy: true, timeout: 3000, maximumAge: 60_000 },
+    )
+  })
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null)
@@ -765,47 +781,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { success: true }
   }, [drivers, currentUser?.name, settings.allowDriverSelfClaim, refreshData])
 
-  const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
-    // Persist the verified qty + rate to the DB. Rate calculation happens
-    // server-side via the existing billing trigger when we update the row.
-    const delivery = deliveries.find(d => d.id === deliveryId)
-    const rateCardForLoc = delivery ? rateCards.find(rc => rc.locationId === delivery.locationId) : null
-    
-    // Build confirmed manifest with verified quantities
-    const confirmedManifest = delivery?.manifest.map(item => {
-      const v = verifications.find(ver => ver.itemId === item.id)
-      return { ...item, confirmedQty: v?.confirmedQty ?? item.postedQty }
-    }) || []
-    
-    // Check if any item was marked out of town
-    const hasOutOfTown = verifications.some(v => v.outOfTown)
-    const effectiveOot = hasOutOfTown || delivery?.isOutOfTown || false
-    
-    // Calculate the rate using confirmed quantities
-    const breakdown = calculateBreakdown(
-      confirmedManifest,
-      effectiveOot,
-      delivery?.isUrgent || false,
-      rateCardForLoc || null,
-      true, // useConfirmed
-      delivery?.distanceKm ?? null
-    )
-    
-    const calculatedRate = breakdown.rate
-    const gstAmount = rateCardForLoc?.gstApplicable ? Math.round(calculatedRate * 0.05 * 100) / 100 : 0
-    const totalAmount = calculatedRate + gstAmount
-    
-    persist(
-      applyPickupVerifications(
-        deliveryId,
-        verifications,
-        calculatedRate,
-        gstAmount,
-        totalAmount,
-        rateCardForLoc?.id || null,
-      ),
-      'verifyPickup',
-    )
+  const verifyPickup = useCallback(async (deliveryId: string, verifications: PickupVerification[]) => {
+    // The database writes the counts and computes the price from the rate
+    // card; we only update local state once it has accepted the pickup.
+    const price = await applyPickupVerifications(deliveryId, verifications)
+    const calculatedRate = price.rate
+    const gstAmount = price.gst
+    const totalAmount = price.total
+
+    void authedFetch('/api/sms/picked-up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId }),
+    }).catch(err => console.error('[v0] picked-up SMS failed', err))
 
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
@@ -848,7 +836,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [deliveries, rateCards])
+  }, [])
 
   const advanceStatus = useCallback((deliveryId: string) => {
     // Compute next status outside the updater so we can persist it.
@@ -924,7 +912,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [deliveries])
 
-  const completeDelivery = useCallback((
+  const completeDelivery = useCallback(async (
     deliveryId: string,
     photoUrls: string[],
     recipientNote: string | null,
@@ -939,33 +927,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Both server routes only act on rows whose status is already 'delivered',
     // so they must run after the write commits — firing them in parallel made
     // them see the old status and silently skip the texts.
-    void updateDeliveryFields(deliveryId, {
-      status: 'delivered',
-      delivered_at: now.toISOString(),
-      duration_mins: durationMins,
-      proof_photo_url: primaryPhoto,
-      proof_photo_urls: photoUrls,
-      signature_url: signatureUrl ?? null,
-      recipient_note: recipientNote,
-    })
-      .then(() => {
-        const init = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId }),
-        }
-        // Recipient + business get the proof-of-delivery tracking link now.
-        void authedFetch('/api/sms/delivered', init).catch(err =>
-          console.error('[sms] delivered failed', err),
-        )
-        // The review request is queued (not sent now) so it doesn't land a
-        // second after the "delivered" text; the cron sweep sends it later.
-        void authedFetch('/api/reviews/schedule', init).catch(err =>
-          console.error('[sms] review scheduling failed', err),
-        )
+    // Awaited so a rejected write (PIN/ID enforcement, RLS, network) surfaces to
+    // the driver instead of showing "completed" for an order that is still open.
+    try {
+      await updateDeliveryFields(deliveryId, {
+        status: 'delivered',
+        delivered_at: now.toISOString(),
+        duration_mins: durationMins,
+        proof_photo_url: primaryPhoto,
+        proof_photo_urls: photoUrls,
+        signature_url: signatureUrl ?? null,
+        recipient_note: recipientNote,
       })
-      .catch(err => console.error('[db] completeDelivery failed:', err?.message || err))
-    
+    } catch (err) {
+      const raw = (err as { message?: string })?.message ?? ''
+      const friendly = raw.includes('DELIVERY_PIN_REQUIRED')
+        ? 'Verify the recipient PIN before completing'
+        : raw.includes('DELIVERY_ID_REQUIRED')
+          ? raw.split(': ').slice(1).join(': ') || 'ID check required before completing'
+          : 'Could not save the delivery. Check your connection and try again.'
+      throw new Error(friendly)
+    }
+
+    const init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId }),
+    }
+    // Recipient + business get the proof-of-delivery tracking link now.
+    void authedFetch('/api/sms/delivered', init).catch(err => console.error('[sms] delivered failed', err))
+    // The review request is queued (not sent now) so it doesn't land a
+    // second after the "delivered" text; the cron sweep sends it later.
+    void authedFetch('/api/reviews/schedule', init).catch(err => console.error('[sms] review scheduling failed', err))
+
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
       persist(
@@ -1024,41 +1018,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [deliveries])
 
-  const failDelivery = useCallback((deliveryId: string, reason: FailReason, notes?: string) => {
-    const noteText = notes?.trim() ? `${reason} — ${notes.trim()}` : reason
-    const current = deliveries.find(d => d.id === deliveryId)
-    const retriesSoFar = current?.retryCount ?? 0
-    persist(
-      insertFailureAndFinalize(deliveryId, reason, notes, retriesSoFar + 1 >= 3),
-      'failDelivery',
-    )
-    // Fire-and-forget: notify recipient and business of failed attempt
-    void authedFetch('/api/sms/failed-attempt', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deliveryId, retryCount: retriesSoFar + 1 }),
-    }).catch(err => console.error('[v0] failed-attempt SMS failed', err))
-    setDeliveries(prev => prev.map(d => {
-      if (d.id === deliveryId) {
-        return {
-          ...d,
-          status: 'failed_retry' as DeliveryStatus,
-          retryCount: (d.retryCount ?? 0) + 1,
-          statusHistory: [
-            ...d.statusHistory,
-            {
-              status: 'failed_retry' as DeliveryStatus,
-              timestamp: new Date().toISOString(),
-              note: noteText,
-              gpsLat: null,
-              gpsLng: null,
-            },
-          ],
-        }
+  const deliveriesRef = useRef(deliveries)
+  deliveriesRef.current = deliveries
+
+  // Server-confirmed failure. Local state only changes after the database
+  // accepts the attempt, so a dropped connection never shows a fake status.
+  const applyFailureResult = useCallback(
+    (deliveryId: string, result: FailureResult, gps: { lat: number; lng: number } | null) => {
+      const permanent = result.status === 'failed_permanent'
+      const delivery = deliveriesRef.current.find(d => d.id === deliveryId)
+      setDeliveries(prev => prev.map(d => d.id !== deliveryId ? d : {
+        ...d,
+        status: result.status as DeliveryStatus,
+        retryCount: result.retry_count,
+        ...(permanent ? { driverId: null, driverName: null, tripId: null } : {}),
+        statusHistory: [
+          ...d.statusHistory,
+          {
+            status: result.status as DeliveryStatus,
+            timestamp: new Date().toISOString(),
+            note: result.note ?? null,
+            gpsLat: gps?.lat ?? null,
+            gpsLng: gps?.lng ?? null,
+          },
+        ],
+      }))
+      if (permanent && delivery?.tripId) {
+        setTrips(prev => prev.map(t => t.id !== delivery.tripId ? t : {
+          ...t,
+          deliveryIds: t.deliveryIds.filter(id => id !== deliveryId),
+          order: t.order.filter(id => id !== deliveryId),
+        }))
       }
-      return d
-    }))
-  }, [deliveries])
+      if (permanent) {
+        const newNotification: AdminNotification = {
+          id: `notif-${Date.now()}`,
+          type: 'flag',
+          title: 'Delivery needs dispatch',
+          message: `${delivery?.trackingCode ?? 'Delivery'} to ${delivery?.recipientName ?? 'recipient'} — ${result.note ?? 'failed'} (${result.retry_count} attempt${result.retry_count === 1 ? '' : 's'}). Action required.`,
+          deliveryId,
+          driverId: delivery?.driverId || null,
+          businessId: delivery?.businessId || null,
+          invoiceId: null,
+          createdAt: new Date().toISOString(),
+          read: false,
+          priority: 'high',
+        }
+        setAdminNotifications(prev => [newNotification, ...prev])
+        persist(
+          insertAdminNotification({
+            type: newNotification.type,
+            title: newNotification.title,
+            message: newNotification.message,
+            deliveryId: newNotification.deliveryId,
+            driverId: newNotification.driverId,
+            businessId: newNotification.businessId,
+            invoiceId: null,
+            priority: 'high',
+            read: false,
+          }).then(saved => {
+            if (saved.id !== newNotification.id) {
+              setAdminNotifications(prev => prev.map(n => (n.id === newNotification.id ? saved : n)))
+            }
+          }),
+          'insertAdminNotification:escalate',
+        )
+      }
+      void authedFetch('/api/sms/failed-attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId }),
+      }).catch(err => console.error('[v0] failed-attempt SMS failed', err))
+    },
+    [],
+  )
+
+  const failDelivery = useCallback(
+    async (deliveryId: string, reason: FailReason, notes?: string): Promise<FailureResult> => {
+      const gps = await getQuickPosition()
+      const result = await recordDeliveryFailure({ deliveryId, reason, notes, lat: gps?.lat, lng: gps?.lng })
+      applyFailureResult(deliveryId, result, gps)
+      return result
+    },
+    [applyFailureResult],
+  )
 
   /**
    * Raise an admin notification that survives a refresh.
@@ -1414,7 +1457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Business-initiated cancel: only allowed before a driver has claimed the job.
   // Returns { ok, error } instead of throwing so the caller can show a friendly toast.
   const cancelOrderByBusiness = useCallback(
-    (deliveryId: string, reason?: string): { ok: boolean; error?: string } => {
+    async (deliveryId: string, reason?: string): Promise<{ ok: boolean; error?: string; fee?: number }> => {
       const delivery = deliveries.find(d => d.id === deliveryId)
       if (!delivery) {
         return { ok: false, error: 'Order not found' }
@@ -1430,15 +1473,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date().toISOString()
-      persist(
-        cancelDeliveryInDb(
-          deliveryId,
-          'before_depart',
-          0,
-          reason?.trim() || 'Cancelled by business (before claim)',
-        ),
-        'cancelOrderByBusiness',
-      )
+      let fee = 0
+      try {
+        const res = await cancelDeliveryInDb(deliveryId, reason?.trim() || null)
+        fee = res.fee
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Could not cancel order' }
+      }
       // Fire-and-forget: notify all parties of cancellation
       void authedFetch('/api/sms/cancelled', {
         method: 'POST',
@@ -1453,7 +1494,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 status: 'cancelled' as DeliveryStatus,
                 cancelledAt: now,
                 cancellationStage: 'before_depart',
-                cancellationFee: 0,
+                cancellationFee: fee,
                 cancellationReason: reason?.trim() || 'Cancelled by business (before claim)',
                 statusHistory: [
                   ...d.statusHistory,
@@ -1469,7 +1510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : d,
         ),
       )
-      return { ok: true }
+      return { ok: true, fee }
     },
     [deliveries],
   )
@@ -3050,102 +3091,42 @@ const reorderTrip = useCallback((tripId: string, newOrder: string[]) => {
     return updateDeliverySequence(orderedDeliveryIds)
   }, [])
 
-  const retryDelivery = useCallback((deliveryId: string) => {
-    setDeliveries(prev => prev.map(d => {
-      if (d.id === deliveryId) {
-        return {
-          ...d,
-          status: 'claimed' as DeliveryStatus,
-          statusHistory: [
-            ...d.statusHistory,
-            {
-              status: 'claimed' as DeliveryStatus,
-              timestamp: new Date().toISOString(),
-              note: 'Retry initiated',
-              gpsLat: null,
-              gpsLng: null,
-            },
-          ],
-        }
-      }
-      return d
+  // Retry resumes the drop-off leg (package is already in the driver's hands),
+  // so it goes back to en_route_dropoff rather than re-running pickup.
+  const retryDelivery = useCallback(async (deliveryId: string): Promise<void> => {
+    await resumeFailedDelivery(deliveryId)
+    setDeliveries(prev => prev.map(d => d.id !== deliveryId ? d : {
+      ...d,
+      status: 'en_route_dropoff' as DeliveryStatus,
+      statusHistory: [
+        ...d.statusHistory,
+        {
+          status: 'en_route_dropoff' as DeliveryStatus,
+          timestamp: new Date().toISOString(),
+          note: 'Retry started',
+          gpsLat: null,
+          gpsLng: null,
+        },
+      ],
     }))
   }, [])
 
-  const escalateDelivery = useCallback((deliveryId: string) => {
-    const delivery = deliveries.find(d => d.id === deliveryId)
-    
-    setDeliveries(prev => prev.map(d => {
-      if (d.id === deliveryId) {
-        return {
-          ...d,
-          status: 'failed_permanent' as DeliveryStatus,
-          driverId: null,
-          driverName: null,
-          tripId: null,
-          statusHistory: [
-            ...d.statusHistory,
-            {
-              status: 'failed_permanent' as DeliveryStatus,
-              timestamp: new Date().toISOString(),
-              note: 'Escalated after 2 failed attempts',
-              gpsLat: null,
-              gpsLng: null,
-            },
-          ],
-        }
-      }
-      return d
-    }))
-
-    // Remove from trip if in one
-    if (delivery?.tripId) {
-      setTrips(prev => prev.map(t => {
-        if (t.id === delivery.tripId) {
-          return {
-            ...t,
-            deliveryIds: t.deliveryIds.filter(id => id !== deliveryId),
-            order: t.order.filter(id => id !== deliveryId),
-          }
-        }
-        return t
-      }))
-    }
-
-    // Add admin notification (optimistic + persisted)
-    const newNotification: AdminNotification = {
-      id: `notif-${Date.now()}`,
-      type: 'flag',
-      title: 'Delivery Escalated',
-      message: `Delivery #${deliveryId.split('-')[1]} - 2 failed attempts - action required`,
-      deliveryId,
-      driverId: delivery?.driverId || null,
-      businessId: delivery?.businessId || null,
-      invoiceId: null,
-      createdAt: new Date().toISOString(),
-      read: false,
-      priority: 'high',
-    }
-    setAdminNotifications(prev => [newNotification, ...prev])
-    persist(
-      insertAdminNotification({
-        type: newNotification.type,
-        title: newNotification.title,
-        message: newNotification.message,
-        deliveryId: newNotification.deliveryId,
-        driverId: newNotification.driverId,
-        businessId: newNotification.businessId,
-        invoiceId: newNotification.invoiceId,
-        priority: newNotification.priority,
-        read: false,
-      }).then(saved => {
-        if (saved.id !== newNotification.id) {
-          setAdminNotifications(prev => prev.map(n => (n.id === newNotification.id ? saved : n)))
-        }
-      }),
-      'insertAdminNotification:escalate',
-    )
-  }, [deliveries])
+  const escalateDelivery = useCallback(
+    async (deliveryId: string, reason?: FailReason, notes?: string): Promise<FailureResult> => {
+      const gps = await getQuickPosition()
+      const result = await recordDeliveryFailure({
+        deliveryId,
+        reason: reason ?? 'released_by_driver',
+        notes,
+        release: true,
+        lat: gps?.lat,
+        lng: gps?.lng,
+      })
+      applyFailureResult(deliveryId, result, gps)
+      return result
+    },
+    [applyFailureResult],
+  )
 
   const checkDuplicateAddress = useCallback((dropoffAddress: string, businessId: string, locationId: string): Delivery | null => {
     const today = new Date().toISOString().split('T')[0]

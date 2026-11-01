@@ -16,7 +16,11 @@ import {
   resolveActorName,
 } from '@/lib/consent-server'
 
-const ACTIVE_STATUSES = new Set(['claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff', 'failed_attempt'])
+// Only once the driver has the package; asking before pickup makes no sense.
+const ACTIVE_STATUSES = new Set(['picked_up', 'en_route_dropoff', 'failed_attempt'])
+const MAX_REQUESTS_PER_WINDOW = 3
+const REQUEST_WINDOW_MINUTES = 30
+const MIN_SECONDS_BETWEEN_REQUESTS = 60
 
 async function requireDriverOnDelivery(req: NextRequest, id: string) {
   const auth = await requireDeliveryParty(req, id)
@@ -69,11 +73,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const admin = createAdminClient()
   const { data: delivery } = await admin
     .from('deliveries')
-    .select('id, status, recipient_name, recipient_phone, driver_id, businesses(name)')
+    .select('id, status, recipient_name, recipient_phone, driver_id, handoff_require_id, businesses(name)')
     .eq('id', id)
     .maybeSingle<{
       id: string
       status: string
+      handoff_require_id: boolean | null
       recipient_name: string | null
       recipient_phone: string | null
       driver_id: string | null
@@ -81,7 +86,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }>()
   if (!delivery) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!ACTIVE_STATUSES.has(delivery.status)) {
-    return NextResponse.json({ error: 'Delivery is not active' }, { status: 409 })
+    return NextResponse.json({ error: 'You can only ask for approval after picking up the package' }, { status: 409 })
+  }
+  if (delivery.handoff_require_id && requestType === 'leave_at_door') {
+    return NextResponse.json(
+      { error: 'This order needs an ID check, so it cannot be left at the door even with approval' },
+      { status: 422 },
+    )
+  }
+
+  const windowStart = new Date(Date.now() - REQUEST_WINDOW_MINUTES * 60_000).toISOString()
+  const { data: recent } = await admin
+    .from('delivery_consent_requests')
+    .select('created_at')
+    .eq('delivery_id', id)
+    .gte('created_at', windowStart)
+    .order('created_at', { ascending: false })
+  if (recent && recent.length > 0) {
+    const secondsSinceLast = (Date.now() - new Date(recent[0].created_at as string).getTime()) / 1000
+    if (secondsSinceLast < MIN_SECONDS_BETWEEN_REQUESTS) {
+      return NextResponse.json(
+        { error: `Please wait ${Math.ceil(MIN_SECONDS_BETWEEN_REQUESTS - secondsSinceLast)}s before sending another text` },
+        { status: 429 },
+      )
+    }
+    if (recent.length >= MAX_REQUESTS_PER_WINDOW) {
+      return NextResponse.json(
+        { error: 'Too many approval texts sent. Call the business, or mark the attempt as failed.' },
+        { status: 429 },
+      )
+    }
   }
   if (!delivery.recipient_phone) {
     return NextResponse.json(
@@ -112,9 +146,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           : requestType === 'leave_at_door'
             ? 'leave it at your door'
             : note!
+  // A per-request code lets a recipient with several pending approvals answer the right one.
+  const replyCode = String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000)
   const messageBody =
     `DOMS By Atria360: ${driverName} is at your address with your delivery from ${businessName} and could not reach you. ` +
-    `May they ${ask}? Reply YES to approve or NO to decline. Expires in ${CONSENT_REQUEST_TTL_MINUTES} min.`
+    `May they ${ask}?${delivery.handoff_require_id ? ' The person receiving it must show photo ID.' : ''} ` +
+    `Reply YES ${replyCode} to approve or NO ${replyCode} to decline. Expires in ${CONSENT_REQUEST_TTL_MINUTES} min.`
 
   const phone = normalizePhone(delivery.recipient_phone)
   const expiresAt = new Date(Date.now() + CONSENT_REQUEST_TTL_MINUTES * 60_000).toISOString()
@@ -129,6 +166,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       note,
       recipient_phone: phone,
       message_body: messageBody,
+      reply_code: replyCode,
       status: 'pending',
       expires_at: expiresAt,
     })

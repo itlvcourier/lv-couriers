@@ -55,10 +55,10 @@ function statusLabel(status: DeliveryStatus): string {
 function statusTone(status: DeliveryStatus): string {
   switch (status) {
     case 'en_route_pickup':
-      return 'bg-blue-500/15 text-blue-500 border-blue-500/30'
+      return 'bg-muted-foreground/15 text-muted-foreground border-muted-foreground/30'
     case 'picked_up':
     case 'en_route_dropoff':
-      return 'bg-orange-500/15 text-orange-500 border-orange-500/30'
+      return 'bg-brand/15 text-brand border-brand/30'
     default:
       return 'bg-muted text-muted-foreground border-border'
   }
@@ -161,14 +161,6 @@ export function BusinessLiveTracking() {
   if (active.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Live Tracking</h2>
-            <p className="text-sm text-muted-foreground">
-              Follow drivers as they move through your active deliveries.
-            </p>
-          </div>
-        </div>
         <Card>
           <CardContent className="py-12">
             <Empty>
@@ -190,18 +182,13 @@ export function BusinessLiveTracking() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-            Live Tracking
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {active.length} active {active.length === 1 ? 'delivery' : 'deliveries'}
-          </p>
-        </div>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="relative flex h-2 w-2" aria-hidden="true">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+          {active.length} active {active.length === 1 ? 'delivery' : 'deliveries'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
@@ -247,14 +234,14 @@ export function BusinessLiveTracking() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-green-500" />
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-success" />
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Pickup</p>
                       <p className="truncate text-foreground">{delivery.pickupAddress}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
+                    <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Drop-off</p>
                       <p className="truncate text-foreground">{delivery.dropoffAddress}</p>
@@ -412,14 +399,14 @@ function TrackingDetailSheet({
             </CardHeader>
             <CardContent className="pt-0 space-y-3 text-sm">
               <div className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-green-500" />
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-success" />
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Pickup</p>
                   <p className="text-foreground">{delivery.pickupAddress}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
+                <Navigation className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Drop-off</p>
                   <p className="text-foreground">{delivery.dropoffAddress}</p>

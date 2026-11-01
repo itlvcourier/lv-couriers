@@ -50,38 +50,38 @@ import type { AdminNotificationType } from '@/lib/types'
 // ─── Notification configs ─────────────────────────────────────────────────────
 
 const NOTIF_CONFIGS: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  new_job:          { icon: Package,       color: 'text-blue-400 bg-blue-500/10',   label: 'New Job' },
-  flag:             { icon: Flag,          color: 'text-red-400 bg-red-500/10',     label: 'Flag' },
-  sla_breach:       { icon: AlertTriangle, color: 'text-orange-400 bg-orange-500/10', label: 'SLA Breach' },
-  driver_timeout:   { icon: Clock,         color: 'text-yellow-400 bg-yellow-500/10', label: 'Driver Timeout' },
-  payment_received: { icon: CheckCircle,   color: 'text-green-400 bg-green-500/10', label: 'Payment' },
+  new_job:          { icon: Package,       color: 'text-info bg-info/10',   label: 'New Job' },
+  flag:             { icon: Flag,          color: 'text-destructive bg-destructive/10',     label: 'Flag' },
+  sla_breach:       { icon: AlertTriangle, color: 'text-brand bg-brand/10', label: 'SLA Breach' },
+  driver_timeout:   { icon: Clock,         color: 'text-warning bg-warning/10', label: 'Driver Timeout' },
+  payment_received: { icon: CheckCircle,   color: 'text-success bg-success/10', label: 'Payment' },
   system:           { icon: Bell,          color: 'text-gray-400 bg-gray-500/10',   label: 'System' },
-  timeout:          { icon: Clock,         color: 'text-yellow-400 bg-yellow-500/10', label: 'Timeout' },
-  completion:       { icon: CheckCircle,   color: 'text-green-400 bg-green-500/10', label: 'Delivery' },
+  timeout:          { icon: Clock,         color: 'text-warning bg-warning/10', label: 'Timeout' },
+  completion:       { icon: CheckCircle,   color: 'text-success bg-success/10', label: 'Delivery' },
   invoice:          { icon: FileText,      color: 'text-gray-400 bg-gray-500/10',   label: 'Invoice' },
-  driver_deactivated: { icon: UserX,       color: 'text-red-400 bg-red-500/10',     label: 'Driver' },
+  driver_deactivated: { icon: UserX,       color: 'text-destructive bg-destructive/10',     label: 'Driver' },
 }
 
 // ─── SMS type / status configs ────────────────────────────────────────────────
 
 const SMS_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
-  pickup_alert:     { label: 'Pickup Alert',     color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  tracking_link:    { label: 'Tracking Link',    color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-  delivery_confirm: { label: 'Delivered',        color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-  failed_attempt:   { label: 'Failed Attempt',   color: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  invoice_reminder: { label: 'Invoice Reminder', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-  overdue_notice:   { label: 'Overdue Notice',   color: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  driver_reassigned:{ label: 'Reassigned',       color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  en_route_pickup:  { label: 'En Route Pickup',  color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
-  en_route_dropoff: { label: 'En Route Dropoff', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
-  feedback_request: { label: 'Feedback Request', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
+  pickup_alert:     { label: 'Pickup Alert',     color: 'bg-info/10 text-info border-info/20' },
+  tracking_link:    { label: 'Tracking Link',    color: 'bg-success/10 text-success border-success/20' },
+  delivery_confirm: { label: 'Delivered',        color: 'bg-success/10 text-success border-success/20' },
+  failed_attempt:   { label: 'Failed Attempt',   color: 'bg-destructive/10 text-destructive border-destructive/20' },
+  invoice_reminder: { label: 'Invoice Reminder', color: 'bg-warning/10 text-warning border-warning/20' },
+  overdue_notice:   { label: 'Overdue Notice',   color: 'bg-destructive/10 text-destructive border-destructive/20' },
+  driver_reassigned:{ label: 'Reassigned',       color: 'bg-info/10 text-info border-info/20' },
+  en_route_pickup:  { label: 'En Route Pickup',  color: 'bg-info/10 text-info border-info/20' },
+  en_route_dropoff: { label: 'En Route Dropoff', color: 'bg-info/10 text-info border-info/20' },
+  feedback_request: { label: 'Feedback Request', color: 'bg-info/10 text-info border-info/20' },
 }
 
 const SMS_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  sent:      { label: 'Sent',      color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  delivered: { label: 'Delivered', color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-  failed:    { label: 'Failed',    color: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  bounced:   { label: 'Bounced',   color: 'bg-red-500/10 text-red-400 border-red-500/20' },
+  sent:      { label: 'Sent',      color: 'bg-info/10 text-info border-info/20' },
+  delivered: { label: 'Delivered', color: 'bg-success/10 text-success border-success/20' },
+  failed:    { label: 'Failed',    color: 'bg-destructive/10 text-destructive border-destructive/20' },
+  bounced:   { label: 'Bounced',   color: 'bg-destructive/10 text-destructive border-destructive/20' },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -390,7 +390,7 @@ export function AdminCommunications() {
                                       {statusCfg.label}
                                     </Badge>
                                     {canRetry && (
-                                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 py-0 bg-warning/10 text-warning border-warning/20">
                                         Retry Available
                                       </Badge>
                                     )}

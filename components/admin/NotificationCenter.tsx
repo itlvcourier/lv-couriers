@@ -31,19 +31,23 @@ const NOTIFICATION_ICONS: Partial<Record<AdminNotificationType, React.ElementTyp
 }
 
 const NOTIFICATION_COLORS: Partial<Record<AdminNotificationType, string>> = {
-  new_job: 'text-blue-400 bg-blue-500/10',
-  flag: 'text-red-400 bg-red-500/10',
-  sla_breach: 'text-orange-400 bg-orange-500/10',
-  driver_timeout: 'text-yellow-400 bg-yellow-500/10',
-  payment_received: 'text-green-400 bg-green-500/10',
+  new_job: 'text-info bg-info/10',
+  flag: 'text-destructive bg-destructive/10',
+  sla_breach: 'text-brand bg-brand/10',
+  driver_timeout: 'text-warning bg-warning/10',
+  payment_received: 'text-success bg-success/10',
   system: 'text-gray-400 bg-gray-500/10',
 }
 
 export function NotificationCenter() {
   const { adminNotifications, markAdminNotificationRead, markAllAdminNotificationsRead } = useApp()
   const [open, setOpen] = useState(false)
-  
-  const unreadCount = adminNotifications.filter(n => !n.read).length
+  const [showEarlier, setShowEarlier] = useState(false)
+
+  const unreadList = adminNotifications.filter(n => !n.read)
+  const earlierList = adminNotifications.filter(n => n.read).slice(0, 30)
+  const visible = showEarlier ? [...unreadList, ...earlierList] : unreadList
+  const unreadCount = unreadList.length
 
   const handleNotificationClick = (notificationId: string) => {
     markAdminNotificationRead(notificationId)
@@ -61,7 +65,13 @@ export function NotificationCenter() {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={next => {
+        setOpen(next)
+        if (!next) setShowEarlier(false)
+      }}
+    >
       <PopoverTrigger asChild>
         <Button 
           variant="ghost" 
@@ -96,13 +106,13 @@ export function NotificationCenter() {
         
         {/* Notifications List */}
         <ScrollArea className="h-[400px]">
-          {adminNotifications.length === 0 ? (
+          {visible.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              No notifications
+              {"You're all caught up"}
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {adminNotifications.map(notification => {
+              {visible.map(notification => {
                 const Icon = NOTIFICATION_ICONS[notification.type] || Bell
                 const colorClass = NOTIFICATION_COLORS[notification.type] || 'text-gray-400 bg-gray-500/10'
                 
@@ -145,7 +155,17 @@ export function NotificationCenter() {
         </ScrollArea>
         
         {/* Footer */}
-        <div className="p-3 border-t border-border">
+        <div className="flex flex-col gap-1 p-3 border-t border-border">
+          {earlierList.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowEarlier(v => !v)}
+            >
+              {showEarlier ? 'Hide earlier' : `Show earlier (${earlierList.length})`}
+            </Button>
+          )}
           <Button 
             variant="ghost" 
             className="w-full text-sm text-muted-foreground hover:text-foreground"

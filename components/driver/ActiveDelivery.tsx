@@ -213,6 +213,7 @@ function TripJobCard({
   const [showFailSheet, setShowFailSheet] = useState(false)
   const [failReason, setFailReason] = useState<FailReason | ''>('')
   const [failNotes, setFailNotes] = useState('')
+  const [failBusy, setFailBusy] = useState(false)
 
   const isCompleted = delivery.status === 'delivered'
   const isRetryPending = delivery.status === 'failed_retry'
@@ -223,21 +224,40 @@ function TripJobCard({
     setFailNotes('')
   }
 
+  const runFailureAction = async (action: () => Promise<unknown>, onDone: () => void) => {
+    if (failBusy) return
+    setFailBusy(true)
+    try {
+      await action()
+      onDone()
+    } catch (err) {
+      toast.error('Could not save', { description: err instanceof Error ? err.message : 'Try again.' })
+    } finally {
+      setFailBusy(false)
+    }
+  }
+
   const handleMarkFailed = () => {
     if (!failReason) return
-    setShowFailSheet(false)
-    if (isFinalAttempt) {
-      escalateDelivery(delivery.id)
-      toast.error('Delivery escalated to dispatch after 2 failed attempts', {
-        description: 'You can move on to your next job.',
-      })
-    } else {
-      failDelivery(delivery.id, failReason, failNotes)
-      toast.warning('Delivery flagged for retry', {
-        description: 'Try again when you can, or release it to dispatch.',
-      })
+    if (failReason === 'other' && failNotes.trim().length < 3) {
+      toast.error('Describe the issue so dispatch knows what happened')
+      return
     }
-    resetFailForm()
+    void runFailureAction(
+      async () => {
+        const result = await failDelivery(delivery.id, failReason, failNotes)
+        if (result.status === 'failed_permanent') {
+          toast.error('Escalated to dispatch after 2 failed attempts', {
+            description: 'Keep the package safe. Dispatch will tell you where to return it.',
+          })
+        } else {
+          toast.warning('Attempt 1 of 2 recorded', {
+            description: 'Customer and business were notified. Retry when you can, or release to dispatch.',
+          })
+        }
+      },
+      () => { setShowFailSheet(false); resetFailForm() },
+    )
   }
   
   const getStatusLabel = () => {
@@ -290,14 +310,14 @@ function TripJobCard({
   if (isRetryPending) {
     const lastFailure = [...delivery.statusHistory].reverse().find(h => h.status === 'failed_retry')
     return (
-      <Card className="bg-yellow-500/10 border-yellow-500/30">
+      <Card className="bg-warning/10 border-warning/30">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+            <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-warning" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm text-yellow-400">{delivery.businessName} — Retry Needed</p>
+              <p className="font-medium text-sm text-warning">{delivery.businessName} — Retry Needed</p>
               <p className="text-xs text-muted-foreground mt-0.5">{delivery.dropoffArea}</p>
               {lastFailure?.note && (
                 <p className="text-xs text-muted-foreground mt-1 italic">{lastFailure.note}</p>
@@ -323,7 +343,8 @@ function TripJobCard({
           <div className="flex gap-2">
             <Button
               size="sm"
-              onClick={() => { retryDelivery(delivery.id); toast.success('Resuming delivery') }}
+              disabled={failBusy}
+              onClick={() => void runFailureAction(() => retryDelivery(delivery.id), () => toast.success('Resuming delivery'))}
               className="flex-1 h-9 rounded-lg bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white text-xs"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
@@ -332,7 +353,8 @@ function TripJobCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => { escalateDelivery(delivery.id); toast.info('Released to dispatch') }}
+              disabled={failBusy}
+              onClick={() => void runFailureAction(() => escalateDelivery(delivery.id), () => toast.info('Released to dispatch'))}
               className="flex-1 h-9 rounded-lg border-[var(--border-color)] text-xs"
             >
               Release
@@ -357,7 +379,7 @@ function TripJobCard({
             <div className="flex items-center justify-between mb-1">
               <p className="font-medium text-sm text-foreground">{delivery.businessName}</p>
               {delivery.isUrgent && (
-                <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-xs font-medium">
+                <span className="px-2 py-0.5 rounded bg-destructive/10 text-destructive text-xs font-medium">
                   Rush
                 </span>
               )}
@@ -533,11 +555,11 @@ function TripJobCard({
         </SheetHeader>
         <div className="space-y-4">
           {/* Attempt warning */}
-          <div className={`p-3 rounded-xl border ${isFinalAttempt ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}>
+          <div className={`p-3 rounded-xl border ${isFinalAttempt ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
             <div className="flex items-start gap-2">
-              <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${isFinalAttempt ? 'text-red-400' : 'text-yellow-400'}`} />
+              <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${isFinalAttempt ? 'text-destructive' : 'text-warning'}`} />
               <div className="text-xs">
-                <p className={`font-medium ${isFinalAttempt ? 'text-red-400' : 'text-yellow-400'}`}>
+                <p className={`font-medium ${isFinalAttempt ? 'text-destructive' : 'text-warning'}`}>
                   {isFinalAttempt ? 'Final attempt — will escalate to dispatch' : 'Attempt 1 of 2'}
                 </p>
                 <p className="text-muted-foreground mt-0.5">
@@ -551,7 +573,7 @@ function TripJobCard({
           {/* Reason */}
           <div className="space-y-2">
             <Label htmlFor={`fail-reason-${delivery.id}`} className="text-sm text-foreground">
-              Reason <span className="text-red-400">*</span>
+              Reason <span className="text-destructive">*</span>
             </Label>
             <Select value={failReason} onValueChange={(v) => setFailReason(v as FailReason)}>
               <SelectTrigger id={`fail-reason-${delivery.id}`} className="h-12 bg-[var(--bg-card-2)] border-[var(--border-color)] text-foreground rounded-xl">
@@ -587,7 +609,7 @@ function TripJobCard({
             <Button
               onClick={handleMarkFailed}
               disabled={!failReason}
-              className={`flex-1 h-12 rounded-xl text-white tap-target disabled:opacity-50 ${isFinalAttempt ? 'bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90' : 'bg-yellow-500 hover:bg-yellow-500/90'}`}
+              className={`flex-1 h-12 rounded-xl text-white tap-target disabled:opacity-50 ${isFinalAttempt ? 'bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90' : 'bg-warning hover:bg-warning/90'}`}
             >
               {isFinalAttempt ? 'Escalate to Dispatch' : 'Flag for Retry'}
             </Button>
@@ -858,41 +880,58 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   }
 
   const isFinalAttempt = (delivery.retryCount ?? 0) >= 1
+  const [failBusy, setFailBusy] = useState(false)
 
   const resetFailForm = () => {
     setFailReason('')
     setFailNotes('')
   }
 
+  const runFailureAction = async (action: () => Promise<unknown>, onDone: () => void) => {
+    if (failBusy) return
+    setFailBusy(true)
+    try {
+      await action()
+      onDone()
+    } catch (err) {
+      toast.error('Could not save', { description: err instanceof Error ? err.message : 'Try again.' })
+    } finally {
+      setFailBusy(false)
+    }
+  }
+
   const handleMarkFailed = () => {
     if (!failReason) return
-    setShowFailSheet(false)
-
-    if (isFinalAttempt) {
-      // Second failure - auto-escalate to dispatch
-      escalateDelivery(delivery.id)
-      toast.error('Delivery escalated to dispatch after 2 failed attempts', {
-        description: 'You can move on to your next job.',
-      })
-    } else {
-      failDelivery(delivery.id, failReason, failNotes)
-      toast.warning('Delivery flagged for retry', {
-        description: 'Try again when you can, or release it to dispatch.',
-      })
+    if (failReason === 'other' && failNotes.trim().length < 3) {
+      toast.error('Describe the issue so dispatch knows what happened')
+      return
     }
-    resetFailForm()
+    void runFailureAction(
+      async () => {
+        const result = await failDelivery(delivery.id, failReason, failNotes)
+        if (result.status === 'failed_permanent') {
+          toast.error('Escalated to dispatch after 2 failed attempts', {
+            description: 'Keep the package safe. Dispatch will tell you where to return it.',
+          })
+        } else {
+          toast.warning('Attempt 1 of 2 recorded', {
+            description: 'Customer and business were notified. Retry when you can, or release to dispatch.',
+          })
+        }
+      },
+      () => { setShowFailSheet(false); resetFailForm() },
+    )
   }
 
   const handleRetryNow = () => {
-    retryDelivery(delivery.id)
-    toast.success('Resuming delivery')
+    void runFailureAction(() => retryDelivery(delivery.id), () => toast.success('Resuming delivery'))
   }
 
   const handleReleaseToDispatch = () => {
-    escalateDelivery(delivery.id)
-    toast.info('Released to dispatch', {
-      description: 'A dispatcher will reassign or follow up.',
-    })
+    void runFailureAction(
+      () => escalateDelivery(delivery.id),
+      () => toast.info('Released to dispatch', { description: 'A dispatcher will reassign or follow up.' }),
+    )
   }
 
   const getActionButton = () => {
@@ -927,14 +966,14 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
 
     return (
       <div className="space-y-4">
-        <Card className="bg-yellow-500/10 border-yellow-500/30">
+        <Card className="bg-warning/10 border-warning/30">
           <CardContent className="p-4 space-y-4">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+              <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-warning" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-yellow-400">Needs Another Attempt</h3>
+                <h3 className="font-medium text-warning">Needs Another Attempt</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Attempt 1 of 2 failed. One retry allowed before escalation.
                 </p>
@@ -992,7 +1031,7 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
               <div className="flex items-center gap-1.5 shrink-0">
                 <RoutingBadge delivery={delivery} hub={hub} />
                 {delivery.isUrgent && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-xs font-medium border border-red-500/20">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-destructive/10 text-destructive text-xs font-medium border border-destructive/20">
                     <Zap className="w-3 h-3" />
                     Urgent
                   </span>
@@ -1324,20 +1363,20 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
             <div
               className={`p-3 rounded-xl border ${
                 isFinalAttempt
-                  ? 'bg-red-500/10 border-red-500/30'
-                  : 'bg-yellow-500/10 border-yellow-500/30'
+                  ? 'bg-destructive/10 border-destructive/30'
+                  : 'bg-warning/10 border-warning/30'
               }`}
             >
               <div className="flex items-start gap-2">
                 <AlertTriangle
                   className={`w-4 h-4 mt-0.5 shrink-0 ${
-                    isFinalAttempt ? 'text-red-400' : 'text-yellow-400'
+                    isFinalAttempt ? 'text-destructive' : 'text-warning'
                   }`}
                 />
                 <div className="text-xs">
                   <p
                     className={`font-medium ${
-                      isFinalAttempt ? 'text-red-400' : 'text-yellow-400'
+                      isFinalAttempt ? 'text-destructive' : 'text-warning'
                     }`}
                   >
                     {isFinalAttempt
@@ -1356,7 +1395,7 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
             {/* Reason */}
             <div className="space-y-2">
               <Label htmlFor="fail-reason" className="text-sm text-foreground">
-                Reason <span className="text-red-400">*</span>
+                Reason <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={failReason}
@@ -1419,7 +1458,7 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
                 className={`flex-1 h-12 rounded-xl text-white tap-target disabled:opacity-50 ${
                   isFinalAttempt
                     ? 'bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90'
-                    : 'bg-yellow-500 hover:bg-yellow-500/90'
+                    : 'bg-warning hover:bg-warning/90'
                 }`}
               >
                 {isFinalAttempt ? 'Escalate to Dispatch' : 'Flag for Retry'}

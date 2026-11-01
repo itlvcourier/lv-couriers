@@ -223,6 +223,7 @@ export interface Delivery {
   recipientNote: string | null
   // Capture requirements set by the business at order creation time.
   requireSignature?: boolean
+  requirePin?: boolean
   requirePhoto?: boolean
   // Handoff / consent rule
   handoffRule?: import('./handoff').HandoffRule
@@ -233,6 +234,9 @@ export interface Delivery {
   receivedByType?: import('./handoff').ReceivedByType | null
   receivedByName?: string | null
   receivedByRelationship?: string | null
+  receivedByIdType?: string | null
+  receivedByIdLast4?: string | null
+  pinVerifiedAt?: string | null
   // Tracking
   trackingCode: string | null
   trackingExpiresAt?: string | null

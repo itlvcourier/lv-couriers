@@ -23,6 +23,7 @@ import useSWR from 'swr'
 import { loadDeliveryMedia } from '@/lib/db-extended'
 import type { Driver, Business } from '@/lib/types'
 import { ConsentLog, type HandoffSnapshot } from './ConsentLog'
+import { OrderActivity } from './OrderActivity'
 
 // Simplified order shape used by this sheet (from BusinessOrders etc.)
 export interface OrderLike {
@@ -169,6 +170,10 @@ export function OrderDetailSheet({
             />
           )}
 
+          {viewType !== 'driver' && (
+            <OrderActivity deliveryId={order.id} canReport={viewType === 'business'} />
+          )}
+
           {/* Cancellation notice */}
           {order.status === 'cancelled' && order.cancellationReason && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2">
@@ -302,7 +307,7 @@ export function OrderDetailSheet({
                         alt="Pickup proof" 
                         className="w-full h-40 object-contain"
                       />
-                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-blue-500/90 text-white text-xs font-medium">
+                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-info/90 text-white text-xs font-medium">
                         Pickup
                       </div>
                     </div>
@@ -338,7 +343,7 @@ export function OrderDetailSheet({
                               className="w-full h-40 object-contain"
                             />
                             {i === 0 && (
-                              <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
+                              <div className="absolute top-2 left-2 px-2 py-1 rounded bg-success/90 text-white text-xs font-medium">
                                 Delivered
                               </div>
                             )}

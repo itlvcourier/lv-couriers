@@ -79,9 +79,9 @@ function formatMins(mins: number | null) {
 
 function getSlaColor(rate: number | null) {
   if (rate === null) return 'text-muted-foreground'
-  if (rate >= 90) return 'text-green-400'
-  if (rate >= 70) return 'text-yellow-400'
-  return 'text-red-400'
+  if (rate >= 90) return 'text-success'
+  if (rate >= 70) return 'text-warning'
+  return 'text-destructive'
 }
 
 function calcLivePerformance(history: DbDelivery[], rushSlaMins = 45) {
@@ -375,14 +375,14 @@ export function AdminDrivers() {
   // ── Status colors ──────────────────────────────────────────────────────────
 
   const statusColors: Record<string, string> = {
-    available: 'bg-green-500/10 text-green-400 border-green-500/20',
-    on_delivery: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    available: 'bg-success/10 text-success border-success/20',
+    on_delivery: 'bg-warning/10 text-warning border-warning/20',
     off_duty: 'bg-muted text-muted-foreground border-border',
   }
   const inviteColors: Record<string, string> = {
-    active: 'bg-green-500/10 text-green-400',
-    pending: 'bg-yellow-500/10 text-yellow-400',
-    deactivated: 'bg-red-500/10 text-red-400',
+    active: 'bg-success/10 text-success',
+    pending: 'bg-warning/10 text-warning',
+    deactivated: 'bg-destructive/10 text-destructive',
   }
   const statusLabel: Record<string, string> = {
     available: 'Available',
@@ -599,7 +599,7 @@ export function AdminDrivers() {
                     </td>
                     <td className="p-4 text-center text-sm">
                       {(driver.monthly_adjustments ?? 0) !== 0 ? (
-                        <span className={(driver.monthly_adjustments ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}>
+                        <span className={(driver.monthly_adjustments ?? 0) > 0 ? 'text-success' : 'text-destructive'}>
                           {(driver.monthly_adjustments ?? 0) > 0 ? '+' : ''}
                           {(driver.monthly_adjustments ?? 0).toFixed(2)}
                         </span>
@@ -792,7 +792,7 @@ export function AdminDrivers() {
                         {livePerf.totalEarnings > 0 && (
                           <div className="col-span-2">
                             <p className="text-xs text-muted-foreground">Total Pay Recorded</p>
-                            <p className="font-semibold text-green-400">${livePerf.totalEarnings.toFixed(2)}</p>
+                            <p className="font-semibold text-success">${livePerf.totalEarnings.toFixed(2)}</p>
                           </div>
                         )}
                       </CardContent>
@@ -813,7 +813,7 @@ export function AdminDrivers() {
                         size="sm"
                         variant={selectedDriver.status === 'available' ? 'default' : 'outline'}
                         onClick={() => setDriverDutyStatus(selectedDriver.id, 'available')}
-                        className={selectedDriver.status === 'available' ? 'bg-green-600 hover:bg-green-700 flex-1' : 'flex-1'}
+                        className={selectedDriver.status === 'available' ? 'bg-success hover:bg-success flex-1' : 'flex-1'}
                       >
                         <ToggleRight className="w-4 h-4 mr-1.5" />
                         Available
@@ -895,7 +895,7 @@ export function AdminDrivers() {
                       <p className="text-xs text-muted-foreground">
                         Add a monthly bonus or deduction. Negative values are deductions.
                         {selectedDriver.monthly_adjustments !== 0 && (
-                          <span className={(selectedDriver.monthly_adjustments ?? 0) > 0 ? ' text-green-400' : ' text-red-400'}>
+                          <span className={(selectedDriver.monthly_adjustments ?? 0) > 0 ? ' text-success' : ' text-destructive'}>
                             {' '}Current: ${(selectedDriver.monthly_adjustments ?? 0) > 0 ? '+' : ''}{(selectedDriver.monthly_adjustments ?? 0).toFixed(2)}
                           </span>
                         )}
@@ -936,7 +936,7 @@ export function AdminDrivers() {
                       {selectedDriver.invite_status === 'active' ? (
                         <Button
                           variant="outline"
-                          className="w-full border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10"
+                          className="w-full border-warning/30 text-warning hover:bg-warning/10"
                           onClick={() => setInviteStatus(selectedDriver.id, 'deactivated')}
                         >
                           <MinusCircle className="w-4 h-4 mr-2" />
@@ -944,7 +944,7 @@ export function AdminDrivers() {
                         </Button>
                       ) : (
                         <Button
-                          className="w-full bg-green-600 hover:bg-green-700"
+                          className="w-full bg-success hover:bg-success"
                           onClick={() => setInviteStatus(selectedDriver.id, 'active')}
                         >
                           <PlusCircle className="w-4 h-4 mr-2" />
@@ -1016,7 +1016,7 @@ export function AdminDrivers() {
                                 </span>
                               )}
                               {(delivery.pickup_pay || delivery.delivery_pay) && (
-                                <span className="text-green-400 ml-auto">
+                                <span className="text-success ml-auto">
                                   ${((delivery.pickup_pay ?? 0) + (delivery.delivery_pay ?? 0)).toFixed(2)}
                                 </span>
                               )}
