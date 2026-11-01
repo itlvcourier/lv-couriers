@@ -79,9 +79,9 @@ async function loadBusinessContext(ctx: SmsContext): Promise<BusinessContext | n
       locationId
         ? admin
             .from('business_locations')
-            .select('name, phone, contact_phone, address')
+            .select('name, phone, contact_phone, address, sms_signature, sms_note, google_review_link')
             .eq('id', locationId)
-            .maybeSingle<{ name: string | null; phone: string | null; contact_phone: string | null; address: string | null }>()
+            .maybeSingle<{ name: string | null; phone: string | null; contact_phone: string | null; address: string | null; sms_signature: string | null; sms_note: string | null; google_review_link: string | null }>()
         : Promise.resolve({ data: null }),
     ])
     if (!biz) return null
@@ -92,13 +92,13 @@ async function loadBusinessContext(ctx: SmsContext): Promise<BusinessContext | n
         business_phone: biz.phone || biz.contact_phone,
         business_email: biz.email,
         business_website: biz.website,
-        google_review_link: biz.google_review_link,
-        business_note: biz.sms_note,
+        google_review_link: loc?.google_review_link || biz.google_review_link,
+        business_note: loc?.sms_note || biz.sms_note,
         location_name: loc?.name,
         location_phone: loc?.phone || loc?.contact_phone,
         location_address: loc?.address,
       },
-      customerSignature: biz.sms_signature?.trim() || null,
+      customerSignature: loc?.sms_signature?.trim() || biz.sms_signature?.trim() || null,
     }
     businessCache.set(cacheKey, { at: Date.now(), value })
     return value

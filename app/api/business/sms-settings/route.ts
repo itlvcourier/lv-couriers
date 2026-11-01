@@ -14,9 +14,10 @@ export async function GET(request: NextRequest) {
   if (isAuthError(auth)) return auth
 
   const admin = createAdminClient()
-  const [{ data: biz, error }, { data: defaultSig }] = await Promise.all([
+  const [{ data: biz, error }, { data: defaultSig }, { data: locations }] = await Promise.all([
     admin.from('businesses').select('email, website, google_review_link, sms_signature, sms_note').eq('id', businessId!).maybeSingle(),
     admin.from('sms_templates').select('body').eq('key', 'signature.recipient').maybeSingle<{ body: string | null }>(),
+    admin.from('business_locations').select('id, name, address, sms_signature, sms_note, google_review_link').eq('business_id', businessId!),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!biz) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     settings: biz,
     defaultSignature: defaultSig?.body ?? SMS_SIGNATURE_MAP['signature.recipient'].defaultBody,
+    locations: locations ?? [],
   })
 }
 
@@ -35,6 +37,7 @@ export async function PUT(request: NextRequest) {
     smsSignature?: string
     smsNote?: string
     googleReviewLink?: string
+    locationId?: string
   }
   const auth = await requireAdminOrBusinessOwner(request, payload.businessId)
   if (isAuthError(auth)) return auth
@@ -57,7 +60,17 @@ export async function PUT(request: NextRequest) {
   const sigError = validateSmsSignature(smsSignature)
   if (sigError) return NextResponse.json({ error: sigError }, { status: 400 })
 
-  const { error } = await createAdminClient()
+  const admin = createAdminClient()
+  if (payload.locationId) {
+    const { data: location } = await admin.from('business_locations').select('id').eq('id', payload.locationId).eq('business_id', payload.businessId!).maybeSingle()
+    if (!location) return NextResponse.json({ error: 'Location not found for this business' }, { status: 404 })
+    const { error } = await admin.from('business_locations').update({ sms_signature: smsSignature || null, sms_note: smsNote || null, google_review_link: googleReviewLink || null }).eq('id', payload.locationId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    invalidateSmsTemplateCache()
+    return NextResponse.json({ ok: true })
+  }
+
+  const { error } = await admin
     .from('businesses')
     .update({
       ...(email ? { email } : {}),
