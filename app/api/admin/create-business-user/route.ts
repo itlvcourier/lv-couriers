@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { requireAdminOrBusinessOwner, isAuthError } from '@/lib/auth-guard'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
 const createUserLimiter = rateLimit({ max: 10, windowMs: 60 * 60 * 1000 })
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin(request)
+  const body = await request.json().catch(() => ({}))
+  const auth = await requireAdminOrBusinessOwner(request, body?.businessId)
   if (isAuthError(auth)) return auth
 
   const ip = getClientIp(request)
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   const supabaseAdmin = createAdminClient()
 
   try {
-    const { email, password, name, businessId, locationId, role } = await request.json()
+    const { email, password, name, businessId, locationId, role } = body
 
     if (!email || !password || !businessId || !role) {
       return NextResponse.json(

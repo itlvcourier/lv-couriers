@@ -56,6 +56,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { authedFetch } from '@/lib/api-client'
+import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 
 export function BusinessProfile() {
   const { currentUser, businesses, deliveries, logout, isOwner, refreshData } = useApp()
@@ -216,7 +218,7 @@ export function BusinessProfile() {
     setIsCreatingUser(true)
 
     try {
-      const response = await fetch('/api/admin/create-business-user', {
+      const response = await authedFetch('/api/admin/create-business-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -360,7 +362,7 @@ export function BusinessProfile() {
     setIsResettingPassword(true)
 
     try {
-      const response = await fetch('/api/admin/reset-user-password', {
+      const response = await authedFetch('/api/admin/reset-user-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -869,10 +871,11 @@ export function BusinessProfile() {
                 </div>
                 <div className="space-y-2">
                   <Label>Store Address *</Label>
-                  <Input
+                  <AddressAutocomplete
                     value={storeRequestForm.storeAddress}
-                    onChange={(e) => setStoreRequestForm({ ...storeRequestForm, storeAddress: e.target.value })}
-                    placeholder="123 Main St, Calgary, AB"
+                    onChange={(value) => setStoreRequestForm(prev => ({ ...prev, storeAddress: value }))}
+                    onSelect={(result) => setStoreRequestForm(prev => ({ ...prev, storeAddress: result.address }))}
+                    placeholder="Start typing the store address"
                     disabled={isSubmittingRequest}
                   />
                 </div>
