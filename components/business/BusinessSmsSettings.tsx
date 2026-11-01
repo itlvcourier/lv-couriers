@@ -64,7 +64,7 @@ export function BusinessSmsSettings({
           <SheetHeader>
             <SheetTitle>Customer text messages</SheetTitle>
             <SheetDescription>
-              Choose what appears at the end of texts we send your customers.
+              Choose what appears at the end of texts we send your customers. These settings apply to every location under {businessName}; you only need to set them once.
             </SheetDescription>
           </SheetHeader>
           {data ? (

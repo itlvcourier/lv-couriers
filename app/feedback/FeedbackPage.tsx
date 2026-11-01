@@ -69,6 +69,8 @@ export function FeedbackPage({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [googleReviewLink, setGoogleReviewLink] = useState<string | null>(null)
+  const [businessName, setBusinessName] = useState<string | null>(null)
 
   // Form state
   const [driverRating, setDriverRating] = useState<number | null>(null)
@@ -92,6 +94,12 @@ export function FeedbackPage({ token }: { token: string }) {
           return
         }
         setFeedback(data)
+        const contextResponse = await fetch(`/api/feedback/${encodeURIComponent(token)}`)
+        if (contextResponse.ok) {
+          const context = await contextResponse.json()
+          setGoogleReviewLink(context.googleReviewLink ?? null)
+          setBusinessName(context.businessName ?? null)
+        }
         setLoading(false)
       } catch (err) {
         setError('Failed to load feedback form. Please try again.')
@@ -179,6 +187,15 @@ export function FeedbackPage({ token }: { token: string }) {
                 Your feedback has been recorded and will help us serve you better.
               </p>
             </div>
+            {businessRating !== null && businessRating >= 4 && googleReviewLink && (
+              <div className="border-t border-border pt-4">
+                <p className="text-sm font-medium text-foreground">Would you share your experience publicly?</p>
+                <p className="mt-1 text-xs text-muted-foreground">Your private feedback helps DOMS improve. A Google review helps {businessName || 'this business'} grow.</p>
+                <Button asChild className="mt-3 w-full" variant="outline">
+                  <a href={googleReviewLink} target="_blank" rel="noreferrer">Leave a Google review</a>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -194,7 +211,7 @@ export function FeedbackPage({ token }: { token: string }) {
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-foreground">How was your delivery?</h1>
           <p className="text-muted-foreground">
-            Your feedback helps us improve service quality
+            Rate both the driver and the business in one quick form
           </p>
         </div>
 
@@ -213,7 +230,7 @@ export function FeedbackPage({ token }: { token: string }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground">Business</p>
                 <p className="font-medium text-foreground truncate">
-                  {feedback.businessId}
+                  {businessName || feedback.businessId}
                 </p>
               </div>
             </div>
@@ -378,7 +395,7 @@ export function FeedbackPage({ token }: { token: string }) {
 
         {/* Footer */}
         <p className="text-xs text-center text-muted-foreground py-4">
-          Your feedback is secure and anonymous. This link will expire in 7 days.
+          Your feedback is secure and private. This link will expire in 7 days. Powered by DOMS By Atria360.
         </p>
       </div>
     </div>
