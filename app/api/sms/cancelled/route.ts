@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify all parties when a delivery is cancelled.
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
-        body: `${greeting}, your delivery from ${businessName} has been cancelled. If this is unexpected, please contact ${businessName} directly. — DOMS By Atria360`,
+        body: await renderSms('cancelled.recipient', { greeting, business_name: businessName }),
         type: 'order_cancelled',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: businessPhone,
-        body: `Your delivery to ${recipientLabel} has been cancelled. Contact DOMS By Atria360 if you have questions. — DOMS By Atria360`,
+        body: await renderSms('cancelled.business', { recipient_name: recipientLabel }),
         type: 'order_cancelled',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'business' })),
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: driverPhone,
-        body: `${driverName}, the delivery you were assigned has been cancelled. Please check the app for your updated job list. — DOMS By Atria360`,
+        body: await renderSms('cancelled.driver', { driver_name: driverName }),
         type: 'order_cancelled',
         deliveryId,
         driverId: delivery.driver_id,

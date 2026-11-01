@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify all parties when a delivery is reassigned to a different driver.
@@ -75,11 +76,14 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: newDriver.phone,
-        body:
-          `Hi ${newDriver.name}, you've been assigned a delivery for ${businessName}. ` +
-          `Pickup: ${delivery.pickup_address || 'see app'}. ` +
-          `Dropoff: ${delivery.dropoff_address || 'see app'} (${recipientLabel}). ` +
-          `Track: ${trackingUrl} — DOMS By Atria360`,
+        body: await renderSms('reassigned.new_driver', {
+          driver_name: newDriver.name,
+          business_name: businessName,
+          pickup_address: delivery.pickup_address || 'see app',
+          dropoff_address: delivery.dropoff_address || 'see app',
+          recipient_name: recipientLabel,
+          tracking_url: trackingUrl,
+        }),
         type: 'driver_reassigned',
         deliveryId,
         driverId: newDriver.id,
@@ -92,7 +96,10 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: oldDriver.phone,
-        body: `Hi ${oldDriver.name}, the delivery to ${recipientLabel} has been reassigned to another driver. Check the app for your current jobs. — DOMS By Atria360`,
+        body: await renderSms('reassigned.old_driver', {
+          driver_name: oldDriver.name,
+          recipient_name: recipientLabel,
+        }),
         type: 'driver_reassigned',
         deliveryId,
         driverId: oldDriver.id,
@@ -105,9 +112,11 @@ export async function POST(req: NextRequest) {
     sends.push(
       sendSms({
         to: businessPhone,
-        body:
-          `Driver update: ${newDriver.name} is now handling the delivery to ${recipientLabel}. ` +
-          `Track: ${trackingUrl} — DOMS By Atria360`,
+        body: await renderSms('reassigned.business', {
+          driver_name: newDriver.name,
+          recipient_name: recipientLabel,
+          tracking_url: trackingUrl,
+        }),
         type: 'driver_reassigned',
         deliveryId,
       }).then(r => ({ ok: r.ok, role: 'business' })),

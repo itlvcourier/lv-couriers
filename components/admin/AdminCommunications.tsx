@@ -46,6 +46,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns'
 import type { AdminNotificationType } from '@/lib/types'
+import { AdminSmsTemplates } from '@/components/admin/AdminSmsTemplates'
 
 // ─── Notification configs ─────────────────────────────────────────────────────
 
@@ -187,11 +188,11 @@ export function AdminCommunications() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Communications</h2>
-        <p className="text-sm text-muted-foreground">Notifications and outbound message log</p>
+        <p className="text-sm text-muted-foreground">Notifications, outbound message log, and SMS templates</p>
       </div>
 
       <Tabs defaultValue="notifications">
-        <TabsList className="w-full grid grid-cols-2 bg-[var(--bg-card)] border border-[var(--border-color)]">
+        <TabsList className="w-full grid grid-cols-3 bg-[var(--bg-card)] border border-[var(--border-color)]">
           <TabsTrigger value="notifications" className="gap-2 text-sm">
             <Bell className="w-4 h-4" />
             Notifications
@@ -205,10 +206,18 @@ export function AdminCommunications() {
             <MessageSquare className="w-4 h-4" />
             SMS Log
             {smsTotal > 0 && (
-              <span className="ml-1 text-xs text-muted-foreground">({smsTotal})</span>
+              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">({smsTotal})</span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-2 text-sm">
+            <FileText className="w-4 h-4" />
+            Templates
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="templates" className="mt-4">
+          <AdminSmsTemplates />
+        </TabsContent>
 
         {/* ─── Notifications tab ─────────────────────────────────────────── */}
         <TabsContent value="notifications" className="mt-4 space-y-4">

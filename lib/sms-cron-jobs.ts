@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms, getSmsTemplateBody } from '@/lib/sms-templates-server'
+import { renderSmsTemplate } from '@/lib/sms-templates'
 import { createFeedbackToken } from '@/lib/db-extended'
 import { feedbackLink } from '@/lib/app-url'
 
@@ -127,11 +129,11 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
 
       const result = await sendSms({
         to: delivery.recipient_phone,
-        body:
-          `${greeting}, how was your delivery from ${businessName}? ` +
-          `Share your feedback here: ${feedbackUrl} ` +
-          `(link expires in 7 days)\n` +
-          `Reply STOP to unsubscribe. — DOMS By Atria360`,
+        body: await renderSms('feedback_request.recipient', {
+          greeting,
+          business_name: businessName,
+          feedback_url: feedbackUrl,
+        }),
         type: 'feedback_request',
         deliveryId: delivery.id,
       })
@@ -209,6 +211,7 @@ export async function runWeeklySmsSummary(): Promise<WeeklySummaryResult> {
 
   const weekLabel = `${since.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} – ${new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}`
 
+  const weeklyTemplate = await getSmsTemplateBody('weekly_summary.business')
   const sends: Array<Promise<{ ok: boolean; businessId: string }>> = []
   for (const biz of (businesses ?? []) as Array<{ id: string; name: string; phone: string | null }>) {
     if (!biz.phone) continue
@@ -216,10 +219,11 @@ export async function runWeeklySmsSummary(): Promise<WeeklySummaryResult> {
     sends.push(
       sendSms({
         to: biz.phone,
-        body:
-          `${biz.name} weekly summary (${weekLabel}): ` +
-          `${count} ${count !== 1 ? 'deliveries' : 'delivery'} completed. ` +
-          `Log in for details. — DOMS By Atria360`,
+        body: renderSmsTemplate(weeklyTemplate, {
+          business_name: biz.name,
+          week_label: weekLabel,
+          count_label: `${count} ${count !== 1 ? 'deliveries' : 'delivery'}`,
+        }),
         type: 'weekly_summary',
       }).then((r) => ({ ok: r.ok, businessId: biz.id })),
     )

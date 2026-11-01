@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify business when their payment has been received and invoice marked paid.
@@ -61,10 +62,12 @@ export async function POST(req: NextRequest) {
 
   const result = await sendSms({
     to: invoice.recipient_phone,
-    body:
-      `Payment received for Invoice #${invoice.invoice_number} (${businessName}). ` +
-      `Amount: ${amount} on ${paidDate}. ` +
-      `Thank you! — DOMS By Atria360`,
+    body: await renderSms('payment_received.business', {
+      invoice_number: invoice.invoice_number,
+      business_name: businessName,
+      amount,
+      paid_date: paidDate,
+    }),
     type: 'payment_received',
     invoiceId,
   })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Send a "your package is on its way" SMS to the recipient.
@@ -67,10 +68,12 @@ export async function POST(req: NextRequest) {
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
 
   if (delivery.recipient_phone) {
-    const recipMsg =
-      `Hi ${recipientName}, your package from ${businessName} is on its way. ` +
-      `We'll be at ${delivery.dropoff_address || 'your address'} shortly. ` +
-      `Track live: ${trackingUrl}`
+    const recipMsg = await renderSms('pickup_ready.recipient', {
+      recipient_name: recipientName,
+      business_name: businessName,
+      dropoff_address: delivery.dropoff_address || 'your address',
+      tracking_url: trackingUrl,
+    })
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
@@ -86,10 +89,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (businessPhone) {
-    const bizMsg =
-      `Driver is en route to ${recipientName} (${businessName}). ` +
-      `Address: ${delivery.dropoff_address || 'recipient address'}. ` +
-      `Live tracking: ${trackingUrl}`
+    const bizMsg = await renderSms('pickup_ready.business', {
+      recipient_name: recipientName,
+      business_name: businessName,
+      dropoff_address: delivery.dropoff_address || 'recipient address',
+      tracking_url: trackingUrl,
+    })
     sends.push(
       sendSms({
         to: businessPhone,

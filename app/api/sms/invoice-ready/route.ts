@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify business when their invoice has been generated and sent.
@@ -62,10 +63,12 @@ export async function POST(req: NextRequest) {
 
   const result = await sendSms({
     to: invoice.recipient_phone,
-    body:
-      `Invoice #${invoice.invoice_number} for ${businessName} is ready. ` +
-      `Total: ${total}, due ${dueDate}. ` +
-      `Log in to view and pay. — DOMS By Atria360`,
+    body: await renderSms('invoice_ready.business', {
+      invoice_number: invoice.invoice_number,
+      business_name: businessName,
+      total,
+      due_date: dueDate,
+    }),
     type: 'invoice_ready',
     invoiceId,
   })
