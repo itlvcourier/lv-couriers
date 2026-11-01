@@ -543,14 +543,25 @@ export function renderSmsTemplate(body: string, vars: Record<string, string | nu
     .join('\n')
 }
 
-/** Message body plus its signature (if any), rendered with blank-tag cleanup. */
+/**
+ * Platform attribution that every outgoing SMS must carry, so recipients know the
+ * number belongs to DOMS, not the business. Not editable by admins or businesses.
+ */
+export const SMS_BRAND_FOOTER = 'Sent via DOMS By Atria360'
+const BRAND_MENTION = /doms\s+by\s+atria\s*360/i
+
+export function ensureSmsBrand(text: string): string {
+  return BRAND_MENTION.test(text) ? text : `${text}\n${SMS_BRAND_FOOTER}`
+}
+
+/** Message body plus its signature (if any), rendered with blank-tag cleanup and the brand footer. */
 export function composeSms(
   body: string,
   signature: string | null,
   vars: Record<string, string | number | null | undefined>,
 ): string {
   const full = signature?.trim() ? `${body.trimEnd()}\n${signature.trim()}` : body
-  return renderSmsTemplate(full, vars).trim()
+  return ensureSmsBrand(renderSmsTemplate(full, vars).trim())
 }
 
 /** Validation for signatures (admin defaults and per-business overrides). */
