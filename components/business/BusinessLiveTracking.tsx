@@ -161,14 +161,6 @@ export function BusinessLiveTracking() {
   if (active.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Live Tracking</h2>
-            <p className="text-sm text-muted-foreground">
-              Follow drivers as they move through your active deliveries.
-            </p>
-          </div>
-        </div>
         <Card>
           <CardContent className="py-12">
             <Empty>
@@ -190,18 +182,13 @@ export function BusinessLiveTracking() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-            Live Tracking
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {active.length} active {active.length === 1 ? 'delivery' : 'deliveries'}
-          </p>
-        </div>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="relative flex h-2 w-2" aria-hidden="true">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+          {active.length} active {active.length === 1 ? 'delivery' : 'deliveries'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-3">

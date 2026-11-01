@@ -46,7 +46,7 @@ import { toast } from 'sonner'
 import type { OrderLike } from '@/components/shared/OrderDetailSheet'
 import type { Delivery } from '@/lib/types'
 import { estimateDeliveryPrice } from '@/lib/billing'
-import { editDeliveryDetails } from '@/lib/db'
+import { EditDeliverySheet } from './EditDeliverySheet'
 import { LabelPrintButton } from '@/components/shared/LabelPrintButton'
 import { ArrowRight, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -70,16 +70,6 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
   
   // Edit state
   const [editTarget, setEditTarget] = useState<Delivery | null>(null)
-  const [editForm, setEditForm] = useState({
-    dropoff_address: '',
-    recipient_name: '',
-    recipient_phone: '',
-    buzz_code: '',
-    special_instructions: '',
-    is_rush: false,
-    is_urgent: false,
-  })
-  const [saving, setSaving] = useState(false)
   
   // Duplicate state
   const [duplicateTarget, setDuplicateTarget] = useState<Delivery | null>(null)
@@ -218,51 +208,11 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
   }
 
   // Edit handlers
-  const openEditDialog = (delivery: Delivery) => {
-    setEditForm({
-      dropoff_address: delivery.dropoffAddress,
-      recipient_name: delivery.recipientName || '',
-      recipient_phone: delivery.recipientPhone || '',
-      buzz_code: delivery.buzzCode || '',
-      special_instructions: delivery.recipientNote || '',
-      is_rush: delivery.isRush || false,
-      is_urgent: delivery.isUrgent || false,
-    })
-    setEditTarget(delivery)
-  }
+  const openEditDialog = (delivery: Delivery) => setEditTarget(delivery)
 
-  const confirmEdit = async () => {
-    if (!editTarget) return
-    setSaving(true)
-    
-    try {
-      await editDeliveryDetails(editTarget.id, {
-        dropoff_address: editForm.dropoff_address,
-        recipient_name: editForm.recipient_name || undefined,
-        recipient_phone: editForm.recipient_phone || undefined,
-        buzz_code: editForm.buzz_code || undefined,
-        special_instructions: editForm.special_instructions || undefined,
-        is_rush: editForm.is_rush,
-        is_urgent: editForm.is_urgent,
-      })
-      
-      toast.success('Delivery updated successfully')
-      // Optimistically update local state — no reload needed
-      patchDelivery(editTarget.id, {
-        dropoffAddress: editForm.dropoff_address,
-        recipientName: editForm.recipient_name || null,
-        recipientPhone: editForm.recipient_phone || null,
-        buzzCode: editForm.buzz_code || null,
-        recipientNote: editForm.special_instructions || null,
-        isRush: editForm.is_rush,
-        isUrgent: editForm.is_urgent,
-      })
-      setEditTarget(null)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update delivery')
-    } finally {
-      setSaving(false)
-    }
+  const handleEdited = (updated: Delivery) => {
+    patchDelivery(updated.id, updated)
+    setEditTarget(null)
   }
 
   // Duplicate handler - opens create order with pre-filled data
@@ -645,100 +595,7 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
       </Dialog>
 
       {/* Edit Delivery Sheet */}
-      <Sheet open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Edit Delivery</SheetTitle>
-            <SheetDescription>
-              Update delivery details. Only available before a driver claims the order.
-            </SheetDescription>
-          </SheetHeader>
-          
-          {editTarget && (
-            <div className="mt-6 space-y-4">
-              <div className="space-y-2">
-                <Label>Dropoff Address</Label>
-                <Textarea
-                  value={editForm.dropoff_address}
-                  onChange={(e) => setEditForm({ ...editForm, dropoff_address: e.target.value })}
-                  placeholder="Enter dropoff address"
-                  rows={2}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Recipient Name</Label>
-                <Input
-                  value={editForm.recipient_name}
-                  onChange={(e) => setEditForm({ ...editForm, recipient_name: e.target.value })}
-                  placeholder="Recipient name"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Recipient Phone</Label>
-                  <Input
-                    value={editForm.recipient_phone}
-                    onChange={(e) => setEditForm({ ...editForm, recipient_phone: e.target.value })}
-                    placeholder="Phone number"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Buzz Code</Label>
-                  <Input
-                    value={editForm.buzz_code}
-                    onChange={(e) => setEditForm({ ...editForm, buzz_code: e.target.value })}
-                    placeholder="Buzz code"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Special Instructions</Label>
-                <Textarea
-                  value={editForm.special_instructions}
-                  onChange={(e) => setEditForm({ ...editForm, special_instructions: e.target.value })}
-                  placeholder="Any special instructions for the driver"
-                  rows={3}
-                />
-              </div>
-              
-              <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Rush Delivery</Label>
-                    <p className="text-xs text-muted-foreground">Higher priority, faster delivery</p>
-                  </div>
-                  <Switch
-                    checked={editForm.is_rush}
-                    onCheckedChange={(checked) => setEditForm({ ...editForm, is_rush: checked, is_urgent: checked ? false : editForm.is_urgent })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Urgent Delivery</Label>
-                    <p className="text-xs text-muted-foreground">Highest priority, immediate dispatch</p>
-                  </div>
-                  <Switch
-                    checked={editForm.is_urgent}
-                    onCheckedChange={(checked) => setEditForm({ ...editForm, is_urgent: checked, is_rush: checked ? false : editForm.is_rush })}
-                  />
-                </div>
-              </div>
-              
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" className="flex-1" onClick={() => setEditTarget(null)} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button className="flex-1" onClick={confirmEdit} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <EditDeliverySheet delivery={editTarget} onClose={() => setEditTarget(null)} onSaved={handleEdited} />
 
       {/* Duplicate/Reorder Confirmation */}
       <Dialog open={!!duplicateTarget} onOpenChange={(open) => !open && setDuplicateTarget(null)}>

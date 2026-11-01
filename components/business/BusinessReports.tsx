@@ -116,13 +116,6 @@ export function BusinessReports() {
     <div className="space-y-6">
       {/* Header with Filters */}
       <div className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Reports</h2>
-          <p className="text-sm text-muted-foreground">
-            Track delivery performance and spending
-          </p>
-        </div>
-        
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Location Filter */}
           {(canViewAll || accessibleLocations.length > 1) && (

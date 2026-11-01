@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import type { Delivery, Driver, DeliveryStatus } from '@/lib/types'
+import { LiveDriversMap } from './LiveDriversMap'
 
 export function DispatchBoard() {
   const {
@@ -267,6 +268,8 @@ function DispatchBoardContent({
 }: DispatchBoardContentProps) {
   return (
   <div className="space-y-6 overflow-x-hidden">
+      <LiveDriversMap />
+
       {/* Top Row: Unassigned + Drivers */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Unassigned Jobs Column */}

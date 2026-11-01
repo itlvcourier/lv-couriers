@@ -526,6 +526,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       recipientName: form.recipientName.trim() || null,
       recipientPhone: form.dropoffContact.trim() || null,
       buzzCode: form.buzzCode.trim() || null,
+      recipientNote: form.specialInstructions.trim() || null,
       manifest,
       isUrgent: form.isRush,
       isOutOfTown: form.isOutOfTown,
@@ -606,13 +607,6 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-4 pb-8 overflow-x-hidden">
-        <div>
-          <h2 className="text-lg sm:text-xl font-semibold mb-1">Create New Delivery</h2>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Fill in the delivery details below
-          </p>
-        </div>
-
         {error && (
           <Card className="border-destructive bg-destructive/10">
             <CardContent className="p-4 flex items-center gap-3">

@@ -1033,6 +1033,84 @@ export async function cancelDeliveryInDb(
   return { fee: Number(r.fee) || 0, reason: String(r.reason ?? reason ?? '') }
 }
 
+export interface DeliveryEditInput {
+  pickupAddress: string
+  pickupPostalCode: string | null
+  pickupLat: number | null
+  pickupLng: number | null
+  dropoffAddress: string
+  dropoffArea: string
+  dropoffPostalCode: string | null
+  dropoffLat: number | null
+  dropoffLng: number | null
+  recipientName: string | null
+  recipientPhone: string | null
+  buzzCode: string | null
+  recipientNote: string | null
+  isRush: boolean
+  isOutOfTown: boolean
+  requireSignature: boolean
+  requirePhoto: boolean
+  handoffRule: NonNullable<Delivery['handoffRule']>
+  handoffRequireId: boolean
+  handoffNamedPerson: string | null
+  handoffNamedRelationship: string | null
+  handoffLocationNote: string | null
+  distanceKm: number | null
+  smallPackages: number
+  bigPackages: number
+  packageDescription: string | null
+}
+
+/**
+ * Edits every field a business sets at creation. Runs as one locked transaction
+ * that re-checks ownership and that no courier has started the order, so a
+ * claim landing mid-edit can't be overwritten.
+ */
+export async function editDeliveryInDb(deliveryId: string, input: DeliveryEditInput): Promise<Delivery> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('business_edit_delivery', {
+    p_delivery_id: deliveryId,
+    p_fields: {
+      pickup_address: input.pickupAddress,
+      pickup_postal_code: input.pickupPostalCode,
+      pickup_lat: input.pickupLat,
+      pickup_lng: input.pickupLng,
+      dropoff_address: input.dropoffAddress,
+      dropoff_area: input.dropoffArea,
+      dropoff_postal_code: input.dropoffPostalCode,
+      dropoff_lat: input.dropoffLat,
+      dropoff_lng: input.dropoffLng,
+      recipient_name: input.recipientName,
+      recipient_phone: input.recipientPhone,
+      buzz_code: input.buzzCode,
+      recipient_note: input.recipientNote,
+      is_rush: input.isRush,
+      is_out_of_town: input.isOutOfTown,
+      require_signature: input.requireSignature,
+      require_photo: input.requirePhoto,
+      handoff_rule: input.handoffRule,
+      handoff_require_id: input.handoffRequireId,
+      handoff_named_person: input.handoffNamedPerson,
+      handoff_named_relationship: input.handoffNamedRelationship,
+      handoff_location_note: input.handoffLocationNote,
+      distance_km: input.distanceKm,
+    },
+    p_small: input.smallPackages,
+    p_big: input.bigPackages,
+    p_description: input.packageDescription,
+  })
+  if (error) throw friendlyDbError(error)
+
+  const { data: full, error: readErr } = await supabase
+    .from('deliveries')
+    .select('*, manifest_items(*)')
+    .eq('id', deliveryId)
+    .single()
+  if (readErr || !full) return mapDeliveryRow(data as Row)
+  return mapDeliveryRow(full as Row)
+}
+
 // ============================================================================
 // TURN 2: saved_contacts, admin_notifications, sms_log, invoice_disputes
 // ============================================================================
