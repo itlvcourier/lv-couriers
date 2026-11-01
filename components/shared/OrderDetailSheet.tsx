@@ -23,6 +23,7 @@ import useSWR from 'swr'
 import { loadDeliveryMedia } from '@/lib/db-extended'
 import type { Driver, Business } from '@/lib/types'
 import { ConsentLog, type HandoffSnapshot } from './ConsentLog'
+import { OrderActivity } from './OrderActivity'
 
 // Simplified order shape used by this sheet (from BusinessOrders etc.)
 export interface OrderLike {
@@ -167,6 +168,10 @@ export function OrderDetailSheet({
               handoff={order.handoff}
               canEdit
             />
+          )}
+
+          {viewType !== 'driver' && (
+            <OrderActivity deliveryId={order.id} canReport={viewType === 'business'} />
           )}
 
           {/* Cancellation notice */}

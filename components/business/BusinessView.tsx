@@ -9,6 +9,7 @@ import { BusinessOrders } from './BusinessOrders'
 import { BusinessLiveTracking } from './BusinessLiveTracking'
 import { BusinessInvoices } from './BusinessInvoices'
 import { BusinessProfile } from './BusinessProfile'
+import { BusinessSettings } from './settings/BusinessSettings'
 import { BusinessReports } from './BusinessReports'
 import { LocationSwitcher } from './LocationSwitcher'
 import { BusinessNotificationCenter } from './BusinessNotificationCenter'
@@ -143,6 +144,7 @@ export function BusinessView() {
             {activeTab === 'invoices' && <BusinessInvoices />}
             {activeTab === 'reports' && <BusinessReports />}
             {activeTab === 'profile' && <BusinessProfile />}
+            {activeTab === 'settings' && <BusinessSettings />}
           </div>
         </main>
       </div>

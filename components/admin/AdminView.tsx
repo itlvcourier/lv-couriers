@@ -18,6 +18,7 @@ import { AdminDriverReports } from './AdminDriverReports'
 import { AdminAuditLog } from './AdminAuditLog'
 import { DispatchBoard } from './DispatchBoard'
 import { ApprovalQueue } from './ApprovalQueue'
+import { AdminIssues } from './AdminIssues'
 import { getPendingCount } from '@/lib/dispatch-requests'
 import { useFeatureFlag } from '@/lib/hooks/useFeatureFlag'
 import { NotificationCenter } from './NotificationCenter'
@@ -42,9 +43,10 @@ import {
   Map as MapIcon,
   Boxes,
   ArrowLeftRight,
+  LifeBuoy,
 } from 'lucide-react'
 
-type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
+type AdminPage = 'dashboard' | 'dispatch' | 'requests' | 'issues' | 'drivers' | 'businesses' | 'orders' | 'zones' | 'sort' | 'transfers' | 'rate_cards' | 'invoices' | 'communications' | 'reports' | 'audit' | 'settings'
 
 type NavItem = { id: AdminPage; label: string; icon: React.ElementType }
 
@@ -61,6 +63,7 @@ const navGroups: { heading: string; items: NavItem[] }[] = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'dispatch', label: 'Dispatch', icon: Radio },
       { id: 'requests', label: 'Requests', icon: Inbox },
+      { id: 'issues', label: 'Problems', icon: LifeBuoy },
       { id: 'orders', label: 'Orders', icon: Package },
     ],
   },
@@ -191,6 +194,7 @@ export function AdminView() {
       case 'dashboard': return <AdminDashboard />
       case 'dispatch': return <DispatchBoard />
       case 'requests': return <ApprovalQueue />
+      case 'issues': return <AdminIssues />
       case 'drivers': return <AdminDrivers />
       case 'businesses': return <AdminBusinesses />
       case 'orders': return <AdminOrders />

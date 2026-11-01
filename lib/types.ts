@@ -223,6 +223,7 @@ export interface Delivery {
   recipientNote: string | null
   // Capture requirements set by the business at order creation time.
   requireSignature?: boolean
+  requirePin?: boolean
   requirePhoto?: boolean
   // Handoff / consent rule
   handoffRule?: import('./handoff').HandoffRule

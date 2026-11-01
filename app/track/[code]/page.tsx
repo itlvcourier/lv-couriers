@@ -46,7 +46,14 @@ interface TrackedDelivery {
   signature_url: string | null
   recipient_note: string | null
   tracking_expires_at: string | null
-  business: { name: string } | null
+  delivery_pin?: string | null
+  business: {
+    name: string
+    brand_color?: string | null
+    brand_logo_url?: string | null
+    tracking_message?: string | null
+    phone?: string | null
+  } | null
   driver: { name: string; phone: string | null } | null
 }
 
@@ -395,9 +402,35 @@ export default function TrackingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <TrackingHeader />
+      <TrackingHeader business={delivery.business} />
 
       <main className="flex-1 p-4 max-w-2xl mx-auto w-full">
+        {(delivery.delivery_pin || delivery.business?.tracking_message) && (
+          <div className="mb-6 flex flex-col gap-4">
+            {delivery.delivery_pin && (
+              <Card className="flex flex-row items-center justify-between gap-4 p-5">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Your delivery PIN</p>
+                  <p className="text-pretty text-xs leading-relaxed text-muted-foreground">
+                    Share this code with the courier at the door. They need it to complete the delivery.
+                  </p>
+                </div>
+                <p
+                  className="font-mono text-3xl font-semibold tracking-[0.3em] tabular-nums"
+                  style={{ color: safeColor(delivery.business?.brand_color) }}
+                  aria-label={`PIN ${delivery.delivery_pin.split('').join(' ')}`}
+                >
+                  {delivery.delivery_pin}
+                </p>
+              </Card>
+            )}
+            {delivery.business?.tracking_message && (
+              <p className="text-pretty rounded-lg border border-border bg-card px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                {delivery.business.tracking_message}
+              </p>
+            )}
+          </div>
+        )}
         {/* Hero */}
         <div className="mb-6">
           {isDelivered ? (
@@ -643,14 +676,33 @@ export default function TrackingPage() {
   )
 }
 
-function TrackingHeader() {
+function safeColor(c?: string | null) {
+  return c && /^#[0-9a-fA-F]{6}$/.test(c) ? c : undefined
+}
+
+function TrackingHeader({ business }: { business?: TrackedDelivery['business'] }) {
+  const color = safeColor(business?.brand_color)
+  const logo = business?.brand_logo_url?.startsWith('https://') ? business.brand_logo_url : null
   return (
     <header className="border-b border-border bg-card">
+      {color && <div className="h-1" style={{ background: color }} aria-hidden />}
       <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <span className="text-xl font-bold text-primary">DOMS</span>
-          <span className="text-xl font-bold">by Atria360</span>
-        </div>
+        {logo ? (
+          <div className="flex items-center gap-3">
+            <img src={logo} alt={business?.name ?? 'Sender logo'} className="h-8 max-w-36 object-contain" />
+            <span className="hidden text-xs text-muted-foreground sm:inline">Delivered by DOMS</span>
+          </div>
+        ) : business?.brand_color || business?.tracking_message ? (
+          <div className="flex flex-col">
+            <span className="text-lg font-semibold text-foreground">{business.name}</span>
+            <span className="text-xs text-muted-foreground">Delivered by DOMS</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <span className="text-xl font-bold text-primary">DOMS</span>
+            <span className="text-xl font-bold">by Atria360</span>
+          </div>
+        )}
         <a
           href="tel:5875759699"
           className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5"

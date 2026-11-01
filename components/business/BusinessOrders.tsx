@@ -51,6 +51,7 @@ import { LabelPrintButton } from '@/components/shared/LabelPrintButton'
 import { ArrowRight, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RouteTrack } from './RouteTrack'
+import { NeedsAttention } from './NeedsAttention'
 
 const orderTimeFormatter = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
@@ -306,6 +307,12 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
 
   return (
     <div className="flex flex-col gap-6 overflow-x-hidden">
+      <NeedsAttention
+        onOpen={(id) => {
+          const o = businessOrders.find((x) => x.id === id)
+          if (o) setSelectedOrder(o)
+        }}
+      />
       <dl className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--elevation)] lg:grid-cols-4">
         {kpis.map((kpi, i) => (
           <div

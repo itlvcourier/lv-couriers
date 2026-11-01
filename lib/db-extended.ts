@@ -208,6 +208,7 @@ export function mapDeliveryRow(row: Row): Delivery {
     signatureUrl: (row.signature_url as string | null) ?? null,
     recipientNote: (row.recipient_note as string | null) ?? null,
     requireSignature: !!(row.require_signature as boolean | null),
+    requirePin: !!(row.require_pin as boolean | null),
     requirePhoto: (row.require_photo as boolean | null) ?? true,
     handoffRule: ((row.handoff_rule as string | null) ?? 'door') as Delivery['handoffRule'],
     handoffRequireId: !!(row.handoff_require_id as boolean | null),

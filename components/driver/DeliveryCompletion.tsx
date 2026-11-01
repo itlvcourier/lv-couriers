@@ -35,6 +35,8 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
   // The business set this flag at order creation; we only require a signature
   // when they explicitly asked for one.
   const requiresSignature = !!delivery.requireSignature
+  const requiresPin = !!delivery.requirePin
+  const [pin, setPin] = useState('')
 
   // Upload photo to blob storage
   const uploadProofPhoto = async (imageData: string, photoType: string): Promise<string | null> => {
@@ -92,7 +94,25 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
       return
     }
 
+    if (requiresPin && pin.length !== 4) {
+      toast.error('Enter the 4-digit PIN from the recipient')
+      return
+    }
+
     setIsUploading(true)
+
+    if (requiresPin) {
+      try {
+        await authedJson(`/api/deliveries/${delivery.id}/verify-pin`, {
+          method: 'POST',
+          body: JSON.stringify({ pin }),
+        })
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'PIN could not be verified')
+        setIsUploading(false)
+        return
+      }
+    }
 
     try {
       const pos = await getPosition()
@@ -144,6 +164,30 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
         </SheetHeader>
 
         <div className="space-y-6">
+          {requiresPin && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <label htmlFor="delivery-pin" className="text-sm font-medium text-foreground">
+                  Recipient PIN
+                </label>
+                <span className="text-xs text-destructive font-medium">Required</span>
+              </div>
+              <input
+                id="delivery-pin"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="0000"
+                className="h-14 w-full rounded-xl border border-border bg-background text-center font-mono text-2xl tracking-[0.5em] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Ask the recipient for the 4-digit code on their tracking page.
+              </p>
+            </div>
+          )}
+
           <ReceivedByFields delivery={delivery} value={receiver} onChange={setReceiver} />
 
           {/* Photo capture - REQUIRED (minimum configurable by admin) */}

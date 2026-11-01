@@ -1,6 +1,6 @@
-import { BarChart3, Building2, Package, Plus, Radar, Receipt, type LucideIcon } from 'lucide-react'
+import { BarChart3, Building2, Package, Plus, Radar, Receipt, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 
-export type BusinessSection = 'orders' | 'live' | 'create' | 'invoices' | 'reports' | 'profile'
+export type BusinessSection = 'orders' | 'live' | 'create' | 'invoices' | 'reports' | 'profile' | 'settings'
 
 export interface BusinessNavItem {
   id: BusinessSection
@@ -18,6 +18,7 @@ export const BUSINESS_NAV: BusinessNavItem[] = [
   { id: 'invoices', label: 'Billing', shortLabel: 'Billing', group: 'Finance', description: 'Invoices, payments and statements.', icon: Receipt },
   { id: 'reports', label: 'Reports', shortLabel: 'Reports', group: 'Finance', description: 'Volume, spend and on-time performance.', icon: BarChart3 },
   { id: 'profile', label: 'Account', shortLabel: 'Account', group: 'Organization', description: 'Business details, locations and team.', icon: Building2 },
+  { id: 'settings', label: 'Workspace', shortLabel: 'Settings', group: 'Organization', description: 'Problem cases, recurring runs, alerts, tracking page and API.', icon: SlidersHorizontal },
 ]
 
 export const NAV_GROUPS: BusinessNavItem['group'][] = ['Operate', 'Finance', 'Organization']
