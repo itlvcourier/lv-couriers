@@ -196,10 +196,10 @@ export async function getAvailableDeliveries() {
   const { data, error } = await supabase
     .from('deliveries')
     .select(`
-      *,
-      business:businesses(*),
-      location:business_locations(*),
-      manifest_items(*)
+      ${DELIVERY_COLUMNS_WITHOUT_MEDIA},
+      business:businesses(id, name, email, phone),
+      location:business_locations(id, business_id, name, address, area, lat, lng, contact_phone, phone),
+      manifest_items(id, delivery_id, item_type, quantity, confirmed_qty, notes)
     `)
     .eq('status', 'posted')
     .order('posted_at', { ascending: false })
@@ -213,10 +213,10 @@ export async function getDriverActiveDeliveries(driverId: string) {
   const { data, error } = await supabase
     .from('deliveries')
     .select(`
-      *,
-      business:businesses(*),
-      location:business_locations(*),
-      manifest_items(*)
+      ${DELIVERY_COLUMNS_WITHOUT_MEDIA},
+      business:businesses(id, name, email, phone),
+      location:business_locations(id, business_id, name, address, area, lat, lng, contact_phone, phone),
+      manifest_items(id, delivery_id, item_type, quantity, confirmed_qty, notes)
     `)
     .eq('driver_id', driverId)
     .in('status', ['claimed', 'en_route_pickup', 'picked_up', 'en_route_dropoff'])
