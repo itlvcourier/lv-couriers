@@ -645,7 +645,7 @@ export function AdminZones() {
                     variant="outline"
                     className={
                       zone.polygon
-                        ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                        ? 'bg-success/10 text-success border-success/20'
                         : 'bg-muted text-muted-foreground'
                     }
                   >

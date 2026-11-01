@@ -65,7 +65,7 @@ const EVENT_TONE: Record<string, string> = {
   handed_off: 'text-[var(--accent-green)]',
   consent_declined: 'text-destructive',
   consent_send_failed: 'text-destructive',
-  consent_expired: 'text-amber-500',
+  consent_expired: 'text-warning',
 }
 
 const CLOSED = new Set(['delivered', 'cancelled', 'failed_permanent'])

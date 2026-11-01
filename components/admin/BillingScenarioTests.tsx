@@ -276,7 +276,7 @@ export function BillingScenarioTests({ rateCard, rateCardLabel }: BillingScenari
         )}
 
         {rateCard && isDistanceBased && (rateCard.radiusTiers?.length ?? 0) === 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-yellow-300 text-sm">
+          <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-warning text-sm">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>Distance-based pricing is enabled but no zones are configured. Add distance zones to test.</span>
           </div>
@@ -306,7 +306,7 @@ export function BillingScenarioTests({ rateCard, rateCardLabel }: BillingScenari
                           'border-t border-[var(--border-color)]',
                           result.passed
                             ? 'bg-transparent'
-                            : 'bg-red-500/5'
+                            : 'bg-destructive/5'
                         )}
                       >
                         <td className="px-3 py-2 text-muted-foreground tabular-nums">{result.id}</td>
@@ -328,18 +328,18 @@ export function BillingScenarioTests({ rateCard, rateCardLabel }: BillingScenari
                         <td className="px-3 py-2 text-right">
                           <div className="tabular-nums text-foreground">${result.expectedRate.toFixed(2)}</div>
                           {!result.passed && (
-                            <div className="tabular-nums text-red-400 text-xs mt-0.5">
+                            <div className="tabular-nums text-destructive text-xs mt-0.5">
                               got ${result.actualRate.toFixed(2)}
                             </div>
                           )}
                         </td>
                         <td className="px-3 py-2 text-right">
                           {result.passed ? (
-                            <Badge variant="outline" className="border-green-500/40 bg-green-500/15 text-green-300 gap-1">
+                            <Badge variant="outline" className="border-success/40 bg-success/15 text-success gap-1">
                               <CheckCircle2 className="w-3 h-3" /> Pass
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="border-red-500/40 bg-red-500/15 text-red-300 gap-1">
+                            <Badge variant="outline" className="border-destructive/40 bg-destructive/15 text-destructive gap-1">
                               <XCircle className="w-3 h-3" /> Fail
                             </Badge>
                           )}
@@ -370,7 +370,7 @@ function ResultBanner({
 }) {
   if (allPassed) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-500/40 bg-green-500/10 p-3 text-green-300 text-sm">
+      <div className="flex items-center gap-2 rounded-lg border border-success/40 bg-success/10 p-3 text-success text-sm">
         <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
         <span>All {total} billing scenarios verified correct</span>
       </div>
@@ -378,7 +378,7 @@ function ResultBanner({
   }
   if (hasFailures) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-red-300 text-sm">
+      <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive text-sm">
         <AlertTriangle className="w-4 h-4 flex-shrink-0" />
         <span>
           Billing calculation has errors &mdash; {passCount}/{total} passing. Check <code className="font-mono text-xs bg-[var(--bg-card-2)] px-1 py-0.5 rounded">lib/billing.ts</code>.

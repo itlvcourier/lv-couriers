@@ -31,11 +31,11 @@ const NOTIFICATION_ICONS: Partial<Record<AdminNotificationType, React.ElementTyp
 }
 
 const NOTIFICATION_COLORS: Partial<Record<AdminNotificationType, string>> = {
-  new_job: 'text-blue-400 bg-blue-500/10',
-  flag: 'text-red-400 bg-red-500/10',
-  sla_breach: 'text-orange-400 bg-orange-500/10',
-  driver_timeout: 'text-yellow-400 bg-yellow-500/10',
-  payment_received: 'text-green-400 bg-green-500/10',
+  new_job: 'text-info bg-info/10',
+  flag: 'text-destructive bg-destructive/10',
+  sla_breach: 'text-brand bg-brand/10',
+  driver_timeout: 'text-warning bg-warning/10',
+  payment_received: 'text-success bg-success/10',
   system: 'text-gray-400 bg-gray-500/10',
 }
 

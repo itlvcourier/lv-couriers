@@ -113,18 +113,18 @@ export function LiveDriversMap() {
 
   const getColorClass = (color: string) => {
     switch (color) {
-      case 'orange': return 'fill-orange-500'
-      case 'blue': return 'fill-blue-500'
-      case 'green': return 'fill-green-500'
+      case 'orange': return 'fill-brand'
+      case 'blue': return 'fill-info'
+      case 'green': return 'fill-success'
       default: return 'fill-gray-500'
     }
   }
 
   const getColorBg = (color: string) => {
     switch (color) {
-      case 'orange': return 'bg-orange-500'
-      case 'blue': return 'bg-blue-500'
-      case 'green': return 'bg-green-500'
+      case 'orange': return 'bg-brand'
+      case 'blue': return 'bg-info'
+      case 'green': return 'bg-success'
       default: return 'bg-gray-500'
     }
   }
@@ -183,7 +183,7 @@ export function LiveDriversMap() {
                   {isEnRoute && (
                     <circle 
                       r="18" 
-                      className="fill-orange-500/20 animate-ping"
+                      className="fill-brand/20 animate-ping"
                     />
                   )}
                   {/* Driver dot */}
@@ -212,15 +212,15 @@ export function LiveDriversMap() {
         {/* Legend */}
         <div className="flex flex-wrap gap-4 mb-4 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
+            <div className="w-3 h-3 rounded-full bg-brand" />
             <span className="text-muted-foreground">En Route</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
+            <div className="w-3 h-3 rounded-full bg-info" />
             <span className="text-muted-foreground">At Pickup</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
+            <div className="w-3 h-3 rounded-full bg-success" />
             <span className="text-muted-foreground">Delivering</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -247,9 +247,9 @@ export function LiveDriversMap() {
                   <td className="py-2.5 px-2 font-medium text-foreground">{driver.name}</td>
                   <td className="py-2.5 px-2">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
-                      driver.color === 'orange' ? 'bg-orange-500/10 text-orange-400' :
-                      driver.color === 'blue' ? 'bg-blue-500/10 text-blue-400' :
-                      driver.color === 'green' ? 'bg-green-500/10 text-green-400' :
+                      driver.color === 'orange' ? 'bg-brand/10 text-brand' :
+                      driver.color === 'blue' ? 'bg-info/10 text-info' :
+                      driver.color === 'green' ? 'bg-success/10 text-success' :
                       'bg-gray-500/10 text-gray-400'
                     }`}>
                       {driver.statusLabel}
@@ -277,9 +277,9 @@ export function LiveDriversMap() {
                   <td className="py-2.5 px-2">
                     {driver.gps ? (
                       <span className={`flex items-center gap-1 ${
-                        driver.gps.battery < 20 ? 'text-red-400' :
-                        driver.gps.battery < 50 ? 'text-yellow-400' :
-                        'text-green-400'
+                        driver.gps.battery < 20 ? 'text-destructive' :
+                        driver.gps.battery < 50 ? 'text-warning' :
+                        'text-success'
                       }`}>
                         <Battery className="w-3 h-3" />
                         {driver.gps.battery}%

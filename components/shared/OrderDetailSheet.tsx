@@ -302,7 +302,7 @@ export function OrderDetailSheet({
                         alt="Pickup proof" 
                         className="w-full h-40 object-contain"
                       />
-                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-blue-500/90 text-white text-xs font-medium">
+                      <div className="absolute top-2 left-2 px-2 py-1 rounded bg-info/90 text-white text-xs font-medium">
                         Pickup
                       </div>
                     </div>
@@ -338,7 +338,7 @@ export function OrderDetailSheet({
                               className="w-full h-40 object-contain"
                             />
                             {i === 0 && (
-                              <div className="absolute top-2 left-2 px-2 py-1 rounded bg-green-500/90 text-white text-xs font-medium">
+                              <div className="absolute top-2 left-2 px-2 py-1 rounded bg-success/90 text-white text-xs font-medium">
                                 Delivered
                               </div>
                             )}

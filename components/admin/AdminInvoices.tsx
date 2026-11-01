@@ -51,11 +51,11 @@ import { toast } from 'sonner'
 
 const statusStyles: Record<InvoiceStatus, string> = {
   draft: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
-  sent: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-  paid: 'bg-green-500/15 text-green-300 border-green-500/30',
-  overdue: 'bg-red-500/15 text-red-300 border-red-500/30',
-  disputed: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30',
-  escalated: 'bg-red-600/20 text-red-400 border-red-600/40 font-semibold',
+  sent: 'bg-info/15 text-info border-info/30',
+  paid: 'bg-success/15 text-success border-success/30',
+  overdue: 'bg-destructive/15 text-destructive border-destructive/30',
+  disputed: 'bg-warning/15 text-warning border-warning/30',
+  escalated: 'bg-destructive/20 text-destructive border-destructive/40 font-semibold',
 }
 
 const statusLeftBorder: Record<InvoiceStatus, string> = {
@@ -345,12 +345,12 @@ export function AdminInvoices() {
 
       {/* Unmatched Payments Banner */}
       {pendingPayments.length > 0 && showUnmatchedPayments && (
-        <Card className="border-yellow-500/50 bg-yellow-500/10">
+        <Card className="border-warning/50 bg-warning/10">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                <CardTitle className="text-base text-yellow-200">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+                <CardTitle className="text-base text-warning">
                   {pendingPayments.length} unmatched payment{pendingPayments.length > 1 ? 's' : ''} &mdash; action required
                 </CardTitle>
               </div>
@@ -612,19 +612,19 @@ function AutoSendStatusIndicator({
 }) {
   if (autoSend) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-success/30 bg-success/10 px-4 py-3">
         <div className="flex items-center gap-2 min-w-0">
-          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
-          <p className="text-sm text-green-200 truncate">
+          <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+          <p className="text-sm text-success truncate">
             <span className="font-medium">Auto-send is ON</span>
-            <span className="text-green-300/70"> &mdash; invoices will send automatically on the 1st</span>
+            <span className="text-success/70"> &mdash; invoices will send automatically on the 1st</span>
           </p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Button variant="ghost" size="sm" className="text-green-300 hover:bg-green-500/20" onClick={onSettings}>
+          <Button variant="ghost" size="sm" className="text-success hover:bg-success/20" onClick={onSettings}>
             Settings
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-300/70" onClick={onDismiss}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-success/70" onClick={onDismiss}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -632,24 +632,24 @@ function AutoSendStatusIndicator({
     )
   }
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
       <div className="flex items-center gap-2 min-w-0">
-        <AlertCircle className="h-4 w-4 text-yellow-400 shrink-0" />
-        <p className="text-sm text-yellow-100 truncate">
+        <AlertCircle className="h-4 w-4 text-warning shrink-0" />
+        <p className="text-sm text-warning truncate">
           <span className="font-medium">Auto-send is OFF</span>
-          <span className="text-yellow-200/80"> &mdash; you must manually send invoices</span>
+          <span className="text-warning/80"> &mdash; you must manually send invoices</span>
         </p>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <Button
           variant="ghost"
           size="sm"
-          className="text-yellow-200 hover:bg-yellow-500/20"
+          className="text-warning hover:bg-warning/20"
           onClick={onToggle}
         >
           Turn on
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-yellow-200/70" onClick={onDismiss}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-warning/70" onClick={onDismiss}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -675,24 +675,24 @@ function DraftBanner({
   onChangeAutoSend: () => void
 }) {
   return (
-    <Card className="border-yellow-500/50 bg-yellow-500/10">
+    <Card className="border-warning/50 bg-warning/10">
       <CardContent className="p-4 sm:p-5 space-y-3">
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
-            <AlertTriangle className="h-5 w-5 text-yellow-400" />
+          <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center shrink-0">
+            <AlertTriangle className="h-5 w-5 text-warning" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-base font-semibold text-yellow-100">
+            <p className="text-base font-semibold text-warning">
               You have {count} draft invoice{count > 1 ? 's' : ''} waiting to send
             </p>
-            <p className="text-sm text-yellow-200/80 mt-0.5">
+            <p className="text-sm text-warning/80 mt-0.5">
               Auto-send is OFF &mdash; these {count > 1 ? 'invoices are' : 'invoice is'} sitting as drafts and will not send automatically.
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-yellow-200/70">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-warning/70">
               <span className="flex items-center gap-1">
                 <FileText className="h-3.5 w-3.5" /> {count} draft{count > 1 ? 's' : ''}
               </span>
-              <span>Total: <span className="font-semibold text-yellow-100">{formatCurrency(total)}</span></span>
+              <span>Total: <span className="font-semibold text-warning">{formatCurrency(total)}</span></span>
             </div>
           </div>
         </div>
@@ -705,11 +705,11 @@ function DraftBanner({
             <Send className="h-4 w-4 mr-2" />
             Send all drafts now
           </Button>
-          <Button variant="outline" onClick={onReviewAll} className="border-yellow-500/40 text-yellow-100 hover:bg-yellow-500/10 flex-1 sm:flex-initial">
+          <Button variant="outline" onClick={onReviewAll} className="border-warning/40 text-warning hover:bg-warning/10 flex-1 sm:flex-initial">
             <Eye className="h-4 w-4 mr-2" />
             Review all
           </Button>
-          <Button variant="ghost" onClick={onChangeAutoSend} className="text-yellow-200/80 hover:bg-yellow-500/10 flex-1 sm:flex-initial">
+          <Button variant="ghost" onClick={onChangeAutoSend} className="text-warning/80 hover:bg-warning/10 flex-1 sm:flex-initial">
             Change auto-send setting
           </Button>
         </div>
@@ -761,12 +761,12 @@ function InvoiceCard({
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-semibold truncate">{invoice.businessName}</p>
                 <Badge variant="outline" className={statusStyles[status]}>
-                  {status === 'overdue' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse mr-1" />}
+                  {status === 'overdue' && <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse mr-1" />}
                   {status === 'escalated' && <Zap className="h-3 w-3 mr-1" />}
                   {status.charAt(0).toUpperCase() + status.slice(1)}
                 </Badge>
                 {invoice.emailBounced && (
-                  <Badge variant="outline" className="bg-red-500/15 text-red-300 border-red-500/30 gap-1">
+                  <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30 gap-1">
                     <MailWarning className="h-3 w-3" />
                     Bounced
                   </Badge>
@@ -778,7 +778,7 @@ function InvoiceCard({
                   </Badge>
                 )}
                 {dispute && (
-                  <Badge variant="outline" className="bg-yellow-500/15 text-yellow-300 border-yellow-500/30">
+                  <Badge variant="outline" className="bg-warning/15 text-warning border-warning/30">
                     <AlertTriangle className="h-3 w-3 mr-1" />
                     Disputed
                   </Badge>
@@ -809,7 +809,7 @@ function InvoiceCard({
         {meta.lines.length > 0 && (
           <div className="rounded-md bg-muted/40 px-3 py-2 text-xs space-y-1">
             {meta.lines.map((line, i) => (
-              <div key={i} className={`flex items-center gap-1.5 ${line.tone === 'danger' ? 'text-red-300' : line.tone === 'warn' ? 'text-yellow-300' : 'text-muted-foreground'}`}>
+              <div key={i} className={`flex items-center gap-1.5 ${line.tone === 'danger' ? 'text-destructive' : line.tone === 'warn' ? 'text-warning' : 'text-muted-foreground'}`}>
                 {line.icon}
                 <span>{line.text}</span>
               </div>
@@ -855,7 +855,7 @@ function InvoiceCard({
               size="sm"
               variant="ghost"
               onClick={onDelete}
-              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -1073,7 +1073,7 @@ function InvoiceDetail({
             ) : (
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-sm">{invoice.billingEmail || <span className="text-muted-foreground italic">not set</span>}</p>
-                {invoice.emailBounced && <Badge variant="outline" className="bg-red-500/15 text-red-300 border-red-500/30 text-[10px]">Bounced</Badge>}
+                {invoice.emailBounced && <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30 text-[10px]">Bounced</Badge>}
                 <Button size="sm" variant="ghost" className="h-7 ml-auto" onClick={() => setEditingEmail(true)}>
                   <Pencil className="h-3 w-3 mr-1" />
                   Edit
@@ -1186,9 +1186,9 @@ function InvoiceDetail({
 
       {/* Dispute Section */}
       {dispute && dispute.status === 'open' && (
-        <Card className="border-yellow-500/50 bg-yellow-500/10">
+        <Card className="border-warning/50 bg-warning/10">
           <CardHeader>
-            <CardTitle className="text-base text-yellow-200 flex items-center gap-2">
+            <CardTitle className="text-base text-warning flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
               Open Dispute &mdash; {dispute.lineItemDescription}
             </CardTitle>
@@ -1210,7 +1210,7 @@ function InvoiceDetail({
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/10"
+                className="flex-1 border-success/50 text-success hover:bg-success/10"
                 onClick={() => {
                   const creditAmount = invoice.lines.find(l => l.id === dispute.lineItemId)?.total || 0
                   onResolveDispute(dispute.id, 'accept', disputeResponse, creditAmount)
@@ -1222,7 +1222,7 @@ function InvoiceDetail({
               </Button>
               <Button
                 variant="outline"
-                className="flex-1 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10"
                 onClick={() => {
                   onResolveDispute(dispute.id, 'reject', disputeResponse)
                   toast.success('Dispute rejected — business notified')
@@ -1339,7 +1339,7 @@ function TimelineEventItem({
         <EmailEventIcon type={event.type} scheduled={!past} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm ${isBounced ? 'text-red-400' : past ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+        <p className={`text-sm ${isBounced ? 'text-destructive' : past ? 'text-foreground' : 'text-muted-foreground italic'}`}>
           {getEventLabel(event)}
           {!past && <span className="ml-1 text-[10px] uppercase tracking-wide">(scheduled)</span>}
         </p>
@@ -1364,29 +1364,29 @@ function EmailEventIcon({ type, scheduled }: { type: InvoiceEventType; scheduled
       return <FileText className={`h-4 w-4 text-gray-400 mt-0.5 ${opacity}`} />
     case 'sent':
     case 'resent':
-      return <Send className={`h-4 w-4 text-blue-400 mt-0.5 ${opacity}`} />
+      return <Send className={`h-4 w-4 text-info mt-0.5 ${opacity}`} />
     case 'opened':
-      return <Eye className={`h-4 w-4 text-green-400 mt-0.5 ${opacity}`} />
+      return <Eye className={`h-4 w-4 text-success mt-0.5 ${opacity}`} />
     case 'reminder_1':
     case 'reminder_2':
     case 'reminder':
     case 'due_reminder':
-      return <Mail className={`h-4 w-4 text-blue-400 mt-0.5 ${opacity}`} />
+      return <Mail className={`h-4 w-4 text-info mt-0.5 ${opacity}`} />
     case 'overdue_notice':
     case 'overdue':
-      return <AlertTriangle className={`h-4 w-4 text-yellow-500 mt-0.5 ${opacity}`} />
+      return <AlertTriangle className={`h-4 w-4 text-warning mt-0.5 ${opacity}`} />
     case 'escalated':
-      return <Zap className={`h-4 w-4 text-red-500 mt-0.5 ${opacity}`} />
+      return <Zap className={`h-4 w-4 text-destructive mt-0.5 ${opacity}`} />
     case 'bounced':
-      return <MailWarning className={`h-4 w-4 text-red-500 mt-0.5 ${opacity}`} />
+      return <MailWarning className={`h-4 w-4 text-destructive mt-0.5 ${opacity}`} />
     case 'disputed':
-      return <AlertTriangle className={`h-4 w-4 text-yellow-400 mt-0.5 ${opacity}`} />
+      return <AlertTriangle className={`h-4 w-4 text-warning mt-0.5 ${opacity}`} />
     case 'dispute_resolved':
-      return <CheckCircle2 className={`h-4 w-4 text-green-400 mt-0.5 ${opacity}`} />
+      return <CheckCircle2 className={`h-4 w-4 text-success mt-0.5 ${opacity}`} />
     case 'paid':
-      return <CheckCircle2 className={`h-4 w-4 text-green-500 mt-0.5 ${opacity}`} />
+      return <CheckCircle2 className={`h-4 w-4 text-success mt-0.5 ${opacity}`} />
     case 'sms_sent':
-      return <Send className={`h-4 w-4 text-blue-400 mt-0.5 ${opacity}`} />
+      return <Send className={`h-4 w-4 text-info mt-0.5 ${opacity}`} />
     case 'skipped':
       return <SkipForward className={`h-4 w-4 text-muted-foreground mt-0.5 ${opacity}`} />
     case 'reminders_paused':
@@ -1663,7 +1663,7 @@ function MarkPaidModal({
           </div>
 
           {scheduledCount > 0 && (
-            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200 flex items-start gap-2">
+            <div className="rounded-lg border border-info/30 bg-info/10 p-3 text-xs text-info flex items-start gap-2">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
                 {scheduledCount} scheduled reminder{scheduledCount > 1 ? 's' : ''} will be cancelled when you mark this paid.
@@ -1699,7 +1699,7 @@ function MarkPaidModal({
             <Label>Amount received</Label>
             <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} />
             {amount !== invoice.total && (
-              <p className="text-xs text-yellow-400">
+              <p className="text-xs text-warning">
                 {amount > invoice.total ? 'Overpaid' : 'Partial payment'} of {formatCurrency(Math.abs(amount - invoice.total))}
               </p>
             )}
@@ -1775,7 +1775,7 @@ function SendInvoicesModal({
               <Label className="text-xs text-muted-foreground">Sending to</Label>
               <p className="text-sm mt-0.5">{onlyInvoice.billingEmail}</p>
               {onlyInvoice.emailBounced && (
-                <div className="mt-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                <div className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                   Previous send attempt bounced. Provide a new email address to send to below.
                 </div>
               )}
@@ -1807,7 +1807,7 @@ function SendInvoicesModal({
                 const checked = !skipIds.has(inv.id)
                 const blocked = !inv.billingEmail || inv.emailBounced
                 return (
-                  <div key={inv.id} className={`flex items-start gap-3 p-3 rounded-md border ${blocked ? 'border-red-500/30 bg-red-500/5' : 'border-border bg-muted/20'}`}>
+                  <div key={inv.id} className={`flex items-start gap-3 p-3 rounded-md border ${blocked ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/20'}`}>
                     <Checkbox
                       checked={checked && !blocked}
                       disabled={blocked}
@@ -1826,10 +1826,10 @@ function SendInvoicesModal({
                         <p className="text-sm text-muted-foreground truncate">{inv.businessName}</p>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        To: {inv.billingEmail || <span className="text-red-400">no email</span>}
+                        To: {inv.billingEmail || <span className="text-destructive">no email</span>}
                       </p>
                       {inv.emailBounced && (
-                        <p className="text-xs text-red-400 mt-0.5">Previous send bounced &mdash; will be skipped</p>
+                        <p className="text-xs text-destructive mt-0.5">Previous send bounced &mdash; will be skipped</p>
                       )}
                     </div>
                     <p className="text-sm font-semibold shrink-0">{formatCurrency(inv.total)}</p>
@@ -1882,7 +1882,7 @@ function UnmatchedPaymentRow({
   const [selectedInvoice, setSelectedInvoice] = useState('')
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-yellow-500/5 rounded-lg">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-warning/5 rounded-lg">
       <div className="flex-1">
         <p className="font-medium">{formatCurrency(payment.amount)}</p>
         <p className="text-sm text-muted-foreground">

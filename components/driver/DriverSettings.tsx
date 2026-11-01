@@ -189,7 +189,7 @@ export function DriverSettings() {
     <div className="space-y-4 pb-20">
       {/* Profile Header */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)] overflow-hidden">
-        <div className="h-16 bg-gradient-to-r from-[var(--accent-orange)]/20 via-[var(--accent-orange)]/10 to-transparent" />
+        <div className="h-16 from-[var(--accent-orange)]/20 via-[var(--accent-orange)]/10 to-transparent" />
         <CardContent className="relative pt-0 pb-6">
           <div className="flex flex-col items-center -mt-8">
             <div className="w-20 h-20 rounded-full bg-[var(--accent-orange)] flex items-center justify-center border-4 border-[var(--bg-card)] shadow-lg">

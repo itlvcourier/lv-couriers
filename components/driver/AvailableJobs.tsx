@@ -46,7 +46,7 @@ function RushSlaTimer({ postedAt, slaMins = 45 }: { postedAt: string; slaMins?: 
   
   if (sla.breached) {
     return (
-      <span className="text-xs font-medium text-red-400 animate-pulse">
+      <span className="text-xs font-medium text-destructive animate-pulse">
         SLA BREACHED
       </span>
     )
@@ -57,7 +57,7 @@ function RushSlaTimer({ postedAt, slaMins = 45 }: { postedAt: string; slaMins?: 
   
   return (
     <span className={`text-xs font-mono font-medium flex items-center gap-1 ${
-      isCritical ? 'text-red-400 animate-pulse' : isUrgent ? 'text-red-400' : 'text-orange-400'
+      isCritical ? 'text-destructive animate-pulse' : isUrgent ? 'text-destructive' : 'text-brand'
     }`}>
       <Clock className="w-3 h-3" />
       Pickup due in {sla.mins}:{sla.secs.toString().padStart(2, '0')}
@@ -182,7 +182,7 @@ function JobCard({
             <h3 className="font-medium text-foreground">{delivery.businessName}</h3>
           </div>
           {delivery.isUrgent && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-xs font-medium border border-red-500/20">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-destructive/10 text-destructive text-xs font-medium border border-destructive/20">
               <Zap className="w-3 h-3" />
               Rush
             </span>
@@ -191,7 +191,7 @@ function JobCard({
         
         {/* Rush SLA Timer */}
         {delivery.isUrgent && (
-          <div className="mb-3 p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+          <div className="mb-3 p-2 rounded-lg bg-brand/10 border border-brand/20">
             <RushSlaTimer postedAt={delivery.postedAt} />
           </div>
         )}
@@ -380,9 +380,9 @@ export function AvailableJobs({ onJobClaimed }: AvailableJobsProps) {
     <div className="space-y-4 pb-20">
       {/* Max jobs warning banner */}
       {!canClaim && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-          <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0" />
-          <p className="text-sm text-yellow-400">
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20">
+          <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+          <p className="text-sm text-warning">
             You have {activeJobs}/{maxJobs} active jobs. Complete a delivery first.
           </p>
         </div>
@@ -479,7 +479,7 @@ export function AvailableJobs({ onJobClaimed }: AvailableJobsProps) {
                     </p>
                   </div>
                   {delivery.isUrgent && (
-                    <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-xs">
+                    <span className="px-2 py-0.5 rounded bg-destructive/10 text-destructive text-xs">
                       Rush
                     </span>
                   )}

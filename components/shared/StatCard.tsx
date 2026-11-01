@@ -11,7 +11,7 @@ interface StatCardProps {
   className?: string
 }
 
-export function StatCard({ title, value, icon: Icon, iconColor = 'text-orange-500', className }: StatCardProps) {
+export function StatCard({ title, value, icon: Icon, iconColor = 'text-brand', className }: StatCardProps) {
   return (
     <div
       className={cn(

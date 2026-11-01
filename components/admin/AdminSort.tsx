@@ -178,15 +178,15 @@ export function AdminSort() {
       <div className="flex flex-wrap items-center gap-3">
         <SummaryStat label="At hub" value={parcels.length} tone="text-primary" />
         <SummaryStat label="Destination bins" value={bins.length} />
-        <SummaryStat label="Drivers present" value={checkins.length} tone="text-green-600" />
+        <SummaryStat label="Drivers present" value={checkins.length} tone="text-success" />
         {divergedCount > 0 && (
-          <SummaryStat label="Need re-target" value={divergedCount} tone="text-amber-600" />
+          <SummaryStat label="Need re-target" value={divergedCount} tone="text-warning" />
         )}
       </div>
 
       {/* Diverged parcels banner */}
       {divergedCount > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning dark:text-warning">
           <AlertTriangle className="size-4 mt-0.5 shrink-0" />
           <span>
             <strong>{divergedCount} parcel{divergedCount !== 1 ? 's were' : ' was'} sorted for a driver whose zone has since been reassigned.</strong>{' '}
@@ -199,7 +199,7 @@ export function AdminSort() {
       {checkins.length > 0 && (
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-card-foreground">
-            <UserCheck className="size-4 text-green-600" />
+            <UserCheck className="size-4 text-success" />
             Drivers at the hub
           </div>
           <div className="flex flex-wrap gap-2">
@@ -208,7 +208,7 @@ export function AdminSort() {
                 key={c.driverId}
                 className="flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground"
               >
-                <span className="flex size-5 items-center justify-center rounded-full bg-green-100 text-[10px] font-semibold text-green-700">
+                <span className="flex size-5 items-center justify-center rounded-full bg-success text-[10px] font-semibold text-success">
                   {initials(c.driverName)}
                 </span>
                 {c.driverName ?? 'Driver'}
@@ -257,14 +257,14 @@ export function AdminSort() {
                         <span
                           className={`flex size-6 items-center justify-center rounded-full text-[10px] font-semibold ${
                             driverPresent
-                              ? 'bg-green-100 text-green-700'
+                              ? 'bg-success text-success'
                               : 'bg-muted text-foreground'
                           }`}
                         >
                           {initials(bin.driverName)}
                         </span>
                         {driverPresent ? (
-                          <span className="text-green-600">Here</span>
+                          <span className="text-success">Here</span>
                         ) : (
                           <span className="italic">Away</span>
                         )}
@@ -301,8 +301,8 @@ export function AdminSort() {
 
                         {/* Re-target control: shown for ALL parcels (expanded by default for diverged) */}
                         {p.assignmentDiverged ? (
-                          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 space-y-1.5">
-                            <p className="flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+                          <div className="rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 space-y-1.5">
+                            <p className="flex items-center gap-1 text-[11px] text-warning font-medium">
                               <AlertTriangle className="size-3 shrink-0" />
                               Sorted for {p.sortedForDriverName ?? 'another driver'} — zone since reassigned
                             </p>
@@ -331,7 +331,7 @@ export function AdminSort() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 px-2 gap-1 text-xs shrink-0 border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+                                className="h-7 px-2 gap-1 text-xs shrink-0 border-warning/40 text-warning hover:bg-warning/10"
                                 disabled={!selectedDriverId || selectedDriverId === '__none__' || isRetargeting}
                                 onClick={() => handleRetarget(p)}
                               >

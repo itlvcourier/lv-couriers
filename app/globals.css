@@ -17,6 +17,7 @@
   --accent-red: #dc2626;
   --accent-yellow: #ca8a04;
   --accent-purple: #9333ea;
+  --info: #3f5873;
   --text-primary: #0f172a;
   --text-muted: #64748b;
   --border-color: #e5e7eb;
@@ -70,6 +71,7 @@
   --accent-red: #ef4444;
   --accent-yellow: #eab308;
   --accent-purple: #a855f7;
+  --info: #9fb3c8;
   --text-primary: #e8eaf0;
   --text-muted: #6b7280;
   --border-color: #1f2535;
@@ -112,18 +114,22 @@
 :root {
   --success: #16a34a;
   --warning: #ca8a04;
+  --brand: #f2611a;
+  --brand-foreground: #ffffff;
 }
 
 .dark {
   --success: #22c55e;
   --warning: #eab308;
+  --brand: #ff7a33;
+  --brand-foreground: #08090b;
 }
 
 /* Business portal — scoped design system. Overrides the shared tokens only
    inside the business shell so admin/driver views are unaffected.
    Direction: ink-on-porcelain, single brand signal (orange) reserved for
    live/in-motion states. */
-.business-theme {
+.portal-theme {
   --background: #f5f6f8;
   --foreground: #0b0d10;
   --card: #ffffff;
@@ -152,10 +158,11 @@
   --surface-rail-muted: #6b717c;
   --surface-rail-border: #e5e7eb;
   --elevation: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 1px rgb(16 24 40 / 0.02);
+  --info: #3f5873;
 }
 
-.dark .business-theme,
-.dark.business-theme {
+.dark .portal-theme,
+.dark.portal-theme {
   --background: #08090b;
   --foreground: #eceef1;
   --card: #0f1114;
@@ -183,74 +190,75 @@
   --surface-rail-muted: #8b909a;
   --surface-rail-border: #1d2025;
   --elevation: 0 0 0 1px rgb(255 255 255 / 0.02);
+  --info: #9fb3c8;
 }
 
-.business-theme {
+.portal-theme {
   font-family: var(--font-display), system-ui, sans-serif;
   font-feature-settings: 'ss01', 'cv11';
   -webkit-font-smoothing: antialiased;
 }
 
-.business-theme h1,
-.business-theme h2,
-.business-theme h3,
-.business-theme [data-slot='card-title'] {
+.portal-theme h1,
+.portal-theme h2,
+.portal-theme h3,
+.portal-theme [data-slot='card-title'] {
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 
-.business-theme .font-mono {
+.portal-theme .font-mono {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   letter-spacing: 0;
 }
 
-.business-theme .tabular {
+.portal-theme .tabular {
   font-variant-numeric: tabular-nums;
 }
 
-.business-theme [data-slot='card'] {
+.portal-theme [data-slot='card'] {
   border-radius: 14px;
   border-color: var(--border);
   box-shadow: var(--elevation);
 }
 
-.business-theme [data-slot='tabs-list'] {
+.portal-theme [data-slot='tabs-list'] {
   background: var(--muted);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 3px;
 }
 
-.business-theme [data-slot='tabs-trigger'] {
+.portal-theme [data-slot='tabs-trigger'] {
   border-radius: 7px;
   font-weight: 500;
   color: var(--muted-foreground);
 }
 
-.business-theme [data-slot='tabs-trigger'][data-state='active'] {
+.portal-theme [data-slot='tabs-trigger'][data-state='active'] {
   background: var(--card);
   color: var(--foreground);
   box-shadow: var(--elevation), 0 0 0 1px var(--border);
 }
 
-.business-theme [data-slot='input'],
-.business-theme [data-slot='textarea'],
-.business-theme [data-slot='select-trigger'] {
+.portal-theme [data-slot='input'],
+.portal-theme [data-slot='textarea'],
+.portal-theme [data-slot='select-trigger'] {
   background: var(--card);
 }
 
-.business-theme [data-slot='badge'] {
+.portal-theme [data-slot='badge'] {
   border-radius: 999px;
   font-weight: 500;
 }
 
-.business-theme [data-slot='button'] {
+.portal-theme [data-slot='button'] {
   font-weight: 500;
 }
 
 /* Status: quiet dot + label instead of colored pills. */
-.business-theme [data-slot='status-badge'] {
+.portal-theme [data-slot='status-badge'] {
   gap: 0.4rem;
   border-radius: 999px;
   border-color: var(--border);
@@ -260,7 +268,7 @@
   white-space: nowrap;
 }
 
-.business-theme [data-slot='status-badge']::before {
+.portal-theme [data-slot='status-badge']::before {
   content: '';
   width: 6px;
   height: 6px;
@@ -269,24 +277,24 @@
   flex-shrink: 0;
 }
 
-.business-theme [data-slot='status-badge'][data-tone='moving']::before {
+.portal-theme [data-slot='status-badge'][data-tone='moving']::before {
   background: var(--brand);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand) 20%, transparent);
 }
 
-.business-theme [data-slot='status-badge'][data-tone='done']::before {
+.portal-theme [data-slot='status-badge'][data-tone='done']::before {
   background: var(--success);
 }
 
-.business-theme [data-slot='status-badge'][data-tone='alert'] {
+.portal-theme [data-slot='status-badge'][data-tone='alert'] {
   color: var(--destructive);
 }
 
-.business-theme [data-slot='status-badge'][data-tone='alert']::before {
+.portal-theme [data-slot='status-badge'][data-tone='alert']::before {
   background: var(--destructive);
 }
 
-.business-theme [data-slot='status-badge'][data-tone='muted'] {
+.portal-theme [data-slot='status-badge'][data-tone='muted'] {
   color: var(--muted-foreground);
 }
 
@@ -315,6 +323,7 @@
   --color-brand-foreground: var(--brand-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-surface-rail: var(--surface-rail);
   --color-surface-rail-foreground: var(--surface-rail-foreground);
   --color-surface-rail-muted: var(--surface-rail-muted);
@@ -453,4 +462,22 @@
 
 .animate-driver-move {
   animation: driver-move 8s ease-in-out infinite alternate;
+}
+
+/* Legacy admin/driver variables, remapped onto the portal palette so the
+   older components inherit the refined system without per-file rewrites. */
+.portal-theme {
+  --bg-primary: var(--background);
+  --bg-card: var(--card);
+  --bg-card-hover: var(--accent);
+  --bg-card-2: var(--secondary);
+  --accent-orange: var(--brand);
+  --accent-blue: var(--info);
+  --accent-green: var(--success);
+  --accent-red: var(--destructive);
+  --accent-yellow: var(--warning);
+  --accent-purple: var(--info);
+  --text-primary: var(--foreground);
+  --text-muted: var(--muted-foreground);
+  --border-color: var(--border);
 }

@@ -122,8 +122,8 @@ export function CostCalculator({ rateCard, rateCardLabel, compact = false }: Cos
                 className="flex items-center gap-2 rounded-md bg-[var(--bg-card)] border border-[var(--border-color)] p-2"
               >
                 {item.kind === 'big_package'
-                  ? <Box className="w-4 h-4 text-orange-400" aria-hidden />
-                  : <Package className="w-4 h-4 text-blue-400" aria-hidden />}
+                  ? <Box className="w-4 h-4 text-brand" aria-hidden />
+                  : <Package className="w-4 h-4 text-info" aria-hidden />}
                 <span className="text-sm text-foreground flex-1 min-w-0 truncate">
                   {item.kind === 'big_package' ? 'Big' : 'Small'} package
                 </span>
@@ -331,7 +331,7 @@ export function BillingBreakdownCard({
       </div>
 
       {!hasRateCard && (
-        <p className="text-xs text-yellow-400">
+        <p className="text-xs text-warning">
           No rate card selected &mdash; values shown are $0.00.
         </p>
       )}
@@ -342,11 +342,11 @@ export function BillingBreakdownCard({
 export function RuleBadge({ rule }: { rule: BillingRuleName }) {
   const color = getRuleBadgeColor(rule)
   const classes: Record<typeof color, string> = {
-    red: 'border-red-500/40 bg-red-500/15 text-red-300',
-    orange: 'border-orange-500/40 bg-orange-500/15 text-orange-300',
-    purple: 'border-purple-500/40 bg-purple-500/15 text-purple-300',
-    blue: 'border-blue-500/40 bg-blue-500/15 text-blue-300',
-    green: 'border-green-500/40 bg-green-500/15 text-green-300',
+    red: 'border-destructive/40 bg-destructive/15 text-destructive',
+    orange: 'border-brand/40 bg-brand/15 text-brand',
+    purple: 'border-info/40 bg-info/15 text-info',
+    blue: 'border-info/40 bg-info/15 text-info',
+    green: 'border-success/40 bg-success/15 text-success',
     gray: 'border-[var(--border-color)] bg-[var(--bg-card)] text-muted-foreground',
   }
   return (

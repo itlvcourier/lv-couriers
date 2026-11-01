@@ -170,12 +170,12 @@ export function DriverDocuments() {
               </p>
             </div>
             {requiredUploaded === requiredCount ? (
-              <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
+              <Badge className="bg-success/10 text-success border-success/20">
                 <Check className="w-3 h-3 mr-1" />
                 Complete
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-orange-500 border-orange-500/30">
+              <Badge variant="outline" className="text-brand border-brand/30">
                 <AlertCircle className="w-3 h-3 mr-1" />
                 Incomplete
               </Badge>
@@ -200,9 +200,9 @@ export function DriverDocuments() {
                 <div className="flex items-start gap-4">
                   <div className={`p-2 rounded-lg ${
                     status.status === 'uploaded' 
-                      ? 'bg-green-500/10 text-green-500' 
+                      ? 'bg-success/10 text-success' 
                       : status.status === 'expired'
-                      ? 'bg-red-500/10 text-red-500'
+                      ? 'bg-destructive/10 text-destructive'
                       : 'bg-muted text-muted-foreground'
                   }`}>
                     <Icon className="w-5 h-5" />
@@ -227,7 +227,7 @@ export function DriverDocuments() {
                     )}
                     
                     {status.status === 'expired' && (
-                      <p className="text-xs text-red-500 mt-2">
+                      <p className="text-xs text-destructive mt-2">
                         Document has expired. Please upload a new copy.
                       </p>
                     )}

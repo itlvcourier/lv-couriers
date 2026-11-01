@@ -209,9 +209,9 @@ return (
 
       {/* Unclaimed Rush Jobs Warning */}
       {rushDeliveries.length > 0 && (
-        <Card className="border-red-500/30 bg-red-500/5">
+        <Card className="border-destructive/30 bg-destructive/5">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-red-400">
+            <CardTitle className="text-base flex items-center gap-2 text-destructive">
               <Zap className="w-4 h-4" />
               Unclaimed Rush Jobs ({rushDeliveries.length})
             </CardTitle>
@@ -242,7 +242,7 @@ return (
                           SLA BREACHED - {Math.abs(remaining)}m ago
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className={remaining < 15 ? 'text-red-400 border-red-400' : 'text-orange-400 border-orange-400'}>
+                        <Badge variant="outline" className={remaining < 15 ? 'text-destructive border-destructive' : 'text-brand border-brand'}>
                           {remaining}m remaining
                         </Badge>
                       )}
@@ -257,9 +257,9 @@ return (
 
       {/* Flagged Deliveries Warning */}
       {flaggedDeliveries.length > 0 && (
-        <Card className="border-yellow-500/30 bg-yellow-500/5">
+        <Card className="border-warning/30 bg-warning/5">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-yellow-400">
+            <CardTitle className="text-base flex items-center gap-2 text-warning">
               <Flag className="w-4 h-4" />
               Flagged Deliveries ({flaggedDeliveries.length})
             </CardTitle>
@@ -342,7 +342,7 @@ return (
                 <p className="text-xs text-muted-foreground mb-1">Total Deliveries</p>
                 <p className="text-2xl font-bold">{stats?.totalDeliveries || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  <span className="text-green-400">{stats?.completedToday || 0} today</span>
+                  <span className="text-success">{stats?.completedToday || 0} today</span>
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -352,68 +352,68 @@ return (
           </CardContent>
         </Card>
 
-        <Card className="bg-yellow-500/5 border-yellow-500/20">
+        <Card className="bg-warning/5 border-warning/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Active</p>
-                <p className="text-2xl font-bold text-yellow-400">{stats?.activeDeliveries || 0}</p>
+                <p className="text-2xl font-bold text-warning">{stats?.activeDeliveries || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {stats?.postedDeliveries || 0} awaiting claim
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-yellow-400" />
+              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
+                <Clock className="w-6 h-6 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-green-500/5 border-green-500/20">
+        <Card className="bg-success/5 border-success/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Active Drivers</p>
-                <p className="text-2xl font-bold text-green-400">{stats?.activeDrivers || 0}</p>
+                <p className="text-2xl font-bold text-success">{stats?.activeDrivers || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   of {stats?.totalDrivers || 0} total
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <Truck className="w-6 h-6 text-green-400" />
+              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+                <Truck className="w-6 h-6 text-success" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-blue-500/5 border-blue-500/20">
+        <Card className="bg-info/5 border-info/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Businesses</p>
-                <p className="text-2xl font-bold text-blue-400">{stats?.totalBusinesses || 0}</p>
+                <p className="text-2xl font-bold text-info">{stats?.totalBusinesses || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {businesses.filter(b => b.invite_status === 'active').length} active
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-blue-400" />
+              <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-info" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-yellow-500/5 border-yellow-500/20">
+        <Card className="bg-warning/5 border-warning/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Avg Rating</p>
-                <p className="text-2xl font-bold text-yellow-400 flex items-center gap-1">
+                <p className="text-2xl font-bold text-warning flex items-center gap-1">
                   {ratings?.avgOverallRating != null
                     ? ratings.avgOverallRating.toFixed(1)
                     : '—'}
                   {ratings?.avgOverallRating != null && (
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <Star className="w-4 h-4 fill-warning text-warning" />
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -421,8 +421,8 @@ return (
                   {ratings?.totalFeedback ?? 0} reviews · {ratings?.last30Days ?? 0} this month
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
-                <Star className="w-6 h-6 text-yellow-400" />
+              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
+                <Star className="w-6 h-6 text-warning" />
               </div>
             </div>
           </CardContent>
@@ -439,13 +439,13 @@ return (
         </Card>
         <Card>
           <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold text-red-400">{failedDeliveries.length}</p>
+            <p className="text-base sm:text-lg font-bold text-destructive">{failedDeliveries.length}</p>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Failed</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold text-yellow-400">{stats?.flaggedDeliveries || 0}</p>
+            <p className="text-base sm:text-lg font-bold text-warning">{stats?.flaggedDeliveries || 0}</p>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Flagged</p>
           </CardContent>
         </Card>
@@ -482,7 +482,7 @@ return (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+              <AlertTriangle className="w-4 h-4 text-warning" />
               Awaiting Claim
               {pendingDeliveries.length > 0 && (
                 <Badge variant="secondary" className="ml-auto">{pendingDeliveries.length}</Badge>
@@ -535,11 +535,11 @@ return (
                 {recentNotifications.map((item) => (
                   <div key={item.id} className="flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                      item.notification_type === 'new_job' ? 'bg-green-400' :
-                      item.notification_type === 'flag' ? 'bg-yellow-400' :
-                      item.notification_type === 'sla_breach' ? 'bg-red-400' :
-                      item.notification_type === 'driver_timeout' ? 'bg-orange-400' :
-                      item.notification_type === 'payment_received' ? 'bg-blue-400' :
+                      item.notification_type === 'new_job' ? 'bg-success' :
+                      item.notification_type === 'flag' ? 'bg-warning' :
+                      item.notification_type === 'sla_breach' ? 'bg-destructive' :
+                      item.notification_type === 'driver_timeout' ? 'bg-brand' :
+                      item.notification_type === 'payment_received' ? 'bg-info' :
                       'bg-muted-foreground'
                     }`} />
                     <div className="flex-1 min-w-0">
@@ -587,25 +587,25 @@ function InvoiceAlertBanner({
 }) {
   const palette: Record<BannerTone, { border: string; bg: string; iconColor: string; title: string; cta: string }> = {
     critical: {
-      border: 'border-red-500/40',
-      bg: 'bg-red-500/10',
-      iconColor: 'text-red-400',
-      title: 'text-red-300',
-      cta: 'bg-red-500 hover:bg-red-500/90 text-white',
+      border: 'border-destructive/40',
+      bg: 'bg-destructive/10',
+      iconColor: 'text-destructive',
+      title: 'text-destructive',
+      cta: 'bg-destructive hover:bg-destructive/90 text-white',
     },
     warning: {
-      border: 'border-yellow-500/40',
-      bg: 'bg-yellow-500/10',
-      iconColor: 'text-yellow-400',
-      title: 'text-yellow-200',
-      cta: 'bg-yellow-500 hover:bg-yellow-500/90 text-black',
+      border: 'border-warning/40',
+      bg: 'bg-warning/10',
+      iconColor: 'text-warning',
+      title: 'text-warning',
+      cta: 'bg-warning hover:bg-warning/90 text-black',
     },
     info: {
-      border: 'border-blue-500/40',
-      bg: 'bg-blue-500/10',
-      iconColor: 'text-blue-400',
-      title: 'text-blue-200',
-      cta: 'bg-blue-500 hover:bg-blue-500/90 text-white',
+      border: 'border-info/40',
+      bg: 'bg-info/10',
+      iconColor: 'text-info',
+      title: 'text-info',
+      cta: 'bg-info hover:bg-info/90 text-white',
     },
   }
   const c = palette[tone]

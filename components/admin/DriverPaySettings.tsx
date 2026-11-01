@@ -75,7 +75,7 @@ export function DriverPaySettings() {
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
             localSettings.driver_pay_enabled 
-              ? 'bg-green-500/10 text-green-500' 
+              ? 'bg-success/10 text-success' 
               : 'bg-muted text-muted-foreground'
           }`}>
             <DollarSign className="w-5 h-5" />
@@ -154,7 +154,7 @@ export function DriverPaySettings() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-yellow-500" />
+                  <Zap className="w-4 h-4 text-warning" />
                   Rush Delivery Bonus
                 </Label>
                 <div className="relative">
@@ -173,7 +173,7 @@ export function DriverPaySettings() {
               
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  <AlertTriangle className="w-4 h-4 text-destructive" />
                   Urgent Delivery Bonus
                 </Label>
                 <div className="relative">

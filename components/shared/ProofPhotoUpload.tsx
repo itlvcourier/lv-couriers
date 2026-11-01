@@ -43,7 +43,7 @@ export function ProofPhotoUpload({ onPhotoSelected, onCancel }: ProofPhotoUpload
       {!preview ? (
         <button
           onClick={() => inputRef.current?.click()}
-          className="w-full h-48 border-2 border-dashed border-[#1f2535] rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-orange-500/50 hover:bg-[#1a1e2a] transition-all duration-200"
+          className="w-full h-48 border-2 border-dashed border-[#1f2535] rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-brand/50 hover:bg-[#1a1e2a] transition-all duration-200"
         >
           <div className="w-16 h-16 rounded-full bg-[#1a1e2a] flex items-center justify-center">
             <Camera className="w-8 h-8 text-[#6b7280]" />
@@ -89,7 +89,7 @@ export function ProofPhotoUpload({ onPhotoSelected, onCancel }: ProofPhotoUpload
         <Button
           onClick={handleConfirm}
           disabled={!preview}
-          className="flex-1 h-12 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold disabled:opacity-50"
+          className="flex-1 h-12 rounded-xl bg-success hover:bg-success text-white font-semibold disabled:opacity-50"
         >
           Complete Delivery
         </Button>

@@ -179,7 +179,7 @@ export function HandoffPanel({ delivery }: { delivery: Delivery }) {
               latest.status === 'approved'
                 ? 'text-[var(--accent-green)]'
                 : latest.status === 'pending'
-                  ? 'text-amber-500'
+                  ? 'text-warning'
                   : 'text-destructive'
             }`}
           >
@@ -198,7 +198,7 @@ export function HandoffPanel({ delivery }: { delivery: Delivery }) {
         </p>
       )}
       {latest?.status === 'expired' && (
-        <p className="text-xs leading-relaxed text-amber-500">No reply in time. Try calling, or mark a failed attempt.</p>
+        <p className="text-xs leading-relaxed text-warning">No reply in time. Try calling, or mark a failed attempt.</p>
       )}
 
       {mode === null && (

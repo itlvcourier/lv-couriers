@@ -431,7 +431,7 @@ export function AdminSettings() {
           </div>
           
           {!localSettings.allowDriverSelfClaim && (
-            <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-600">
+            <div className="flex items-center gap-2 p-3 bg-info/10 border border-info/20 rounded-lg text-sm text-info">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>
                 Go to <strong>Dispatch</strong> in the sidebar to assign jobs to drivers.
@@ -778,17 +778,17 @@ export function AdminSettings() {
             </div>
 
             {localSettings.autoSendInvoices ? (
-              <Badge variant="outline" className="border-green-500/40 bg-green-500/10 text-green-400 gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <Badge variant="outline" className="border-success/40 bg-success/10 text-success gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
                 Invoices send automatically on the 1st
               </Badge>
             ) : (
               <>
-                <Badge variant="outline" className="border-yellow-500/40 bg-yellow-500/10 text-yellow-400 gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-warning" />
                   Manual send required
                 </Badge>
-                <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200/90">
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning/90">
                   Auto-send is off. Invoices will be generated as drafts on the 28th but will not send until you manually approve and send them from the Invoices page.
                 </div>
               </>
@@ -1399,7 +1399,7 @@ export function AdminSettings() {
             <Shield className="w-4 h-4" />
             Two-Factor Authentication
             {twoFaEnabled && (
-              <Badge variant="outline" className="ml-auto border-green-500/30 text-green-400">
+              <Badge variant="outline" className="ml-auto border-success/30 text-success">
                 Enabled
               </Badge>
             )}
@@ -1556,8 +1556,8 @@ export function AdminSettings() {
 
           {twoFaStep === 'done' && (
             <div className="space-y-4 py-2">
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                <CheckCircle2 className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-success/10 border border-success/20">
+                <CheckCircle2 className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
                 <div className="text-sm">
                   <p className="font-medium text-foreground">2FA is enabled</p>
                   <p className="text-muted-foreground">
@@ -1615,11 +1615,11 @@ function ReminderTimeline({
   escalation: number
 }) {
   const stops = [
-    { label: 'Sent', sub: 'Day 0', color: 'bg-blue-400' },
-    { label: 'Reminder 1', sub: `Day ${reminder1}`, color: 'bg-blue-400' },
-    { label: 'Reminder 2', sub: 'Due date', color: 'bg-orange-400' },
-    { label: 'Overdue', sub: `+${overdue} days`, color: 'bg-red-400' },
-    { label: 'Escalated', sub: `+${escalation} days`, color: 'bg-red-600' },
+    { label: 'Sent', sub: 'Day 0', color: 'bg-info' },
+    { label: 'Reminder 1', sub: `Day ${reminder1}`, color: 'bg-info' },
+    { label: 'Reminder 2', sub: 'Due date', color: 'bg-brand' },
+    { label: 'Overdue', sub: `+${overdue} days`, color: 'bg-destructive' },
+    { label: 'Escalated', sub: `+${escalation} days`, color: 'bg-destructive' },
   ]
   return (
     <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card-2)] p-4">

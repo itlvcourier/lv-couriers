@@ -65,13 +65,13 @@ export function ReceivedByFields({ delivery, value, onChange }: Props) {
               )}
             >
               <span className="font-medium">{RECEIVED_BY_LABELS[t]}</span>
-              {!ok && <span className="text-xs text-amber-500">Needs approval</span>}
+              {!ok && <span className="text-xs text-warning">Needs approval</span>}
             </button>
           )
         })}
       </div>
       {value.type && !allowed.has(value.type) && (
-        <p className="text-xs leading-relaxed text-amber-500">
+        <p className="text-xs leading-relaxed text-warning">
           Not allowed by the instructions unless the recipient approved it (by text, phone, or in person) in the handoff panel.
         </p>
       )}

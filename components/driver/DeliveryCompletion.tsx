@@ -153,11 +153,11 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
                 <label className="text-sm font-medium text-foreground">
                   Proof of Delivery Photos
                 </label>
-                <span className="text-xs text-red-500 font-medium">Required</span>
+                <span className="text-xs text-destructive font-medium">Required</span>
               </div>
               <span
                 className={`text-xs font-semibold tabular-nums ${
-                  hasEnoughPhotos ? 'text-[var(--accent-green)]' : 'text-amber-500'
+                  hasEnoughPhotos ? 'text-[var(--accent-green)]' : 'text-warning'
                 }`}
               >
                 {photoCount}/{minPhotos}
@@ -202,7 +202,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
             />
 
             {!hasEnoughPhotos && (
-              <div className="mt-2 flex items-center gap-2 text-xs text-amber-500">
+              <div className="mt-2 flex items-center gap-2 text-xs text-warning">
                 <AlertCircle className="w-3 h-3" />
                 {`Take ${minPhotos - photoCount} more ${
                   minPhotos - photoCount === 1 ? 'photo' : 'photos'
@@ -225,7 +225,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
                 <label className="text-sm font-medium text-foreground">
                   Recipient Signature
                 </label>
-                <span className="text-xs text-red-500 font-medium">Required</span>
+                <span className="text-xs text-destructive font-medium">Required</span>
               </div>
 
               <SignaturePad onChange={setSignatureDataUrl} />
@@ -238,7 +238,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
               )}
 
               {!signatureDataUrl && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-amber-500">
+                <div className="mt-2 flex items-center gap-2 text-xs text-warning">
                   <AlertCircle className="w-3 h-3" />
                   Signature is required for this delivery
                 </div>

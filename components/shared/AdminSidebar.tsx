@@ -32,7 +32,7 @@ export function AdminSidebar({ activePage, onPageChange }: AdminSidebarProps) {
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[#1f2535]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
             <Truck className="w-5 h-5 text-white" />
           </div>
           <span className="text-lg font-bold text-[#e8eaf0]">DOMS</span>
@@ -52,7 +52,7 @@ export function AdminSidebar({ activePage, onPageChange }: AdminSidebarProps) {
               className={cn(
                 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
                 isActive
-                  ? 'bg-orange-500/10 text-orange-500'
+                  ? 'bg-brand/10 text-brand'
                   : 'text-[#6b7280] hover:text-[#e8eaf0] hover:bg-[#1a1e2a]'
               )}
             >
@@ -88,7 +88,7 @@ export function AdminBottomNav({ activePage, onPageChange }: AdminSidebarProps) 
               onClick={() => onPageChange(item.id)}
               className={cn(
                 'flex flex-col items-center justify-center flex-1 h-full min-w-[48px] gap-0.5 transition-colors duration-200',
-                isActive ? 'text-orange-500' : 'text-[#6b7280]'
+                isActive ? 'text-brand' : 'text-[#6b7280]'
               )}
             >
               <Icon className="w-5 h-5" />

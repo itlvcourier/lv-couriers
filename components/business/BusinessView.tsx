@@ -47,8 +47,8 @@ export function BusinessView() {
   // Portaled overlays (dialogs, selects, sheets) render on <body>, outside
   // the shell, so the scoped theme must live there too while mounted.
   useEffect(() => {
-    document.body.classList.add('business-theme')
-    return () => document.body.classList.remove('business-theme')
+    document.body.classList.add('portal-theme')
+    return () => document.body.classList.remove('portal-theme')
   }, [])
 
   const { activeCount, inTransitCount } = useMemo(() => {
@@ -71,7 +71,7 @@ export function BusinessView() {
   const isOverview = activeTab === 'orders'
 
   return (
-    <div className="business-theme min-h-screen overflow-x-hidden bg-background text-foreground">
+    <div className="portal-theme min-h-screen overflow-x-hidden bg-background text-foreground">
       <BusinessSidebar
         active={activeTab}
         onNavigate={navigate}

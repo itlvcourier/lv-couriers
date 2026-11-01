@@ -57,10 +57,10 @@ export function AdminRateCards() {
     <div className="space-y-6">
       {/* Warning Banner */}
       {missingRateCards.length > 0 && (
-        <Card className="border-yellow-500/50 bg-yellow-500/10">
+        <Card className="border-warning/50 bg-warning/10">
           <CardContent className="flex items-center gap-3 p-4">
-            <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0" />
-            <p className="text-sm text-yellow-200">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <p className="text-sm text-warning">
               {missingRateCards.length} business{missingRateCards.length > 1 ? 'es have' : ' has'} no rate card and cannot post deliveries
             </p>
           </CardContent>
@@ -112,12 +112,12 @@ export function AdminRateCards() {
                 </div>
                 <div className="flex items-center gap-3">
                   {rateCard ? (
-                    <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20">
+                    <Badge variant="outline" className="bg-success/10 text-success border-success/20">
                       <Check className="h-3 w-3 mr-1" />
                       Active
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                    <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
                       <AlertTriangle className="h-3 w-3 mr-1" />
                       Missing
                     </Badge>
@@ -434,7 +434,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
               <div>
                 <Label className="text-sm">Out of town 2+ big</Label>
                 {formData.rateOotBig === 0 && !formData.useRadiusPricing && (
-                  <p className="text-xs text-yellow-400 mt-0.5">Rate not set - this scenario cannot be billed</p>
+                  <p className="text-xs text-warning mt-0.5">Rate not set - this scenario cannot be billed</p>
                 )}
               </div>
               <div className="flex items-center gap-1">
@@ -512,10 +512,10 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
         {formData.useRadiusPricing && (
           <CardContent className="space-y-4">
             {!location.lat && (
-              <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0" />
-                  <p className="text-xs text-yellow-400">
+                  <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                  <p className="text-xs text-warning">
                     Store location not geocoded. Distance pricing requires store coordinates.
                   </p>
                 </div>
@@ -577,7 +577,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => removeTier(index)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -651,7 +651,7 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
                 </Button>
                 
                 {/* Fallback Rate */}
-                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 space-y-2">
+                <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="fallbackRate" className="text-sm font-medium">Fallback Rate</Label>
@@ -771,10 +771,10 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
       </Card>
 
       {/* Billing Logic Info */}
-      <Card className="bg-blue-500/10 border-blue-500/20">
+      <Card className="bg-info/10 border-info/20">
         <CardContent className="p-4">
-          <p className="text-sm font-medium text-blue-400 mb-2">Priority Order:</p>
-          <ol className="text-xs text-blue-300/80 space-y-1 list-decimal list-inside">
+          <p className="text-sm font-medium text-info mb-2">Priority Order:</p>
+          <ol className="text-xs text-info/80 space-y-1 list-decimal list-inside">
             {formData.useRadiusPricing ? (
               <>
                 <li>Find distance zone based on driving distance</li>
@@ -798,9 +798,9 @@ function RateCardEditor({ business, location, existingRateCard, onSave, onClose 
 
       {/* Errors */}
       {errors.length > 0 && (
-        <Card className="bg-red-500/10 border-red-500/20">
+        <Card className="bg-destructive/10 border-destructive/20">
           <CardContent className="p-4">
-            <ul className="text-sm text-red-400 space-y-1">
+            <ul className="text-sm text-destructive space-y-1">
               {errors.map((error, i) => (
                 <li key={i}>• {error}</li>
               ))}

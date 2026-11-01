@@ -30,6 +30,12 @@ export function DriverView() {
   const router = useRouter()
   const { currentUser, logout, deliveries, settings, refreshData } = useApp()
 
+  // Portaled overlays render on <body>, so the scoped theme lives there too.
+  useEffect(() => {
+    document.body.classList.add('portal-theme')
+    return () => document.body.classList.remove('portal-theme')
+  }, [])
+
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
@@ -136,12 +142,19 @@ export function DriverView() {
   }, [showTransfers, activeTab, isDispatchMode])
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col overflow-x-hidden">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-[var(--bg-card)] border-b border-[var(--border-color)] safe-area-top">
+    <div className="portal-theme min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden">
+      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl safe-area-top">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-[var(--accent-orange)]">DOMS</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="text-base font-bold tracking-tight text-brand">DOMS</span>
+            <span className="h-5 w-px bg-border" aria-hidden="true" />
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${inTransitDelivery ? 'bg-brand animate-route-pulse' : 'bg-success'}`}
+                aria-hidden="true"
+              />
+              {inTransitDelivery ? 'On a run' : 'On duty'}
+            </span>
           </div>
 
           <div className="flex items-center gap-1">
@@ -157,11 +170,10 @@ export function DriverView() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 tap-target">
-                <span className="text-sm text-foreground hidden sm:block truncate max-w-[120px]">{currentUser?.name}</span>
-                <div className="w-9 h-9 rounded-full bg-[var(--accent-orange)] flex items-center justify-center shrink-0">
-                  <span className="text-sm font-semibold text-white">
-                    {getInitials(currentUser?.name || 'D')}
+              <button className="flex items-center gap-2 tap-target" aria-label="Account menu">
+                <div className="w-9 h-9 rounded-full bg-foreground flex items-center justify-center shrink-0">
+                  <span className="text-xs font-semibold text-background">
+                    {getInitials(currentUser?.name || 'D').slice(0, 2)}
                   </span>
                 </div>
               </button>

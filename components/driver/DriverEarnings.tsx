@@ -186,30 +186,30 @@ export function DriverEarnings() {
     <div className="p-4 space-y-4 pb-24">
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
+        <Card className="border-success/20">
           <CardContent className="p-2 sm:p-4 text-center">
-            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-green-500" />
-            <p className="text-lg sm:text-2xl font-bold text-green-500">${earnings?.today.amount.toFixed(0) || 0}</p>
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-success" />
+            <p className="text-lg sm:text-2xl font-bold text-success">${earnings?.today.amount.toFixed(0) || 0}</p>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Today</p>
-            <p className="text-[10px] sm:text-xs text-green-500/70">{earnings?.today.count || 0} del</p>
+            <p className="text-[10px] sm:text-xs text-success/70">{earnings?.today.count || 0} del</p>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+        <Card className="border-info/20">
           <CardContent className="p-2 sm:p-4 text-center">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-blue-500" />
-            <p className="text-lg sm:text-2xl font-bold text-blue-500">${earnings?.week.amount.toFixed(0) || 0}</p>
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-info" />
+            <p className="text-lg sm:text-2xl font-bold text-info">${earnings?.week.amount.toFixed(0) || 0}</p>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Week</p>
-            <p className="text-[10px] sm:text-xs text-blue-500/70">{earnings?.week.count || 0} del</p>
+            <p className="text-[10px] sm:text-xs text-info/70">{earnings?.week.count || 0} del</p>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+        <Card className="border-info/20">
           <CardContent className="p-2 sm:p-4 text-center">
-            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-purple-500" />
-            <p className="text-lg sm:text-2xl font-bold text-purple-500">${earnings?.month.amount.toFixed(0) || 0}</p>
+            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 text-info" />
+            <p className="text-lg sm:text-2xl font-bold text-info">${earnings?.month.amount.toFixed(0) || 0}</p>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Month</p>
-            <p className="text-[10px] sm:text-xs text-purple-500/70">{earnings?.month.count || 0} del</p>
+            <p className="text-[10px] sm:text-xs text-info/70">{earnings?.month.count || 0} del</p>
           </CardContent>
         </Card>
       </div>
@@ -247,7 +247,7 @@ export function DriverEarnings() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ArrowUpRight className="w-4 h-4 text-blue-500" />
+                <ArrowUpRight className="w-4 h-4 text-info" />
                 <span className="text-sm">Pickup legs</span>
                 <Badge variant="outline" className="text-[10px]">
                   {legEarnings.pickup.jobs}
@@ -257,7 +257,7 @@ export function DriverEarnings() {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ArrowDownLeft className="w-4 h-4 text-green-500" />
+                <ArrowDownLeft className="w-4 h-4 text-success" />
                 <span className="text-sm">Delivery legs</span>
                 <Badge variant="outline" className="text-[10px]">
                   {legEarnings.delivery.jobs}
@@ -267,7 +267,7 @@ export function DriverEarnings() {
             </div>
             <div className="flex items-center justify-between pt-2 border-t border-[var(--border-color)]">
               <span className="text-sm font-medium">Leg pay total</span>
-              <span className="font-semibold text-green-500">
+              <span className="font-semibold text-success">
                 ${legEarnings.total.toFixed(2)}
               </span>
             </div>
@@ -294,30 +294,30 @@ export function DriverEarnings() {
           
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-orange-500" />
+              <Zap className="w-4 h-4 text-brand" />
               <span className="text-sm">Rush Deliveries</span>
             </div>
-            <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
+            <Badge variant="outline" className="bg-brand/10 text-brand border-brand/30">
               {earnings?.rushCount || 0}
             </Badge>
           </div>
           
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-red-500" />
+              <Clock className="w-4 h-4 text-destructive" />
               <span className="text-sm">Urgent Deliveries</span>
             </div>
-            <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/30">
+            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">
               {earnings?.urgentCount || 0}
             </Badge>
           </div>
           
           <div className="flex items-center justify-between pt-2 border-t border-[var(--border-color)]">
             <div className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-green-500" />
+              <DollarSign className="w-4 h-4 text-success" />
               <span className="text-sm font-medium">Avg per Delivery</span>
             </div>
-            <span className="font-semibold text-green-500">
+            <span className="font-semibold text-success">
               ${earnings && earnings.month.count > 0 ? (earnings.month.amount / earnings.month.count).toFixed(2) : '0.00'}
             </span>
           </div>

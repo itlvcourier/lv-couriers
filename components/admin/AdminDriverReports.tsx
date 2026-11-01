@@ -157,9 +157,9 @@ export function AdminDriverReports() {
   }
   
   const getRushSlaColor = (rate: number) => {
-    if (rate >= 90) return 'text-green-400'
-    if (rate >= 70) return 'text-yellow-400'
-    return 'text-red-400'
+    if (rate >= 90) return 'text-success'
+    if (rate >= 70) return 'text-warning'
+    return 'text-destructive'
   }
 
   const weeklyChartConfig = {
@@ -216,8 +216,8 @@ export function AdminDriverReports() {
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-info" />
               </div>
               <div className="min-w-0">
                 <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.deliveries}</p>
@@ -230,8 +230,8 @@ export function AdminDriverReports() {
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
               </div>
               <div className="min-w-0">
                 <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.completed}</p>
@@ -244,8 +244,8 @@ export function AdminDriverReports() {
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
               </div>
               <div className="min-w-0">
                 <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.failed}</p>
@@ -258,8 +258,8 @@ export function AdminDriverReports() {
         <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-warning" />
               </div>
               <div className="min-w-0">
                 <p className="text-xl sm:text-2xl font-bold text-foreground">{totals.adjustments}</p>
@@ -307,9 +307,9 @@ export function AdminDriverReports() {
                     <span className="font-medium text-foreground">{report.driverName}</span>
                   </td>
                   <td className="p-4 text-center text-foreground">{report.totalDeliveries}</td>
-                  <td className="p-4 text-center text-green-400">{report.completedDeliveries}</td>
+                  <td className="p-4 text-center text-success">{report.completedDeliveries}</td>
                   <td className="p-4 text-center">
-                    <span className={report.failedDeliveries > 0 ? 'text-red-400' : 'text-muted-foreground'}>
+                    <span className={report.failedDeliveries > 0 ? 'text-destructive' : 'text-muted-foreground'}>
                       {report.failedDeliveries}
                     </span>
                   </td>
@@ -321,7 +321,7 @@ export function AdminDriverReports() {
                     {report.avgRating ? (
                       <div className="flex items-center justify-center gap-1">
                         <span className="font-medium text-foreground">{report.avgRating.toFixed(1)}</span>
-                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                        <Star className="w-4 h-4 text-warning fill-warning" />
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -329,7 +329,7 @@ export function AdminDriverReports() {
                   </td>
                   <td className="p-4 text-center text-foreground">{report.feedbackReceived}</td>
                   <td className="p-4 text-center">
-                    <span className={report.adjustments > 0 ? 'text-yellow-400' : 'text-muted-foreground'}>
+                    <span className={report.adjustments > 0 ? 'text-warning' : 'text-muted-foreground'}>
                       {report.adjustments}
                     </span>
                   </td>
@@ -349,8 +349,8 @@ export function AdminDriverReports() {
                 <h3 className="font-medium text-foreground">{report.driverName}</h3>
                 <div className="flex items-center gap-2">
                   {report.avgRating && (
-                    <Badge variant="outline" className="bg-yellow-400/10 text-yellow-400 border-yellow-400/20">
-                      <Star className="w-3 h-3 mr-1 fill-yellow-400" />
+                    <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                      <Star className="w-3 h-3 mr-1 fill-warning" />
                       {report.avgRating.toFixed(1)}
                     </Badge>
                   )}
@@ -423,7 +423,7 @@ export function AdminDriverReports() {
                   <p className="text-xs text-muted-foreground">Total</p>
                 </div>
                 <div>
-                  <p className="font-bold text-green-400">{report.completedDeliveries}</p>
+                  <p className="font-bold text-success">{report.completedDeliveries}</p>
                   <p className="text-xs text-muted-foreground">Completed</p>
                 </div>
                 <div>
