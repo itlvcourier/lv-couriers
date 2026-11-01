@@ -978,21 +978,50 @@ export async function insertDeliveryFlag(flag: {
   if (dErr) throw dErr
 }
 
-export async function insertFailureAndFinalize(
-  deliveryId: string,
-  reason: FailReason,
-  notes: string | undefined,
-  permanent: boolean,
-): Promise<void> {
+export type FailureResult = {
+  status: 'failed_retry' | 'failed_permanent' | 'en_route_dropoff'
+  retry_count: number
+  note?: string
+}
+
+/** Turns `CODE: message` DB exceptions into the human message part. */
+function friendlyDbError(error: { message?: string } | null): Error {
+  const msg = error?.message ?? 'Could not save. Check your connection and try again.'
+  const idx = msg.indexOf(': ')
+  return new Error(/^[A-Z_]+$/.test(msg.slice(0, idx)) ? msg.slice(idx + 2) : msg)
+}
+
+/**
+ * Records a failed attempt atomically on the server. The database decides
+ * whether this is the retry (attempt 1) or the escalation (attempt 2), so a
+ * stale client or a second device cannot reset the counter.
+ */
+export async function recordDeliveryFailure(input: {
+  deliveryId: string
+  reason: FailReason | 'released_by_driver'
+  notes?: string
+  release?: boolean
+  lat?: number | null
+  lng?: number | null
+}): Promise<FailureResult> {
   const supabase = createClient()
-  const { error } = await supabase
-    .from('deliveries')
-    .update({
-      status: permanent ? 'failed_permanent' : 'failed_retry',
-      cancellation_reason: notes ? `${reason}: ${notes}` : reason,
-    })
-    .eq('id', deliveryId)
-  if (error) throw error
+  const { data, error } = await supabase.rpc('record_delivery_failure', {
+    p_delivery_id: input.deliveryId,
+    p_reason: input.reason,
+    p_notes: input.notes?.trim() || null,
+    p_release: input.release ?? false,
+    p_lat: input.lat ?? null,
+    p_lng: input.lng ?? null,
+  })
+  if (error) throw friendlyDbError(error)
+  return data as FailureResult
+}
+
+export async function resumeFailedDelivery(deliveryId: string): Promise<FailureResult> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('resume_failed_delivery', { p_delivery_id: deliveryId })
+  if (error) throw friendlyDbError(error)
+  return data as FailureResult
 }
 
 export async function cancelDeliveryInDb(

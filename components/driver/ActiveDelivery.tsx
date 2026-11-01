@@ -213,6 +213,7 @@ function TripJobCard({
   const [showFailSheet, setShowFailSheet] = useState(false)
   const [failReason, setFailReason] = useState<FailReason | ''>('')
   const [failNotes, setFailNotes] = useState('')
+  const [failBusy, setFailBusy] = useState(false)
 
   const isCompleted = delivery.status === 'delivered'
   const isRetryPending = delivery.status === 'failed_retry'
@@ -223,21 +224,40 @@ function TripJobCard({
     setFailNotes('')
   }
 
+  const runFailureAction = async (action: () => Promise<unknown>, onDone: () => void) => {
+    if (failBusy) return
+    setFailBusy(true)
+    try {
+      await action()
+      onDone()
+    } catch (err) {
+      toast.error('Could not save', { description: err instanceof Error ? err.message : 'Try again.' })
+    } finally {
+      setFailBusy(false)
+    }
+  }
+
   const handleMarkFailed = () => {
     if (!failReason) return
-    setShowFailSheet(false)
-    if (isFinalAttempt) {
-      escalateDelivery(delivery.id)
-      toast.error('Delivery escalated to dispatch after 2 failed attempts', {
-        description: 'You can move on to your next job.',
-      })
-    } else {
-      failDelivery(delivery.id, failReason, failNotes)
-      toast.warning('Delivery flagged for retry', {
-        description: 'Try again when you can, or release it to dispatch.',
-      })
+    if (failReason === 'other' && failNotes.trim().length < 3) {
+      toast.error('Describe the issue so dispatch knows what happened')
+      return
     }
-    resetFailForm()
+    void runFailureAction(
+      async () => {
+        const result = await failDelivery(delivery.id, failReason, failNotes)
+        if (result.status === 'failed_permanent') {
+          toast.error('Escalated to dispatch after 2 failed attempts', {
+            description: 'Keep the package safe. Dispatch will tell you where to return it.',
+          })
+        } else {
+          toast.warning('Attempt 1 of 2 recorded', {
+            description: 'Customer and business were notified. Retry when you can, or release to dispatch.',
+          })
+        }
+      },
+      () => { setShowFailSheet(false); resetFailForm() },
+    )
   }
   
   const getStatusLabel = () => {
@@ -323,7 +343,8 @@ function TripJobCard({
           <div className="flex gap-2">
             <Button
               size="sm"
-              onClick={() => { retryDelivery(delivery.id); toast.success('Resuming delivery') }}
+              disabled={failBusy}
+              onClick={() => void runFailureAction(() => retryDelivery(delivery.id), () => toast.success('Resuming delivery'))}
               className="flex-1 h-9 rounded-lg bg-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/90 text-white text-xs"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
@@ -332,7 +353,8 @@ function TripJobCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => { escalateDelivery(delivery.id); toast.info('Released to dispatch') }}
+              disabled={failBusy}
+              onClick={() => void runFailureAction(() => escalateDelivery(delivery.id), () => toast.info('Released to dispatch'))}
               className="flex-1 h-9 rounded-lg border-[var(--border-color)] text-xs"
             >
               Release
@@ -858,41 +880,58 @@ function ActiveJobCard({ delivery }: { delivery: Delivery }) {
   }
 
   const isFinalAttempt = (delivery.retryCount ?? 0) >= 1
+  const [failBusy, setFailBusy] = useState(false)
 
   const resetFailForm = () => {
     setFailReason('')
     setFailNotes('')
   }
 
+  const runFailureAction = async (action: () => Promise<unknown>, onDone: () => void) => {
+    if (failBusy) return
+    setFailBusy(true)
+    try {
+      await action()
+      onDone()
+    } catch (err) {
+      toast.error('Could not save', { description: err instanceof Error ? err.message : 'Try again.' })
+    } finally {
+      setFailBusy(false)
+    }
+  }
+
   const handleMarkFailed = () => {
     if (!failReason) return
-    setShowFailSheet(false)
-
-    if (isFinalAttempt) {
-      // Second failure - auto-escalate to dispatch
-      escalateDelivery(delivery.id)
-      toast.error('Delivery escalated to dispatch after 2 failed attempts', {
-        description: 'You can move on to your next job.',
-      })
-    } else {
-      failDelivery(delivery.id, failReason, failNotes)
-      toast.warning('Delivery flagged for retry', {
-        description: 'Try again when you can, or release it to dispatch.',
-      })
+    if (failReason === 'other' && failNotes.trim().length < 3) {
+      toast.error('Describe the issue so dispatch knows what happened')
+      return
     }
-    resetFailForm()
+    void runFailureAction(
+      async () => {
+        const result = await failDelivery(delivery.id, failReason, failNotes)
+        if (result.status === 'failed_permanent') {
+          toast.error('Escalated to dispatch after 2 failed attempts', {
+            description: 'Keep the package safe. Dispatch will tell you where to return it.',
+          })
+        } else {
+          toast.warning('Attempt 1 of 2 recorded', {
+            description: 'Customer and business were notified. Retry when you can, or release to dispatch.',
+          })
+        }
+      },
+      () => { setShowFailSheet(false); resetFailForm() },
+    )
   }
 
   const handleRetryNow = () => {
-    retryDelivery(delivery.id)
-    toast.success('Resuming delivery')
+    void runFailureAction(() => retryDelivery(delivery.id), () => toast.success('Resuming delivery'))
   }
 
   const handleReleaseToDispatch = () => {
-    escalateDelivery(delivery.id)
-    toast.info('Released to dispatch', {
-      description: 'A dispatcher will reassign or follow up.',
-    })
+    void runFailureAction(
+      () => escalateDelivery(delivery.id),
+      () => toast.info('Released to dispatch', { description: 'A dispatcher will reassign or follow up.' }),
+    )
   }
 
   const getActionButton = () => {

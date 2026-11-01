@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
   const businessPhone = delivery.businesses?.phone || null
   const trackingUrl = buildTrackingUrl(deliveryId)
   const retries = delivery.retry_count ?? 0
-  const maxRetries = 3
-  const attemptsLeft = Math.max(0, maxRetries - retries)
+  // Must match record_delivery_failure(): 2 attempts, then dispatch.
+  const maxRetries = 2
+  const attemptsLeft = delivery.status === 'failed_permanent' ? 0 : Math.max(0, maxRetries - retries)
 
   const sends: Array<Promise<{ ok: boolean; role: string }>> = []
 
