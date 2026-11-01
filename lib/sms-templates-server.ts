@@ -64,7 +64,7 @@ async function loadBusinessContext(ctx: SmsContext): Promise<BusinessContext | n
     const [{ data: biz }, { data: loc }] = await Promise.all([
       admin
         .from('businesses')
-        .select('name, phone, contact_phone, email, website, sms_signature, sms_note')
+        .select('name, phone, contact_phone, email, website, google_review_link, sms_signature, sms_note')
         .eq('id', businessId)
         .maybeSingle<{
           name: string | null
@@ -72,6 +72,7 @@ async function loadBusinessContext(ctx: SmsContext): Promise<BusinessContext | n
           contact_phone: string | null
           email: string | null
           website: string | null
+          google_review_link: string | null
           sms_signature: string | null
           sms_note: string | null
         }>(),
@@ -91,6 +92,7 @@ async function loadBusinessContext(ctx: SmsContext): Promise<BusinessContext | n
         business_phone: biz.phone || biz.contact_phone,
         business_email: biz.email,
         business_website: biz.website,
+        google_review_link: biz.google_review_link,
         business_note: biz.sms_note,
         location_name: loc?.name,
         location_phone: loc?.phone || loc?.contact_phone,

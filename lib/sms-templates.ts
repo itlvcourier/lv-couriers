@@ -45,7 +45,18 @@ export const BUSINESS_TAGS: SmsTemplateVar[] = [
   { name: 'location_address', description: 'Branch address', example: '12 King St' },
 ]
 
+export const CUSTOMER_TAGS: SmsTemplateVar[] = [
+  { name: 'recipient_name', description: 'Customer full name', example: 'Jane Doe' },
+  { name: 'recipient_first_name', description: 'Customer first name', example: 'Jane' },
+  { name: 'recipient_last_name', description: 'Customer last name', example: 'Doe' },
+  { name: 'dropoff_address', description: 'Delivery address', example: '88 Queen Ave' },
+  { name: 'tracking_url', description: 'Live delivery tracking link', example: 'https://atria360.ca/track/abc123' },
+  { name: 'google_review_link', description: 'Business Google review link', example: 'https://g.page/r/example/review' },
+]
+
 const BUSINESS_TAG_NAMES = new Set(BUSINESS_TAGS.map((t) => t.name))
+const CUSTOMER_TAG_NAMES = new Set(CUSTOMER_TAGS.map((t) => t.name))
+const ALL_TAG_NAMES = new Set([...BUSINESS_TAG_NAMES, ...CUSTOMER_TAG_NAMES])
 
 export type SmsSignatureKey = 'signature.recipient' | 'signature.business' | 'signature.driver'
 
@@ -525,7 +536,7 @@ const EMPTY = '\u0000'
 export function renderSmsTemplate(body: string, vars: Record<string, string | number | null | undefined>): string {
   const filled = body.replace(PLACEHOLDER, (match, name: string) => {
     const value = vars[name]
-    if (BUSINESS_TAG_NAMES.has(name) && (value === undefined || value === null || String(value).trim() === '')) {
+    if (ALL_TAG_NAMES.has(name) && (value === undefined || value === null || String(value).trim() === '')) {
       return EMPTY
     }
     return value === undefined || value === null ? match : String(value)
@@ -567,7 +578,7 @@ export function composeSms(
 /** Validation for signatures (admin defaults and per-business overrides). */
 export function validateSmsSignature(body: string): string | null {
   if (body.length > SMS_SIGNATURE_MAX_LENGTH) return `Signature must be ${SMS_SIGNATURE_MAX_LENGTH} characters or fewer.`
-  const unknown = findPlaceholders(body).filter((p) => !BUSINESS_TAG_NAMES.has(p))
+  const unknown = findPlaceholders(body).filter((p) => !ALL_TAG_NAMES.has(p))
   if (unknown.length) return `Unknown tag${unknown.length > 1 ? 's' : ''}: ${unknown.map((u) => `{${u}}`).join(', ')}`
   return null
 }
@@ -588,7 +599,7 @@ export function findPlaceholders(body: string): string[] {
 export function validateSmsTemplate(def: SmsTemplateDef, body: string): string | null {
   if (!body.trim()) return 'Message cannot be empty.'
   if (body.length > SMS_TEMPLATE_MAX_LENGTH) return `Message must be ${SMS_TEMPLATE_MAX_LENGTH} characters or fewer.`
-  const known = new Set([...def.vars.map((v) => v.name), ...BUSINESS_TAG_NAMES])
+  const known = new Set([...def.vars.map((v) => v.name), ...ALL_TAG_NAMES])
   const unknown = findPlaceholders(body).filter((p) => !known.has(p))
   if (unknown.length) return `Unknown variable${unknown.length > 1 ? 's' : ''}: ${unknown.map((u) => `{${u}}`).join(', ')}`
   const missing = def.vars.filter((v) => v.required && !body.includes(`{${v.name}}`))

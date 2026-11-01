@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient()
   const [{ data: biz, error }, { data: defaultSig }] = await Promise.all([
-    admin.from('businesses').select('email, website, sms_signature, sms_note').eq('id', businessId!).maybeSingle(),
+    admin.from('businesses').select('email, website, google_review_link, sms_signature, sms_note').eq('id', businessId!).maybeSingle(),
     admin.from('sms_templates').select('body').eq('key', 'signature.recipient').maybeSingle<{ body: string | null }>(),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -34,6 +34,7 @@ export async function PUT(request: NextRequest) {
     website?: string
     smsSignature?: string
     smsNote?: string
+    googleReviewLink?: string
   }
   const auth = await requireAdminOrBusinessOwner(request, payload.businessId)
   if (isAuthError(auth)) return auth
@@ -42,10 +43,15 @@ export async function PUT(request: NextRequest) {
   const website = payload.website?.trim() ?? ''
   const smsSignature = payload.smsSignature?.trim() ?? ''
   const smsNote = payload.smsNote?.trim() ?? ''
+  const googleReviewLink = payload.googleReviewLink?.trim() ?? ''
 
   if (!email) return NextResponse.json({ error: 'Contact email is required' }, { status: 400 })
   if (!EMAIL.test(email)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
   if (website.length > 120) return NextResponse.json({ error: 'Website is too long' }, { status: 400 })
+  if (googleReviewLink && !/^https:\/\/(www\.)?(google\.[^/]+|g\.page)\//i.test(googleReviewLink)) {
+    return NextResponse.json({ error: 'Use a valid Google review link' }, { status: 400 })
+  }
+  if (googleReviewLink.length > 300) return NextResponse.json({ error: 'Google review link is too long' }, { status: 400 })
   if (smsNote.length > 160) return NextResponse.json({ error: 'Note must be 160 characters or fewer' }, { status: 400 })
   if (/\{[a-z_]+\}/.test(smsNote)) return NextResponse.json({ error: 'The note cannot contain tags' }, { status: 400 })
   const sigError = validateSmsSignature(smsSignature)
@@ -56,6 +62,7 @@ export async function PUT(request: NextRequest) {
     .update({
       ...(email ? { email } : {}),
       website: website || null,
+      google_review_link: googleReviewLink || null,
       sms_signature: smsSignature || null,
       sms_note: smsNote || null,
     })
