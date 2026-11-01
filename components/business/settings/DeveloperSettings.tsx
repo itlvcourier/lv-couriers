@@ -97,6 +97,28 @@ export function DeveloperSettings() {
         </div>
       </Panel>
 
+      <Panel title="Connect to Claude (MCP)" description="Let Claude book, track and cancel deliveries for this account. It uses an API key from above, so all order rules and duplicate protection apply.">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">Claude Code:</p>
+          <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">{`claude mcp add --transport http doms ${origin}/api/mcp \\
+  --header "Authorization: Bearer YOUR_KEY"`}</pre>
+          <p className="text-xs leading-relaxed text-muted-foreground">Claude Desktop (claude_desktop_config.json):</p>
+          <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">{`{
+  "mcpServers": {
+    "doms": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "${origin}/api/mcp",
+               "--header", "Authorization: Bearer YOUR_KEY"]
+    }
+  }
+}`}</pre>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Tools: <span className="font-mono">create_delivery</span>, <span className="font-mono">get_delivery</span>, <span className="font-mono">list_deliveries</span>, <span className="font-mono">cancel_delivery</span>, <span className="font-mono">list_pickup_locations</span>.
+            Use a dedicated key named &quot;Claude&quot; so you can revoke it on its own.
+          </p>
+        </div>
+      </Panel>
+
       <Panel title="Webhooks" description="We POST signed JSON to your URL whenever an order changes status. Verify X-Doms-Signature: HMAC-SHA256 of `${timestamp}.${raw body}` using your secret. Reply 2xx within 8s; failures retry for about 9 hours. Use X-Doms-Event-Id to ignore duplicates.">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
