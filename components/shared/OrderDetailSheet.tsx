@@ -22,6 +22,7 @@ import { format } from 'date-fns'
 import useSWR from 'swr'
 import { loadDeliveryMedia } from '@/lib/db-extended'
 import type { Driver, Business } from '@/lib/types'
+import { ConsentLog, type HandoffSnapshot } from './ConsentLog'
 
 // Simplified order shape used by this sheet (from BusinessOrders etc.)
 export interface OrderLike {
@@ -54,6 +55,8 @@ export interface OrderLike {
   pickupPhotoUrl?: string | null
   signatureUrl?: string | null
   recipientNote?: string | null
+  handoff?: HandoffSnapshot
+  rawStatus?: string
 }
 
 interface OrderDetailSheetProps {
@@ -155,6 +158,15 @@ export function OrderDetailSheet({
                 </div>
               </div>
             </div>
+          )}
+
+          {viewType !== 'driver' && order.handoff && (
+            <ConsentLog
+              deliveryId={order.id}
+              status={order.rawStatus ?? order.status}
+              handoff={order.handoff}
+              canEdit
+            />
           )}
 
           {/* Cancellation notice */}

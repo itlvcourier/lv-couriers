@@ -5,6 +5,7 @@ import { driverWelcomeEmail } from '@/lib/email-templates'
 import { sendSms } from '@/lib/twilio'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { appLink } from '@/lib/app-url'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -130,11 +131,7 @@ export async function POST(req: NextRequest) {
   ])
 
   // 4. Build the login URL using the site the request came from.
-  const origin =
-    req.headers.get('origin') ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    `https://${req.headers.get('host')}`
-  const loginUrl = `${origin.replace(/\/$/, '')}/login`
+  const loginUrl = appLink('/login')
 
   const tpl = driverWelcomeEmail({ name, email, tempPassword, loginUrl })
 

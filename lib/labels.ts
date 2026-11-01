@@ -3,6 +3,7 @@
 import QRCode from 'qrcode'
 import type { Delivery } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { HANDOFF_LABEL_TAGS, isHandoffRule } from '@/lib/handoff'
 
 /**
  * Stamp deliveries as having had their label printed (§11). Best-effort: a
@@ -51,6 +52,20 @@ export interface LabelData {
   requireSignature: boolean
   requirePhoto: boolean
   createdAt: string | null
+  handoffTag?: string | null
+  handoffDetail?: string | null
+}
+
+function handoffLabelParts(
+  rule: string | null | undefined,
+  requireId: boolean | null | undefined,
+  namedPerson: string | null | undefined,
+  locationNote: string | null | undefined,
+): { handoffTag: string | null; handoffDetail: string | null } {
+  if (!rule || !isHandoffRule(rule)) return { handoffTag: null, handoffDetail: null }
+  const tag = HANDOFF_LABEL_TAGS[rule] + (requireId ? ' · ID REQUIRED' : '')
+  const detailParts = [namedPerson ? `Alt: ${namedPerson}` : null, locationNote].filter(Boolean)
+  return { handoffTag: tag, handoffDetail: detailParts.length ? detailParts.join(' · ') : null }
 }
 
 /** Print formats the business can choose from. */
@@ -120,6 +135,12 @@ export function buildLabelData(
     requireSignature: !!delivery.requireSignature,
     requirePhoto: !!delivery.requirePhoto,
     createdAt: delivery.createdAt ?? delivery.postedAt ?? null,
+    ...handoffLabelParts(
+      delivery.handoffRule,
+      delivery.handoffRequireId,
+      delivery.handoffNamedPerson,
+      delivery.handoffLocationNote,
+    ),
   }
 }
 
@@ -146,6 +167,10 @@ export function buildLabelDataFromRow(
     require_signature?: boolean | null
     require_photo?: boolean | null
     created_at?: string | null
+    handoff_rule?: string | null
+    handoff_require_id?: boolean | null
+    handoff_named_person?: string | null
+    handoff_location_note?: string | null
     business?: { name?: string | null } | null
     driver?: { name?: string | null } | null
   },
@@ -172,6 +197,12 @@ export function buildLabelDataFromRow(
     requireSignature: !!row.require_signature,
     requirePhoto: !!row.require_photo,
     createdAt: row.created_at ?? null,
+    ...handoffLabelParts(
+      row.handoff_rule,
+      row.handoff_require_id,
+      row.handoff_named_person,
+      row.handoff_location_note,
+    ),
   }
 }
 
@@ -211,6 +242,8 @@ function labelInnerHtml(d: LabelData, qrDataUrl: string): string {
   if (d.distanceKm != null) detailRows.push(`<div class="row"><span>Distance</span><b>${d.distanceKm.toFixed(1)} km</b></div>`)
   detailRows.push(`<div class="row"><span>Pieces</span><b>${d.pieces}</b></div>`)
   if (captureFlags.length) detailRows.push(`<div class="row"><span>On delivery</span><b>${captureFlags.join(' + ')}</b></div>`)
+  if (d.handoffTag) detailRows.push(`<div class="row"><span>Handoff</span><b>${escapeHtml(d.handoffTag)}</b></div>`)
+  if (d.handoffDetail) detailRows.push(`<div class="row"><span>Note</span><b>${escapeHtml(d.handoffDetail)}</b></div>`)
 
   return `
     <div class="label">

@@ -48,6 +48,7 @@ import { ListPager } from '@/components/shared/ListPager'
 const PAGE_SIZE = 25
 import type { DeliveryStatus } from '@/lib/types'
 import { OrderLabelPrint } from './OrderLabelPrint'
+import { ConsentLog, handoffSnapshotFromRow } from '@/components/shared/ConsentLog'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Separator } from '@/components/ui/separator'
@@ -683,6 +684,13 @@ export function AdminOrders() {
                 )}
                 <OrderLabelPrint rows={[selectedDelivery]} defaultSize="halfA4" size="sm" label="Print label" />
               </div>
+
+              <ConsentLog
+                deliveryId={selectedDelivery.id}
+                status={selectedDelivery.status}
+                handoff={handoffSnapshotFromRow(selectedDelivery as unknown as Record<string, unknown>)}
+                canEdit
+              />
 
               {/* Business & Driver */}
               <div className="space-y-3">

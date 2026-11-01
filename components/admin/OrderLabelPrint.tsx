@@ -44,6 +44,10 @@ interface Row {
   require_signature?: boolean | null
   require_photo?: boolean | null
   created_at?: string | null
+  handoff_rule?: string | null
+  handoff_require_id?: boolean | null
+  handoff_named_person?: string | null
+  handoff_location_note?: string | null
   business?: { name?: string | null } | null
   driver?: { name?: string | null } | null
 }

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { setOptOut, sendSms } from '@/lib/twilio'
+import { logConsentEvent } from '@/lib/consent-server'
+import { CONSENT_REQUEST_LABELS, normalizePhone, type ConsentRequestType } from '@/lib/handoff'
 
 /**
  * Twilio webhook endpoint — receives inbound SMS replies.
@@ -51,6 +53,15 @@ export async function POST(req: Request) {
 
   const supabase = createAdminClient()
 
+  // Handoff approval replies take priority over opt-in keywords (YES).
+  const consentReply = parseConsentReply(rawMsg)
+  if (consentReply) {
+    const handled = await handleConsentReply(supabase, from, consentReply, params.get('Body') || '')
+    if (handled) {
+      return new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } })
+    }
+  }
+
   // Check if opt-out management is enabled
   const { data: settings } = await supabase
     .from('system_settings')
@@ -88,4 +99,72 @@ export async function POST(req: Request) {
 
   // Always return empty TwiML so Twilio doesn't send a generic reply
   return new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } })
+}
+
+function parseConsentReply(msg: string): 'approved' | 'declined' | null {
+  const word = msg.replace(/[^A-Z]/g, '')
+  if (['YES', 'Y', 'APPROVE', 'APPROVED', 'OK', 'OKAY'].includes(word)) return 'approved'
+  if (['NO', 'N', 'DECLINE', 'DECLINED', 'DENY'].includes(word)) return 'declined'
+  return null
+}
+
+/** Resolve the newest pending handoff approval for this phone. Returns true when one was answered. */
+async function handleConsentReply(
+  supabase: ReturnType<typeof createAdminClient>,
+  from: string,
+  decision: 'approved' | 'declined',
+  rawBody: string,
+): Promise<boolean> {
+  const phone = normalizePhone(from)
+  const now = new Date().toISOString()
+  const { data: request } = await supabase
+    .from('delivery_consent_requests')
+    .select('id, delivery_id, proposed_receiver_name, proposed_relationship, request_type')
+    .eq('recipient_phone', phone)
+    .eq('status', 'pending')
+    .gt('expires_at', now)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<{
+      id: string
+      delivery_id: string
+      proposed_receiver_name: string | null
+      proposed_relationship: string | null
+      request_type: ConsentRequestType
+    }>()
+  if (!request) return false
+
+  // Guard against a double reply racing: only flip if still pending.
+  const { data: updated } = await supabase
+    .from('delivery_consent_requests')
+    .update({ status: decision, reply_body: rawBody.slice(0, 300), responded_at: now })
+    .eq('id', request.id)
+    .eq('status', 'pending')
+    .select('id')
+  if (!updated || updated.length === 0) return true
+
+  const who = request.proposed_receiver_name
+    ? ` to ${request.proposed_receiver_name}${request.proposed_relationship ? ` (${request.proposed_relationship})` : ''}`
+    : ''
+  await logConsentEvent(supabase, {
+    deliveryId: request.delivery_id,
+    eventType: decision === 'approved' ? 'consent_approved' : 'consent_declined',
+    actorRole: 'customer',
+    actorName: phone,
+    summary: `Recipient ${decision === 'approved' ? 'APPROVED' : 'DECLINED'} by text: ${CONSENT_REQUEST_LABELS[request.request_type]}${who}. Reply: "${rawBody.trim().slice(0, 120)}"`,
+    details: { requestId: request.id, reply: rawBody.slice(0, 300), from: phone },
+  })
+
+  await sendSms({
+    to: phone,
+    body:
+      decision === 'approved'
+        ? 'DOMS By Atria360: Thanks, your approval was recorded and sent to your driver.'
+        : 'DOMS By Atria360: Got it, your driver will not leave the delivery. They will follow up with you.',
+    type: 'consent_result',
+    deliveryId: request.delivery_id,
+    skipOptOutCheck: true,
+    dedupeWindowMinutes: 0,
+  })
+  return true
 }

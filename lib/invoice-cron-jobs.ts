@@ -8,6 +8,7 @@ import {
 } from '@/lib/invoice-db'
 import { sendEmail } from '@/lib/email'
 import { invoiceReviewReminderEmail } from '@/lib/email-templates'
+import { appLink } from '@/lib/app-url'
 
 /**
  * Pure job functions — no HTTP, no auth. Each returns a JSON-serializable
@@ -153,10 +154,7 @@ export async function runGenerateDrafts() {
   if (!settings.auto_send_invoices && generated.length > 0) {
     const adminRecipients = await resolveAdminEmails(supabase)
     if (adminRecipients.length > 0) {
-      const site =
-        process.env.NEXT_PUBLIC_SITE_URL ||
-        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
-      const adminUrl = `${(site || '').replace(/\/$/, '')}/admin?tab=invoices`
+      const adminUrl = appLink('/admin?tab=invoices')
       const tpl = invoiceReviewReminderEmail({
         draftCount: generated.length,
         periodLabel: `${periodStartISO} – ${periodEndISO}`,

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { disputeRaisedEmail } from '@/lib/email-templates'
 import { requireAuth, isAuthError } from '@/lib/auth-guard'
+import { appLink } from '@/lib/app-url'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -69,11 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: 'No admin recipients configured' })
   }
 
-  const origin =
-    req.headers.get('origin') ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    `https://${req.headers.get('host')}`
-  const adminUrl = `${origin.replace(/\/$/, '')}/admin?tab=invoices&invoice=${dispute.invoices.id}`
+  const adminUrl = appLink(`/admin?tab=invoices&invoice=${dispute.invoices.id}`)
 
   const tpl = disputeRaisedEmail({
     businessName: dispute.invoices.businesses?.name || 'A business',

@@ -1,6 +1,7 @@
 import 'server-only'
 import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { trackingLink } from '@/lib/app-url'
 
 /**
  * SMS adapter wrapping Twilio.
@@ -32,6 +33,8 @@ export type SmsType =
   | 'payment_received'
   | 'weekly_summary'
   | 'opt_out_confirm'
+  | 'consent_request'
+  | 'consent_result'
 
 export type SendSmsInput = {
   to: string
@@ -342,10 +345,5 @@ export async function setOptOut(phone: string, optedOut: boolean): Promise<void>
  * Build a public tracking URL for a delivery.
  */
 export function buildTrackingUrl(deliveryId: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    'http://localhost:3000'
-  const normalized = base.startsWith('http') ? base : `https://${base}`
-  return `${normalized.replace(/\/$/, '')}/track/${deliveryId}`
+  return trackingLink(deliveryId)
 }

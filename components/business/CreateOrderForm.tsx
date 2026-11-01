@@ -48,6 +48,7 @@ import {
   type LabelSize,
 } from '@/lib/labels'
 import { Printer } from 'lucide-react'
+import { DEFAULT_HANDOFF, HandoffRuleFields, validateHandoff, type HandoffValue } from '@/components/shared/HandoffRuleFields'
 
 interface CreateOrderFormProps {
   onSuccess?: () => void
@@ -82,6 +83,7 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
   // After a successful post, prompt the business to print the QR label.
   const [justPosted, setJustPosted] = useState<Delivery | null>(null)
   const [printingLabel, setPrintingLabel] = useState(false)
+  const [handoff, setHandoff] = useState<HandoffValue>(DEFAULT_HANDOFF)
 
   const business = businesses.find(b => b.id === currentUser?.businessId)
   const userIsOwner = isOwner()
@@ -377,6 +379,8 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       if (form.smallPackages + form.bigPackages === 0) {
         throw new Error('Please add at least one package')
       }
+      const handoffError = validateHandoff(handoff)
+      if (handoffError) throw new Error(handoffError)
 
       const manifest = createManifestItems()
 
@@ -528,9 +532,15 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
       requireSignature: form.requireSignature,
       requirePhoto: form.requirePhoto,
       distanceKm: distanceKm,
+      handoffRule: handoff.handoffRule,
+      handoffRequireId: handoff.handoffRequireId,
+      handoffNamedPerson: handoff.handoffNamedPerson.trim() || null,
+      handoffNamedRelationship: handoff.handoffNamedRelationship.trim() || null,
+      handoffLocationNote: handoff.handoffLocationNote.trim() || null,
     })
 
     resetForm()
+    setHandoff(DEFAULT_HANDOFF)
     toast.success('Delivery posted successfully!')
 
     // Prompt the business to print the QR label right away. We keep the form
@@ -961,6 +971,11 @@ export function CreateOrderForm({ onSuccess }: CreateOrderFormProps) {
                 rows={2}
                 className="text-sm"
               />
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p className="text-xs font-semibold sm:text-sm">Delivery instructions &amp; consent</p>
+              <HandoffRuleFields value={handoff} onChange={setHandoff} />
             </div>
 
             <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
