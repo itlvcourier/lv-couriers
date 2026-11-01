@@ -1,5 +1,5 @@
 import 'server-only'
-import { createHmac, createHash, randomBytes } from 'crypto'
+import { createHmac, createHash, randomBytes, randomUUID } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const WEBHOOK_EVENTS = [
@@ -62,9 +62,15 @@ export function isAllowedWebhookUrl(raw: string) {
   }
 }
 
+/**
+ * Only used for manual test pings. Real delivery events are queued and signed by the
+ * `trg_webhook_delivery_event` database trigger and retried by the `webhook-outbox` pg_cron job,
+ * so every status change fires no matter which code path made it.
+ */
 async function postOne(endpoint: { id: string; url: string; secret: string }, event: string, payload: unknown, deliveryId: string | null) {
   const db = createAdminClient()
-  const body = JSON.stringify({ event, created_at: new Date().toISOString(), data: payload })
+  const eventId = randomUUID()
+  const body = JSON.stringify({ id: eventId, event, created_at: new Date().toISOString(), data: payload })
   const ts = Math.floor(Date.now() / 1000).toString()
   let statusCode: number | null = null
   let error: string | null = null
@@ -74,6 +80,7 @@ async function postOne(endpoint: { id: string; url: string; secret: string }, ev
       headers: {
         'content-type': 'application/json',
         'x-doms-event': event,
+        'x-doms-event-id': eventId,
         'x-doms-timestamp': ts,
         'x-doms-signature': `sha256=${signPayload(endpoint.secret, ts, body)}`,
       },
@@ -88,31 +95,6 @@ async function postOne(endpoint: { id: string; url: string; secret: string }, ev
   }
   await db.from('webhook_deliveries').insert({ endpoint_id: endpoint.id, event, delivery_id: deliveryId, status_code: statusCode, error })
   return { statusCode, error }
-}
-
-export async function dispatchDeliveryEvent(deliveryId: string) {
-  const db = createAdminClient()
-  const { data: delivery } = await db
-    .from('deliveries')
-    .select(`business_id, ${PUBLIC_DELIVERY_COLUMNS}`)
-    .eq('id', deliveryId)
-    .maybeSingle<Record<string, unknown> & { business_id: string | null; status: string }>()
-  if (!delivery?.business_id) return { sent: 0 }
-  const event = eventForStatus(delivery.status)
-  if (!event) return { sent: 0 }
-
-  const { data: endpoints } = await db
-    .from('webhook_endpoints')
-    .select('id, url, secret, events')
-    .eq('business_id', delivery.business_id)
-    .eq('active', true)
-  const targets = (endpoints ?? []).filter((e) => !e.events?.length || e.events.includes(event))
-  if (!targets.length) return { sent: 0 }
-
-  const { business_id: _omit, ...payload } = delivery
-  void _omit
-  await Promise.all(targets.map((t) => postOne(t, event, payload, deliveryId)))
-  return { sent: targets.length }
 }
 
 export async function sendTestWebhook(endpoint: { id: string; url: string; secret: string }) {

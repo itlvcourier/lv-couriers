@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { hashApiKey, PUBLIC_DELIVERY_COLUMNS, dispatchDeliveryEvent } from '@/lib/webhooks'
+import { hashApiKey, PUBLIC_DELIVERY_COLUMNS } from '@/lib/webhooks'
 import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 const limiter = rateLimit({ max: 120, windowMs: 60_000 })
+
+const HANDOFF_RULES = ['door', 'recipient_only', 'recipient_or_named', 'reception', 'security', 'call_on_arrival'] as const
+const MANIFEST_TYPES = ['small_package', 'big_package'] as const
 
 async function authenticate(req: NextRequest) {
   const key = req.headers.get('authorization')?.match(/^Bearer\s+(doms_live_\S+)$/)?.[1]
@@ -22,24 +25,28 @@ async function authenticate(req: NextRequest) {
   return data
 }
 
-function err(message: string, status: number) {
-  return NextResponse.json({ error: { message } }, { status })
+function err(message: string, status: number, code?: string) {
+  return NextResponse.json({ error: { message, ...(code ? { code } : {}) } }, { status })
 }
+
+const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
+const coord = (v: unknown, lim: number) => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim ? v : null)
 
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
-  if (!auth) return err('Invalid or missing API key', 401)
-  if (!limiter.check(auth.id).ok) return err('Rate limit exceeded', 429)
+  if (!auth) return err('Invalid or missing API key', 401, 'unauthorized')
+  if (!limiter.check(auth.id).ok) return err('Rate limit exceeded', 429, 'rate_limited')
 
   const sp = req.nextUrl.searchParams
   const db = createAdminClient()
   const id = sp.get('id')
-  const tracking = sp.get('tracking_code')
+  if (id && !/^[0-9a-f-]{36}$/i.test(id)) return err('id must be a UUID', 400, 'invalid_id')
   let q = db.from('deliveries').select(PUBLIC_DELIVERY_COLUMNS).eq('business_id', auth.business_id)
   if (id) q = q.eq('id', id)
-  if (tracking) q = q.eq('tracking_code', tracking)
+  const tracking = sp.get('tracking_code')
+  if (tracking) q = q.eq('tracking_code', tracking.slice(0, 40))
   const status = sp.get('status')
-  if (status) q = q.eq('status', status)
+  if (status) q = q.eq('status', status.slice(0, 40))
   const limit = Math.min(100, Math.max(1, Number(sp.get('limit')) || 25))
   const { data, error } = await q.order('created_at', { ascending: false }).limit(limit)
   if (error) return err('Query failed', 500)
@@ -48,25 +55,60 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req)
-  if (!auth) return err('Invalid or missing API key', 401)
-  if (!limiter.check(auth.id).ok) return err('Rate limit exceeded', 429)
+  if (!auth) return err('Invalid or missing API key', 401, 'unauthorized')
+  if (!limiter.check(auth.id).ok) return err('Rate limit exceeded', 429, 'rate_limited')
 
-  const b = (await req.json().catch(() => null)) as {
-    location_id?: string; dropoff_address?: string; dropoff_area?: string; dropoff_postal_code?: string
-    recipient_name?: string; recipient_phone?: string; recipient_note?: string
-    is_rush?: boolean; require_signature?: boolean; require_pin?: boolean
-  } | null
-  if (!b?.dropoff_address?.trim() || !b.dropoff_area?.trim()) {
-    return err('dropoff_address and dropoff_area are required', 400)
+  const b = (await req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!b || typeof b !== 'object') return err('Body must be JSON', 400, 'invalid_json')
+
+  const dropoffAddress = str(b.dropoff_address, 300)
+  const dropoffArea = str(b.dropoff_area, 100)
+  if (!dropoffAddress || !dropoffArea) return err('dropoff_address and dropoff_area are required', 400, 'missing_fields')
+
+  const idemKey = str(req.headers.get('idempotency-key'), 100)
+  const db = createAdminClient()
+
+  if (idemKey) {
+    const { data: existing } = await db
+      .from('deliveries')
+      .select(PUBLIC_DELIVERY_COLUMNS)
+      .eq('business_id', auth.business_id)
+      .eq('api_idempotency_key', idemKey)
+      .maybeSingle()
+    if (existing) return NextResponse.json({ data: existing, idempotent_replay: true }, { status: 200 })
   }
 
-  const db = createAdminClient()
+  const handoffRule = (HANDOFF_RULES as readonly string[]).includes(b.handoff_rule as string)
+    ? (b.handoff_rule as string)
+    : 'door'
+  const requireId = b.handoff_require_id === true
+  if (requireId && handoffRule === 'door') {
+    return err('handoff_require_id cannot be used with handoff_rule "door"', 400, 'invalid_handoff')
+  }
+  const namedPerson = str(b.handoff_named_person, 120)
+  if (handoffRule === 'recipient_or_named' && !namedPerson) {
+    return err('handoff_named_person is required when handoff_rule is "recipient_or_named"', 400, 'invalid_handoff')
+  }
+
+  const rawItems = Array.isArray(b.items) ? b.items.slice(0, 50) : []
+  const items = rawItems
+    .map((i) => i as Record<string, unknown>)
+    .filter((i) => (MANIFEST_TYPES as readonly string[]).includes(i.type as string))
+    .map((i) => ({
+      item_type: i.type as string,
+      quantity: Math.min(999, Math.max(1, Math.floor(Number(i.quantity) || 1))),
+      notes: str(i.notes, 200),
+    }))
+
   let locQ = db.from('business_locations').select('id, address, area, lat, lng').eq('business_id', auth.business_id)
-  locQ = b.location_id ? locQ.eq('id', b.location_id) : locQ.order('is_default', { ascending: false })
+  const locationId = str(b.location_id, 40)
+  locQ = locationId ? locQ.eq('id', locationId) : locQ.order('is_default', { ascending: false })
   const { data: locs } = await locQ.limit(1)
   const loc = locs?.[0]
-  if (!loc) return err('No matching pickup location for this account', 400)
+  if (!loc) return err('No matching pickup location for this account', 400, 'invalid_location')
 
+  const now = new Date().toISOString()
+  const isRush = b.is_rush === true
   const { data, error } = await db
     .from('deliveries')
     .insert({
@@ -77,26 +119,52 @@ export async function POST(req: NextRequest) {
       pickup_area: loc.area,
       pickup_lat: loc.lat,
       pickup_lng: loc.lng,
-      dropoff_address: b.dropoff_address.trim().slice(0, 300),
-      dropoff_area: b.dropoff_area.trim().slice(0, 100),
-      dropoff_postal_code: b.dropoff_postal_code?.slice(0, 12) ?? null,
-      recipient_name: b.recipient_name?.slice(0, 120) ?? null,
-      recipient_phone: b.recipient_phone?.slice(0, 30) ?? null,
-      recipient_note: b.recipient_note?.slice(0, 500) ?? null,
-      is_rush: !!b.is_rush,
-      is_urgent: !!b.is_rush,
+      dropoff_address: dropoffAddress,
+      dropoff_area: dropoffArea,
+      dropoff_postal_code: str(b.dropoff_postal_code, 12),
+      dropoff_lat: coord(b.dropoff_lat, 90),
+      dropoff_lng: coord(b.dropoff_lng, 180),
+      recipient_name: str(b.recipient_name, 120),
+      recipient_phone: str(b.recipient_phone, 30),
+      recipient_note: str(b.recipient_note, 500),
+      buzz_code: str(b.buzz_code, 40),
+      is_rush: isRush,
+      is_urgent: isRush,
       is_out_of_town: false,
-      require_signature: !!b.require_signature,
+      require_signature: b.require_signature === true,
       require_photo: true,
-      require_pin: !!b.require_pin,
-      handoff_rule: 'door',
+      require_pin: b.require_pin === true,
+      handoff_rule: handoffRule,
+      handoff_require_id: requireId,
+      handoff_named_person: namedPerson,
+      handoff_named_relationship: str(b.handoff_named_relationship, 60),
+      handoff_location_note: str(b.handoff_location_note, 300),
       handoff_set_by: 'business',
-      posted_at: new Date().toISOString(),
+      handoff_updated_at: now,
+      posted_at: now,
       retry_count: 0,
+      api_idempotency_key: idemKey,
     })
     .select(PUBLIC_DELIVERY_COLUMNS)
     .single()
-  if (error) return err('Could not create delivery', 500)
-  void dispatchDeliveryEvent((data as unknown as { id: string }).id).catch(() => {})
+
+  if (error) {
+    // Two concurrent requests with the same key: the unique index rejects the second one.
+    if (error.code === '23505' && idemKey) {
+      const { data: existing } = await db
+        .from('deliveries')
+        .select(PUBLIC_DELIVERY_COLUMNS)
+        .eq('business_id', auth.business_id)
+        .eq('api_idempotency_key', idemKey)
+        .maybeSingle()
+      if (existing) return NextResponse.json({ data: existing, idempotent_replay: true }, { status: 200 })
+    }
+    return err('Could not create delivery', 500)
+  }
+
+  const newId = (data as unknown as { id: string }).id
+  if (items.length) {
+    await db.from('manifest_items').insert(items.map((i) => ({ ...i, delivery_id: newId })))
+  }
   return NextResponse.json({ data }, { status: 201 })
 }

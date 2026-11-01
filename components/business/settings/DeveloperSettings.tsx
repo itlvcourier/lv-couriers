@@ -88,11 +88,16 @@ export function DeveloperSettings() {
           <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">{`curl -X POST ${origin}/api/v1/deliveries \\
   -H "Authorization: Bearer YOUR_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"dropoffAddress":"123 Main St, Toronto","recipientName":"Sam","recipientPhone":"+14165550100"}'`}</pre>
+  -H "Idempotency-Key: your-order-id-123" \\
+  -d '{"dropoff_address":"123 Main St, Toronto","dropoff_area":"Downtown","recipient_name":"Sam","recipient_phone":"+14165550100"}'`}</pre>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Send the same <span className="font-mono">Idempotency-Key</span> when retrying and you get the original order back instead of a duplicate.
+            Optional fields: <span className="font-mono">dropoff_lat</span>, <span className="font-mono">dropoff_lng</span>, <span className="font-mono">buzz_code</span>, <span className="font-mono">recipient_note</span>, <span className="font-mono">is_rush</span>, <span className="font-mono">require_signature</span>, <span className="font-mono">require_pin</span>, <span className="font-mono">handoff_rule</span>, <span className="font-mono">handoff_require_id</span>, <span className="font-mono">handoff_named_person</span>, <span className="font-mono">items</span>, <span className="font-mono">location_id</span>.
+          </p>
         </div>
       </Panel>
 
-      <Panel title="Webhooks" description="We POST signed JSON to your URL whenever an order changes. Verify with the X-Doms-Signature header (HMAC-SHA256).">
+      <Panel title="Webhooks" description="We POST signed JSON to your URL whenever an order changes status. Verify X-Doms-Signature: HMAC-SHA256 of `${timestamp}.${raw body}` using your secret. Reply 2xx within 8s; failures retry for about 9 hours. Use X-Doms-Event-Id to ignore duplicates.">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
             <Input aria-label="Endpoint URL" placeholder="https://example.com/webhooks/doms" value={url} onChange={(e) => setUrl(e.target.value)} />
