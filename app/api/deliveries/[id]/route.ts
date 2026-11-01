@@ -1,17 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireAdmin, isAuthError } from '@/lib/auth-guard'
+import { requireDeliveryParty, requireAdmin, isAuthError } from '@/lib/auth-guard'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth(req)
+  const { id: deliveryId } = await params
+  const auth = await requireDeliveryParty(req, deliveryId)
   if (isAuthError(auth)) return auth
 
   try {
     const supabase = await createClient()
-    const { id: deliveryId } = await params
 
     const { data, error } = await supabase
       .from('deliveries')
@@ -48,7 +48,19 @@ export async function PATCH(
   try {
     const supabase = await createClient()
     const { id: deliveryId } = await params
-    const updateData = await req.json()
+    const body = await req.json()
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Invalid update payload' }, { status: 400 })
+    }
+    const blockedFields = new Set([
+      'id', 'business_id', 'location_id', 'tracking_code', 'recipient_phone',
+      'driver_id', 'pickup_driver_id', 'holder_driver_id', 'sorted_for_driver_id',
+      'created_at', 'updated_at', 'delivered_at', 'proof_photo_url', 'signature_url',
+    ])
+    const updateData = Object.fromEntries(Object.entries(body).filter(([key]) => !blockedFields.has(key)))
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No editable fields provided' }, { status: 400 })
+    }
 
     const { data, error } = await supabase
       .from('deliveries')
