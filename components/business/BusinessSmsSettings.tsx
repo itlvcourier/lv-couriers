@@ -26,7 +26,8 @@ type Settings = {
   sms_signature: string | null
   sms_note: string | null
 }
-type Response = { settings: Settings; defaultSignature: string }
+type LocationSettings = { id: string; name: string; address: string; sms_signature: string | null; sms_note: string | null; google_review_link: string | null }
+type Response = { settings: Settings; defaultSignature: string; locations: LocationSettings[] }
 
 export function BusinessSmsSettings({
   businessId,
@@ -73,6 +74,7 @@ export function BusinessSmsSettings({
               tagValues={{ business_name: businessName, business_phone: businessPhone ?? '' }}
               initial={data.settings}
               defaultSignature={data.defaultSignature}
+              locations={data.locations}
               onSaved={() => {
                 mutate()
                 setOpen(false)
@@ -94,14 +96,18 @@ function SmsSettingsForm({
   tagValues,
   initial,
   defaultSignature,
+  locations,
   onSaved,
 }: {
   businessId: string
   tagValues: Record<string, string>
   initial: Settings
   defaultSignature: string
+  locations: LocationSettings[]
   onSaved: () => void
 }) {
+  const [selectedLocationId, setSelectedLocationId] = useState('')
+  const selectedLocation = locations.find((location) => location.id === selectedLocationId)
   const [email, setEmail] = useState(initial.email ?? '')
   const [website, setWebsite] = useState(initial.website ?? '')
   const [googleReviewLink, setGoogleReviewLink] = useState(initial.google_review_link ?? '')
@@ -111,6 +117,14 @@ function SmsSettingsForm({
   const sigRef = useRef<HTMLTextAreaElement>(null)
 
   const effectiveSignature = signature.trim() || defaultSignature
+
+  const selectLocation = (locationId: string) => {
+    const location = locations.find((item) => item.id === locationId)
+    setSelectedLocationId(locationId)
+    setSignature(location?.sms_signature ?? '')
+    setNote(location?.sms_note ?? '')
+    setGoogleReviewLink(location?.google_review_link ?? '')
+  }
   const sigError = validateSmsSignature(signature)
   const preview = composeSms('Your order is on the way! Track it here: lvc.link/t/ABC123', effectiveSignature, {
     ...tagValues,
@@ -123,9 +137,9 @@ function SmsSettingsForm({
     recipient_last_name: 'Doe',
     dropoff_address: '88 Queen Ave',
     tracking_url: 'https://atria360.ca/track/ABC123',
-    location_name: 'Main location',
+    location_name: selectedLocation?.name ?? 'Main location',
     location_phone: tagValues.business_phone,
-    location_address: '',
+    location_address: selectedLocation?.address ?? '',
   })
 
   const insertTag = (name: string) => {
@@ -146,7 +160,7 @@ function SmsSettingsForm({
     try {
       await authedJson('/api/business/sms-settings', {
         method: 'PUT',
-        body: JSON.stringify({ businessId, email, website, googleReviewLink, smsNote: note, smsSignature: signature }),
+        body: JSON.stringify({ businessId, locationId: selectedLocationId || undefined, email, website, googleReviewLink, smsNote: note, smsSignature: signature }),
       })
       toast.success('Text message settings saved')
       onSaved()
@@ -159,6 +173,23 @@ function SmsSettingsForm({
 
   return (
     <div className="flex flex-col gap-5 px-4 pb-6">
+      {locations.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
+          <Label htmlFor="sms-location-scope">Customize for</Label>
+          <select
+            id="sms-location-scope"
+            value={selectedLocationId}
+            onChange={(event) => selectLocation(event.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+          >
+            <option value="">All locations (business default)</option>
+            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {selectedLocation ? `This override is used for ${selectedLocation.name} only.` : 'Set one default for every location, then add overrides for individual stores.'}
+          </p>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <Label htmlFor="sms-biz-email">Contact email</Label>
         <Input
