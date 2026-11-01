@@ -145,8 +145,12 @@ export function PickupVerification({ delivery, onClose }: PickupVerificationProp
         outOfTown: verifications[item.id]?.outOfTown ?? false,
       }))
 
-      verifyPickup(delivery.id, pickupVerifications)
+      await verifyPickup(delivery.id, pickupVerifications)
       setShowConfirmation(true)
+    } catch (err) {
+      toast.error('Pickup not saved', {
+        description: err instanceof Error ? err.message : 'Check your connection and try again.',
+      })
     } finally {
       setConfirming(false)
     }

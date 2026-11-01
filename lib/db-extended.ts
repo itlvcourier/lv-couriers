@@ -923,37 +923,31 @@ export async function createDriverInDb(driver: Omit<Driver, 'id'>): Promise<Driv
   return mapDriverRow(data as Row)
 }
 
+export type PickupPriceResult = { rate: number; gst: number; total: number; rate_card_id: string | null }
+
+/**
+ * Confirms pickup on the server. The database writes the confirmed counts and
+ * recalculates the price from the location's rate card, so the phone never
+ * decides what the business is billed.
+ */
 export async function applyPickupVerifications(
   deliveryId: string,
   verifications: PickupVerification[],
-  calculatedRate: number,
-  gstAmount: number,
-  totalAmount: number,
-  rateCardId: string | null,
-): Promise<void> {
+): Promise<PickupPriceResult> {
   const supabase = createClient()
-  // DB has only `quantity` on manifest_items — we overwrite it with the
-  // confirmed count at pickup. Verification photos are stored in
-  // delivery_flags (qty_adjusted) rather than per-item.
-  for (const v of verifications) {
-    const { error } = await supabase
-      .from('manifest_items')
-      .update({ quantity: v.confirmedQty })
-      .eq('id', v.itemId)
-    if (error) throw error
+  const { data, error } = await supabase.rpc('confirm_pickup', {
+    p_delivery_id: deliveryId,
+    p_items: verifications.map(v => ({ itemId: v.itemId, confirmedQty: v.confirmedQty })),
+    p_out_of_town: verifications.some(v => v.outOfTown),
+  })
+  if (error) throw friendlyDbError(error)
+  const r = data as Record<string, unknown>
+  return {
+    rate: Number(r.rate) || 0,
+    gst: Number(r.gst) || 0,
+    total: Number(r.total) || 0,
+    rate_card_id: (r.rate_card_id as string | null) ?? null,
   }
-  const { error: dErr } = await supabase
-    .from('deliveries')
-    .update({
-      status: 'picked_up',
-      picked_up_at: new Date().toISOString(),
-      calculated_rate: calculatedRate,
-      gst_amount: gstAmount,
-      total_amount: totalAmount,
-      rate_card_id: rateCardId,
-    })
-    .eq('id', deliveryId)
-  if (dErr) throw dErr
 }
 
 export async function insertDeliveryFlag(flag: {
@@ -1024,24 +1018,19 @@ export async function resumeFailedDelivery(deliveryId: string): Promise<FailureR
   return data as FailureResult
 }
 
+/** Business cancel. The database checks ownership/status and sets the fee from the rate card. */
 export async function cancelDeliveryInDb(
   deliveryId: string,
-  stage: 'before_depart' | 'en_route_pickup' | 'after_pickup',
-  fee: number,
   reason: string | null,
-): Promise<void> {
+): Promise<{ fee: number; reason: string }> {
   const supabase = createClient()
-  const { error } = await supabase
-    .from('deliveries')
-    .update({
-      status: 'cancelled',
-      cancelled_at: new Date().toISOString(),
-      cancellation_stage: stage,
-      cancellation_fee: fee,
-      cancellation_reason: reason,
-    })
-    .eq('id', deliveryId)
-  if (error) throw error
+  const { data, error } = await supabase.rpc('cancel_delivery_by_business', {
+    p_delivery_id: deliveryId,
+    p_reason: reason,
+  })
+  if (error) throw friendlyDbError(error)
+  const r = data as Record<string, unknown>
+  return { fee: Number(r.fee) || 0, reason: String(r.reason ?? reason ?? '') }
 }
 
 // ============================================================================

@@ -209,7 +209,7 @@ interface AppContextType {
   
   // Delivery functions
   claimDelivery: (deliveryId: string, driverId: string) => Promise<{ success: boolean; error?: string }>
-  verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => void
+  verifyPickup: (deliveryId: string, verifications: PickupVerification[]) => Promise<void>
   advanceStatus: (deliveryId: string) => void
   completeDelivery: (
     deliveryId: string,
@@ -222,7 +222,7 @@ interface AppContextType {
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
   postDelivery: (data: Partial<Delivery>) => Promise<Delivery | null>
   reassignDriver: (deliveryId: string, newDriverId: string) => void
-  cancelOrderByBusiness: (deliveryId: string, reason?: string) => { ok: boolean; error?: string }
+  cancelOrderByBusiness: (deliveryId: string, reason?: string) => Promise<{ ok: boolean; error?: string; fee?: number }>
   patchDelivery: (deliveryId: string, fields: Partial<Delivery>) => void
   // Admin dispatch assignment (bypasses driver limits, records who assigned)
   assignDelivery: (deliveryId: string, driverId: string, adminUserId: string) => void
@@ -781,47 +781,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { success: true }
   }, [drivers, currentUser?.name, settings.allowDriverSelfClaim, refreshData])
 
-  const verifyPickup = useCallback((deliveryId: string, verifications: PickupVerification[]) => {
-    // Persist the verified qty + rate to the DB. Rate calculation happens
-    // server-side via the existing billing trigger when we update the row.
-    const delivery = deliveries.find(d => d.id === deliveryId)
-    const rateCardForLoc = delivery ? rateCards.find(rc => rc.locationId === delivery.locationId) : null
-    
-    // Build confirmed manifest with verified quantities
-    const confirmedManifest = delivery?.manifest.map(item => {
-      const v = verifications.find(ver => ver.itemId === item.id)
-      return { ...item, confirmedQty: v?.confirmedQty ?? item.postedQty }
-    }) || []
-    
-    // Check if any item was marked out of town
-    const hasOutOfTown = verifications.some(v => v.outOfTown)
-    const effectiveOot = hasOutOfTown || delivery?.isOutOfTown || false
-    
-    // Calculate the rate using confirmed quantities
-    const breakdown = calculateBreakdown(
-      confirmedManifest,
-      effectiveOot,
-      delivery?.isUrgent || false,
-      rateCardForLoc || null,
-      true, // useConfirmed
-      delivery?.distanceKm ?? null
-    )
-    
-    const calculatedRate = breakdown.rate
-    const gstAmount = rateCardForLoc?.gstApplicable ? Math.round(calculatedRate * 0.05 * 100) / 100 : 0
-    const totalAmount = calculatedRate + gstAmount
-    
-    persist(
-      applyPickupVerifications(
-        deliveryId,
-        verifications,
-        calculatedRate,
-        gstAmount,
-        totalAmount,
-        rateCardForLoc?.id || null,
-      ),
-      'verifyPickup',
-    )
+  const verifyPickup = useCallback(async (deliveryId: string, verifications: PickupVerification[]) => {
+    // The database writes the counts and computes the price from the rate
+    // card; we only update local state once it has accepted the pickup.
+    const price = await applyPickupVerifications(deliveryId, verifications)
+    const calculatedRate = price.rate
+    const gstAmount = price.gst
+    const totalAmount = price.total
+
+    void authedFetch('/api/sms/picked-up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId }),
+    }).catch(err => console.error('[v0] picked-up SMS failed', err))
 
     setDeliveries(prev => prev.map(d => {
       if (d.id === deliveryId) {
@@ -864,7 +836,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return d
     }))
-  }, [deliveries, rateCards])
+  }, [])
 
   const advanceStatus = useCallback((deliveryId: string) => {
     // Compute next status outside the updater so we can persist it.
@@ -1485,7 +1457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Business-initiated cancel: only allowed before a driver has claimed the job.
   // Returns { ok, error } instead of throwing so the caller can show a friendly toast.
   const cancelOrderByBusiness = useCallback(
-    (deliveryId: string, reason?: string): { ok: boolean; error?: string } => {
+    async (deliveryId: string, reason?: string): Promise<{ ok: boolean; error?: string; fee?: number }> => {
       const delivery = deliveries.find(d => d.id === deliveryId)
       if (!delivery) {
         return { ok: false, error: 'Order not found' }
@@ -1501,15 +1473,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date().toISOString()
-      persist(
-        cancelDeliveryInDb(
-          deliveryId,
-          'before_depart',
-          0,
-          reason?.trim() || 'Cancelled by business (before claim)',
-        ),
-        'cancelOrderByBusiness',
-      )
+      let fee = 0
+      try {
+        const res = await cancelDeliveryInDb(deliveryId, reason?.trim() || null)
+        fee = res.fee
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Could not cancel order' }
+      }
       // Fire-and-forget: notify all parties of cancellation
       void authedFetch('/api/sms/cancelled', {
         method: 'POST',
@@ -1524,7 +1494,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 status: 'cancelled' as DeliveryStatus,
                 cancelledAt: now,
                 cancellationStage: 'before_depart',
-                cancellationFee: 0,
+                cancellationFee: fee,
                 cancellationReason: reason?.trim() || 'Cancelled by business (before claim)',
                 statusHistory: [
                   ...d.statusHistory,
@@ -1540,7 +1510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : d,
         ),
       )
-      return { ok: true }
+      return { ok: true, fee }
     },
     [deliveries],
   )

@@ -198,7 +198,7 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
   const confirmCancel = async () => {
     if (!cancelTarget) return
     setCancelling(true)
-    const result = cancelOrderByBusiness(cancelTarget.id, cancelReason)
+    const result = await cancelOrderByBusiness(cancelTarget.id, cancelReason)
     setCancelling(false)
 
     if (!result.ok) {
@@ -207,7 +207,9 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
     }
 
     toast.success('Order cancelled', {
-      description: 'No cancellation fee — driver hadn\u2019t claimed yet.',
+      description: result.fee
+        ? `A $${result.fee.toFixed(2)} cancellation fee applies per your rate card.`
+        : 'No cancellation fee — driver hadn\u2019t claimed yet.',
     })
     setCancelTarget(null)
     setCancelReason('')
