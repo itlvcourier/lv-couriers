@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { setOptOut, sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 import { logConsentEvent } from '@/lib/consent-server'
 import { CONSENT_REQUEST_LABELS, normalizePhone, type ConsentRequestType } from '@/lib/handoff'
 
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
     // Send confirmation (skip opt-out check on the confirmation itself)
     await sendSms({
       to: from,
-      body: 'You have been unsubscribed from DOMS By Atria360 SMS notifications. Reply START to re-subscribe.',
+      body: await renderSms('opt_out.confirm', {}),
       type: 'opt_out_confirm',
       skipOptOutCheck: true,
       skipLog: false,
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
     await setOptOut(from, false)
     await sendSms({
       to: from,
-      body: 'You have re-subscribed to DOMS By Atria360 SMS notifications. Reply STOP at any time to unsubscribe.',
+      body: await renderSms('opt_in.confirm', {}),
       type: 'opt_out_confirm',
       skipOptOutCheck: true,
       skipLog: false,
@@ -151,7 +152,7 @@ async function handleConsentReply(
     if (!request) {
       await sendSms({
         to: phone,
-        body: `DOMS By Atria360: We couldn't match code ${reply.code}. Reply YES or NO followed by the 4-digit code from the delivery text.`,
+        body: await renderSms('consent_reply.unknown_code', { code: reply.code }),
         type: 'consent_result',
         skipOptOutCheck: true,
         dedupeWindowMinutes: 0,
@@ -164,7 +165,7 @@ async function handleConsentReply(
     const codes = pending.map((p) => p.reply_code).filter(Boolean).join(', ')
     await sendSms({
       to: phone,
-      body: `DOMS By Atria360: You have ${pending.length} delivery approvals waiting. Reply YES or NO with the code from the text you're answering (codes: ${codes}).`,
+      body: await renderSms('consent_reply.multiple_pending', { count: pending.length, codes }),
       type: 'consent_result',
       skipOptOutCheck: true,
       dedupeWindowMinutes: 0,
@@ -195,10 +196,7 @@ async function handleConsentReply(
 
   await sendSms({
     to: phone,
-    body:
-      decision === 'approved'
-        ? 'DOMS By Atria360: Thanks, your approval was recorded and sent to your driver.'
-        : 'DOMS By Atria360: Got it, your driver will not leave the delivery. They will follow up with you.',
+    body: await renderSms(decision === 'approved' ? 'consent_reply.approved' : 'consent_reply.declined', {}),
     type: 'consent_result',
     deliveryId: request.delivery_id,
     skipOptOutCheck: true,

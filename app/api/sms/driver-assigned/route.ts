@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify the driver when they are assigned to a delivery.
@@ -80,13 +81,15 @@ export async function POST(req: NextRequest) {
 
   // Notify driver with pickup/dropoff details
   if (driver.phone) {
-    const driverMsg =
-      `${urgencyTag}Job assigned from ${businessName}.\n` +
-      `Pickup: ${delivery.pickup_address || delivery.pickup_area || 'See app'}\n` +
-      `Dropoff: ${delivery.dropoff_address || delivery.dropoff_area || 'See app'}\n` +
-      `Recipient: ${delivery.recipient_name || 'N/A'}` +
-      (delivery.recipient_phone ? ` (${delivery.recipient_phone})` : '') +
-      `\nTrack: ${trackingUrl}`
+    const driverMsg = await renderSms('driver_assigned.driver', {
+      rush: urgencyTag,
+      business_name: businessName,
+      pickup_address: delivery.pickup_address || delivery.pickup_area || 'See app',
+      dropoff_address: delivery.dropoff_address || delivery.dropoff_area || 'See app',
+      recipient_contact:
+        (delivery.recipient_name || 'N/A') + (delivery.recipient_phone ? ` (${delivery.recipient_phone})` : ''),
+      tracking_url: trackingUrl,
+    }, { deliveryId })
 
     sends.push(
       sendSms({
@@ -104,11 +107,13 @@ export async function POST(req: NextRequest) {
 
   // Notify business that a driver has been assigned
   if (delivery.businesses?.phone) {
-    const bizMsg =
-      `Driver ${driver.name} has been assigned to your delivery.\n` +
-      `Route: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}\n` +
-      `Recipient: ${delivery.recipient_name || 'N/A'}\n` +
-      `Track live: ${trackingUrl}`
+    const bizMsg = await renderSms('driver_assigned.business', {
+      driver_name: driver.name,
+      pickup_area: delivery.pickup_area || 'pickup',
+      dropoff_area: delivery.dropoff_area || 'dropoff',
+      recipient_name: delivery.recipient_name || 'N/A',
+      tracking_url: trackingUrl,
+    }, { deliveryId })
 
     sends.push(
       sendSms({
@@ -127,10 +132,12 @@ export async function POST(req: NextRequest) {
   // Notify the customer (recipient) with their live tracking link
   if (delivery.recipient_phone) {
     const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
-    const recipMsg =
-      `${greeting}, your delivery from ${businessName} has been assigned to driver ${driver.name}.\n` +
-      `Track it live: ${trackingUrl}\n` +
-      `Reply STOP to opt out.`
+    const recipMsg = await renderSms('driver_assigned.recipient', {
+      greeting,
+      business_name: businessName,
+      driver_name: driver.name,
+      tracking_url: trackingUrl,
+    }, { deliveryId })
 
     sends.push(
       sendSms({

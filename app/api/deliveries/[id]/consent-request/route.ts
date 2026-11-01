@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 import {
   CONSENT_REQUEST_LABELS,
   CONSENT_REQUEST_TTL_MINUTES,
@@ -148,10 +149,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             : note!
   // A per-request code lets a recipient with several pending approvals answer the right one.
   const replyCode = String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000)
-  const messageBody =
-    `DOMS By Atria360: ${driverName} is at your address with your delivery from ${businessName} and could not reach you. ` +
-    `May they ${ask}?${delivery.handoff_require_id ? ' The person receiving it must show photo ID.' : ''} ` +
-    `Reply YES ${replyCode} to approve or NO ${replyCode} to decline. Expires in ${CONSENT_REQUEST_TTL_MINUTES} min.`
+  const messageBody = await renderSms('consent_request.recipient', {
+    driver_name: driverName,
+    business_name: businessName,
+    ask,
+    id_notice: delivery.handoff_require_id ? ' The person receiving it must show photo ID.' : '',
+    reply_code: replyCode,
+    expires_minutes: CONSENT_REQUEST_TTL_MINUTES,
+  }, { deliveryId: delivery.id })
 
   const phone = normalizePhone(delivery.recipient_phone)
   const expiresAt = new Date(Date.now() + CONSENT_REQUEST_TTL_MINUTES * 60_000).toISOString()

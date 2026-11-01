@@ -94,6 +94,33 @@ export async function requireAdmin(req: NextRequest): Promise<AuthResult> {
 }
 
 /**
+ * Verify the caller is an admin, or the owner of the given business.
+ * Owners are business profiles with no location_id (managers are pinned to one).
+ */
+export async function requireAdminOrBusinessOwner(
+  req: NextRequest,
+  businessId: string | undefined | null,
+): Promise<AuthResult> {
+  const result = await requireAuth(req)
+  if (isAuthError(result)) return result
+  if (result.profile.role === 'admin') return result
+  if (!businessId || result.profile.role !== 'business' || result.profile.business_id !== businessId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { data } = await createAdminClient()
+    .from('profiles')
+    .select('location_id')
+    .eq('id', result.user.id)
+    .maybeSingle<{ location_id: string | null }>()
+
+  if (data?.location_id) {
+    return NextResponse.json({ error: 'Only the business owner can manage team members' }, { status: 403 })
+  }
+  return result
+}
+
+/**
  * Verify the caller is a party to a specific delivery: an admin, the driver
  * assigned to it, or the business that owns it. Used by delivery-scoped SMS
  * routes so drivers/businesses can trigger notifications for their own jobs

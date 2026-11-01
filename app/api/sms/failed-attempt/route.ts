@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify recipient and business when a delivery attempt fails.
@@ -66,11 +67,18 @@ export async function POST(req: NextRequest) {
   if (delivery.recipient_phone) {
     const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
     const recipMsg = attemptsLeft > 0
-      ? `${greeting}, we attempted delivery from ${businessName} but were unable to complete it. ` +
-        `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining. ` +
-        `Track your delivery: ${trackingUrl} — DOMS By Atria360`
-      : `${greeting}, we were unable to complete your delivery from ${businessName} after ${retries} attempt${retries !== 1 ? 's' : ''}. ` +
-        `Please contact us to arrange redelivery. Track: ${trackingUrl} — DOMS By Atria360`
+      ? await renderSms('failed_attempt.recipient_retry', {
+          greeting,
+          business_name: businessName,
+          attempts_left_label: `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''}`,
+          tracking_url: trackingUrl,
+        }, { deliveryId })
+      : await renderSms('failed_attempt.recipient_final', {
+          greeting,
+          business_name: businessName,
+          retries_label: `${retries} attempt${retries !== 1 ? 's' : ''}`,
+          tracking_url: trackingUrl,
+        }, { deliveryId })
     sends.push(
       sendSms({ to: delivery.recipient_phone, body: recipMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'recipient' })),
@@ -81,10 +89,17 @@ export async function POST(req: NextRequest) {
   if (businessPhone) {
     const recipientLabel = delivery.recipient_name || 'recipient'
     const bizMsg = attemptsLeft > 0
-      ? `Delivery to ${recipientLabel} failed (attempt ${retries}/${maxRetries}). ` +
-        `Driver will retry. Track: ${trackingUrl} — DOMS By Atria360`
-      : `Delivery to ${recipientLabel} permanently failed after ${retries} attempts. ` +
-        `Admin review required. Track: ${trackingUrl} — DOMS By Atria360`
+      ? await renderSms('failed_attempt.business_retry', {
+          recipient_name: recipientLabel,
+          retries,
+          max_retries: maxRetries,
+          tracking_url: trackingUrl,
+        }, { deliveryId })
+      : await renderSms('failed_attempt.business_final', {
+          recipient_name: recipientLabel,
+          retries,
+          tracking_url: trackingUrl,
+        }, { deliveryId })
     sends.push(
       sendSms({ to: businessPhone, body: bizMsg, type: 'failed_attempt', deliveryId })
         .then(r => ({ ok: r.ok, role: 'business' })),

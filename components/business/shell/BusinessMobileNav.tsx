@@ -8,7 +8,7 @@ interface BusinessMobileNavProps {
   onNavigate: (section: BusinessSection) => void
 }
 
-const MOBILE_ORDER: BusinessSection[] = ['orders', 'live', 'create', 'invoices', 'reports', 'profile', 'settings']
+const MOBILE_ORDER: BusinessSection[] = ['orders', 'live', 'invoices', 'create', 'reports', 'profile', 'settings']
 
 export function BusinessMobileNav({ active, onNavigate }: BusinessMobileNavProps) {
   const items = MOBILE_ORDER.map(id => BUSINESS_NAV.find(item => item.id === id)!)
@@ -31,12 +31,21 @@ export function BusinessMobileNav({ active, onNavigate }: BusinessMobileNavProps
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[10px] sm:text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  isActive ? 'font-medium text-foreground' : 'text-muted-foreground',
+                  isCreate
+                    ? 'font-semibold text-foreground'
+                    : isActive
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground',
                 )}
               >
                 {isCreate ? (
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  <span
+                    className={cn(
+                      '-mt-5 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background transition-transform active:scale-95',
+                      isActive && 'ring-brand/40',
+                    )}
+                  >
+                    <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                 ) : (
                   <span className="relative flex h-8 w-8 items-center justify-center">

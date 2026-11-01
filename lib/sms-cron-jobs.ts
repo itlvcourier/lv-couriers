@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 import { createFeedbackToken } from '@/lib/db-extended'
 import { feedbackLink } from '@/lib/app-url'
 
@@ -127,11 +128,11 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
 
       const result = await sendSms({
         to: delivery.recipient_phone,
-        body:
-          `${greeting}, how was your delivery from ${businessName}? ` +
-          `Share your feedback here: ${feedbackUrl} ` +
-          `(link expires in 7 days)\n` +
-          `Reply STOP to unsubscribe. — DOMS By Atria360`,
+        body: await renderSms('feedback_request.recipient', {
+          greeting,
+          business_name: businessName,
+          feedback_url: feedbackUrl,
+        }, { deliveryId: delivery.id, businessId: delivery.business_id, locationId: delivery.location_id }),
         type: 'feedback_request',
         deliveryId: delivery.id,
       })
@@ -211,17 +212,19 @@ export async function runWeeklySmsSummary(): Promise<WeeklySummaryResult> {
 
   const sends: Array<Promise<{ ok: boolean; businessId: string }>> = []
   for (const biz of (businesses ?? []) as Array<{ id: string; name: string; phone: string | null }>) {
-    if (!biz.phone) continue
+    const phone = biz.phone
+    if (!phone) continue
     const count = byBusiness.get(biz.id) ?? 0
     sends.push(
-      sendSms({
-        to: biz.phone,
-        body:
-          `${biz.name} weekly summary (${weekLabel}): ` +
-          `${count} ${count !== 1 ? 'deliveries' : 'delivery'} completed. ` +
-          `Log in for details. — DOMS By Atria360`,
+      (async () => sendSms({
+        to: phone,
+        body: await renderSms('weekly_summary.business', {
+          business_name: biz.name,
+          week_label: weekLabel,
+          count_label: `${count} ${count !== 1 ? 'deliveries' : 'delivery'}`,
+        }, { businessId: biz.id }),
         type: 'weekly_summary',
-      }).then((r) => ({ ok: r.ok, businessId: biz.id })),
+      }))().then((r) => ({ ok: r.ok, businessId: biz.id })),
     )
   }
 

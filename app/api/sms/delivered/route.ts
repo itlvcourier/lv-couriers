@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Send a "your package has been delivered" SMS to the recipient.
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   const trackingUrl = buildTrackingUrl(deliveryId)
-  const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}, your` : 'Your'
+  const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
 
   // Send to recipient + business in parallel. Both get the same tracking link
   // which renders the proof photo and signature so each side has a verifiable
@@ -78,7 +79,11 @@ export async function POST(req: NextRequest) {
   const sends: Array<Promise<{ ok: boolean; reason?: string; role: string }>> = []
 
   if (delivery.recipient_phone) {
-    const recipMsg = `${greeting} package from ${businessName} has been delivered. View proof: ${trackingUrl}\n\n— DOMS By Atria360`
+    const recipMsg = await renderSms('delivered.recipient', {
+      greeting,
+      business_name: businessName,
+      tracking_url: trackingUrl,
+    }, { deliveryId })
     sends.push(
       sendSms({
         to: delivery.recipient_phone,
@@ -95,9 +100,10 @@ export async function POST(req: NextRequest) {
 
   if (businessPhone) {
     const recipientLabel = delivery.recipient_name || 'recipient'
-    const bizMsg =
-      `Delivery to ${recipientLabel} completed. ` +
-      `View proof of delivery (photo + signature): ${trackingUrl}\n\n— DOMS By Atria360`
+    const bizMsg = await renderSms('delivered.business', {
+      recipient_name: recipientLabel,
+      tracking_url: trackingUrl,
+    }, { deliveryId })
     sends.push(
       sendSms({
         to: businessPhone,

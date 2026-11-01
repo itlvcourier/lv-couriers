@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Spinner } from '@/components/ui/spinner'
 import { ThemeToggleRow } from '@/components/shared/ThemeToggleRow'
+import { BusinessSmsSettings } from '@/components/business/BusinessSmsSettings'
 import {
   Sheet, 
   SheetContent, 
@@ -56,6 +57,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { authedFetch } from '@/lib/api-client'
+import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 
 export function BusinessProfile() {
   const { currentUser, businesses, deliveries, logout, isOwner, refreshData } = useApp()
@@ -216,7 +219,7 @@ export function BusinessProfile() {
     setIsCreatingUser(true)
 
     try {
-      const response = await fetch('/api/admin/create-business-user', {
+      const response = await authedFetch('/api/admin/create-business-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -360,7 +363,7 @@ export function BusinessProfile() {
     setIsResettingPassword(true)
 
     try {
-      const response = await fetch('/api/admin/reset-user-password', {
+      const response = await authedFetch('/api/admin/reset-user-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -659,6 +662,16 @@ export function BusinessProfile() {
             <Switch defaultChecked />
           </div>
           <Separator />
+          {userIsOwner && (
+            <>
+              <BusinessSmsSettings
+                businessId={business.id}
+                businessName={business.name}
+                businessPhone={primaryLocation?.phone}
+              />
+              <Separator />
+            </>
+          )}
           <ThemeToggleRow id="business-dark-mode" />
           <Separator />
           <div className="flex items-center justify-between py-3">
@@ -869,10 +882,11 @@ export function BusinessProfile() {
                 </div>
                 <div className="space-y-2">
                   <Label>Store Address *</Label>
-                  <Input
+                  <AddressAutocomplete
                     value={storeRequestForm.storeAddress}
-                    onChange={(e) => setStoreRequestForm({ ...storeRequestForm, storeAddress: e.target.value })}
-                    placeholder="123 Main St, Calgary, AB"
+                    onChange={(value) => setStoreRequestForm(prev => ({ ...prev, storeAddress: value }))}
+                    onSelect={(result) => setStoreRequestForm(prev => ({ ...prev, storeAddress: result.address }))}
+                    placeholder="Start typing the store address"
                     disabled={isSubmittingRequest}
                   />
                 </div>

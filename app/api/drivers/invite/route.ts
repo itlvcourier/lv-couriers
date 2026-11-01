@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { driverWelcomeEmail } from '@/lib/email-templates'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { appLink } from '@/lib/app-url'
@@ -137,7 +138,12 @@ export async function POST(req: NextRequest) {
 
   // Email + SMS in parallel. SMS is best-effort: skip-logged because the
   // sms_type enum has no "invite" value and the message isn't delivery-bound.
-  const smsBody = `Welcome to DOMS By Atria360, ${name}. Sign in at ${loginUrl} with email ${email} and temp password: ${tempPassword}. Please change it on first sign-in.`
+  const smsBody = await renderSms('driver_invite.driver', {
+    name,
+    login_url: loginUrl,
+    email,
+    temp_password: tempPassword,
+  })
   const [emailResult, smsResult] = await Promise.all([
     sendEmail({
       to: email,

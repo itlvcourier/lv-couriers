@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify business when their invoice has been generated and sent.
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('id, invoice_number, total, due_date, status, billing_email, recipient_phone, businesses(name)')
+    .select('id, invoice_number, total, due_date, status, billing_email, recipient_phone, business_id, businesses(name)')
     .eq('id', invoiceId)
     .maybeSingle<{
       id: string
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       status: string
       billing_email: string
       recipient_phone: string | null
+      business_id: string | null
       businesses: { name: string } | null
     }>()
 
@@ -62,10 +64,12 @@ export async function POST(req: NextRequest) {
 
   const result = await sendSms({
     to: invoice.recipient_phone,
-    body:
-      `Invoice #${invoice.invoice_number} for ${businessName} is ready. ` +
-      `Total: ${total}, due ${dueDate}. ` +
-      `Log in to view and pay. — DOMS By Atria360`,
+    body: await renderSms('invoice_ready.business', {
+      invoice_number: invoice.invoice_number,
+      business_name: businessName,
+      total,
+      due_date: dueDate,
+    }, { businessId: invoice.business_id }),
     type: 'invoice_ready',
     invoiceId,
   })

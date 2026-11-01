@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 import { createFeedbackToken } from '@/lib/db-extended'
 import { feedbackLink } from '@/lib/app-url'
 
@@ -71,11 +72,11 @@ export async function POST(req: NextRequest) {
 
     const result = await sendSms({
       to: delivery.recipient_phone,
-      body:
-        `${greeting}, how was your delivery from ${businessName}? ` +
-        `Share your feedback here: ${feedbackUrl} ` +
-        `(link expires in 7 days)\n` +
-        `Reply STOP to unsubscribe. — DOMS By Atria360`,
+      body: await renderSms('feedback_request.recipient', {
+        greeting,
+        business_name: businessName,
+        feedback_url: feedbackUrl,
+      }, { deliveryId }),
       type: 'feedback_request',
       deliveryId,
     })

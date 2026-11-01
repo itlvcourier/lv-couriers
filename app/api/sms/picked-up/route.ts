@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Notify business when driver has picked up the package.
@@ -61,10 +62,12 @@ export async function POST(req: NextRequest) {
   const driverName = delivery.drivers?.name || 'Driver'
   const recipientLabel = delivery.recipient_name || 'recipient'
   const trackingUrl = buildTrackingUrl(deliveryId)
-  const msg =
-    `Package picked up by ${driverName}. ` +
-    `Now heading to ${recipientLabel} at ${delivery.dropoff_address || 'destination'}. ` +
-    `Track: ${trackingUrl} — DOMS By Atria360`
+  const msg = await renderSms('picked_up.business', {
+    driver_name: driverName,
+    recipient_name: recipientLabel,
+    dropoff_address: delivery.dropoff_address || 'destination',
+    tracking_url: trackingUrl,
+  }, { deliveryId })
 
   const result = await sendSms({
     to: businessPhone,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms, buildTrackingUrl } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 
 /**
  * Send confirmation to the business when their order is successfully posted.
@@ -69,12 +70,13 @@ export async function POST(req: NextRequest) {
 
   // Notify business that their order was received
   if (delivery.businesses?.phone) {
-    const bizMsg =
-      `${urgencyTag}Order received!\n` +
-      `Route: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}\n` +
-      `Recipient: ${delivery.recipient_name || 'N/A'}\n` +
-      `We're finding a driver now.\n` +
-      `Track: ${trackingUrl}`
+    const bizMsg = await renderSms('order_confirmed.business', {
+      rush: urgencyTag,
+      pickup_area: delivery.pickup_area || 'pickup',
+      dropoff_area: delivery.dropoff_area || 'dropoff',
+      recipient_name: delivery.recipient_name || 'N/A',
+      tracking_url: trackingUrl,
+    }, { deliveryId })
 
     sends.push(
       sendSms({
@@ -92,10 +94,11 @@ export async function POST(req: NextRequest) {
 
   // Send tracking link to recipient immediately so they can watch for the driver
   if (delivery.recipient_phone) {
-    const recipientMsg =
-      `Hi ${delivery.recipient_name || 'there'}, ` +
-      `${businessName} has scheduled a delivery for you. ` +
-      `Track your package: ${trackingUrl}\n\n— DOMS By Atria360`
+    const recipientMsg = await renderSms('order_confirmed.recipient', {
+      recipient_name: delivery.recipient_name || 'there',
+      business_name: businessName,
+      tracking_url: trackingUrl,
+    }, { deliveryId })
 
     sends.push(
       sendSms({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
+import { renderSms } from '@/lib/sms-templates-server'
 import { requireAuth, isAuthError } from '@/lib/auth-guard'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
@@ -84,9 +85,12 @@ export async function POST(req: NextRequest) {
 
   const businessName = delivery.businesses?.name || 'DOMS By Atria360'
   const urgencyTag = delivery.is_urgent || delivery.is_rush ? '[RUSH] ' : ''
-  const message =
-    `${urgencyTag}New job from ${businessName}: ${delivery.pickup_area || 'pickup'} → ${delivery.dropoff_area || 'dropoff'}. ` +
-    `Open the driver app to claim.`
+  const message = await renderSms('job_alert.driver', {
+    rush: urgencyTag,
+    business_name: businessName,
+    pickup_area: delivery.pickup_area || 'pickup',
+    dropoff_area: delivery.dropoff_area || 'dropoff',
+  }, { deliveryId })
 
   let sent = 0
   let failed = 0
