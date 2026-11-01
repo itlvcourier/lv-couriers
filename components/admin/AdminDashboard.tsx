@@ -333,149 +333,46 @@ return (
         )}
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Total Deliveries</p>
-                <p className="text-2xl font-bold">{stats?.totalDeliveries || 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <span className="text-success">{stats?.completedToday || 0} today</span>
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Package className="w-6 h-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Stats Ledger */}
+      {(() => {
+        const primary = [
+          { label: 'Deliveries', value: stats?.totalDeliveries || 0, note: `${stats?.completedToday || 0} completed today` },
+          { label: 'In progress', value: stats?.activeDeliveries || 0, note: `${stats?.postedDeliveries || 0} awaiting claim`, tone: (stats?.postedDeliveries || 0) > 0 ? 'text-warning' : undefined },
+          { label: 'Drivers on duty', value: stats?.activeDrivers || 0, note: `of ${stats?.totalDrivers || 0} on roster` },
+          { label: 'Businesses', value: stats?.totalBusinesses || 0, note: `${businesses.filter(b => b.invite_status === 'active').length} active` },
+          { label: 'Avg rating', value: ratings?.avgOverallRating != null ? ratings.avgOverallRating.toFixed(1) : '—', note: `${ratings?.totalFeedback ?? 0} reviews · ${ratings?.last30Days ?? 0} this month` },
+        ]
+        const secondary = [
+          { label: 'Done', value: completedDeliveries.length },
+          { label: 'Failed', value: failedDeliveries.length, tone: failedDeliveries.length > 0 ? 'text-destructive' : undefined },
+          { label: 'Flagged', value: stats?.flaggedDeliveries || 0, tone: (stats?.flaggedDeliveries || 0) > 0 ? 'text-warning' : undefined },
+          { label: 'Verified drivers', value: drivers.filter((d: DbDriver) => d.invite_status === 'active').length },
+          { label: 'Busy', value: drivers.filter((d: DbDriver) => d.status === 'on_delivery').length },
+          { label: 'Success', value: `${completedDeliveries.length > 0 ? ((completedDeliveries.length / (stats?.totalDeliveries || 1)) * 100).toFixed(0) : 0}%` },
+        ]
+        return (
+          <section aria-label="Operations summary" className="overflow-hidden rounded-xl border border-border bg-card">
+            <dl className="grid grid-cols-2 divide-border md:grid-cols-5 md:divide-x">
+              {primary.map((s) => (
+                <div key={s.label} className="flex flex-col gap-1 border-b border-border p-5 md:border-b-0">
+                  <dt className="text-xs font-medium text-muted-foreground">{s.label}</dt>
+                  <dd className={`font-mono text-3xl font-semibold tabular-nums tracking-tight ${s.tone ?? 'text-foreground'}`}>{s.value}</dd>
+                  <dd className="text-xs text-muted-foreground">{s.note}</dd>
+                </div>
+              ))}
+            </dl>
+            <dl className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border bg-muted/30 px-5 py-3">
+              {secondary.map((s) => (
+                <div key={s.label} className="flex items-baseline gap-2">
+                  <dd className={`font-mono text-sm font-semibold tabular-nums ${s.tone ?? 'text-foreground'}`}>{s.value}</dd>
+                  <dt className="text-xs text-muted-foreground">{s.label}</dt>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )
+      })()}
 
-        <Card className="bg-warning/5 border-warning/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Active</p>
-                <p className="text-2xl font-bold text-warning">{stats?.activeDeliveries || 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats?.postedDeliveries || 0} awaiting claim
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-warning" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-success/5 border-success/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Active Drivers</p>
-                <p className="text-2xl font-bold text-success">{stats?.activeDrivers || 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  of {stats?.totalDrivers || 0} total
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <Truck className="w-6 h-6 text-success" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-info/5 border-info/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Businesses</p>
-                <p className="text-2xl font-bold text-info">{stats?.totalBusinesses || 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {businesses.filter(b => b.invite_status === 'active').length} active
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-info" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-warning/5 border-warning/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Avg Rating</p>
-                <p className="text-2xl font-bold text-warning flex items-center gap-1">
-                  {ratings?.avgOverallRating != null
-                    ? ratings.avgOverallRating.toFixed(1)
-                    : '—'}
-                  {ratings?.avgOverallRating != null && (
-                    <Star className="w-4 h-4 fill-warning text-warning" />
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <MessageCircle className="w-3 h-3 inline mr-0.5" />
-                  {ratings?.totalFeedback ?? 0} reviews · {ratings?.last30Days ?? 0} this month
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
-                <Star className="w-6 h-6 text-warning" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Secondary Stats */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 sm:grid-cols-6">
-        <Card>
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold">{completedDeliveries.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Done</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold text-destructive">{failedDeliveries.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Failed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold text-warning">{stats?.flaggedDeliveries || 0}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Flagged</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold">
-              {drivers.filter((d: DbDriver) => d.invite_status === 'active').length}
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Verified</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold">
-              {drivers.filter((d: DbDriver) => d.status === 'on_delivery').length}
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Busy</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-2 sm:p-3 text-center">
-            <p className="text-base sm:text-lg font-bold">
-              {completedDeliveries.length > 0 
-                ? ((completedDeliveries.length / (stats?.totalDeliveries || 1)) * 100).toFixed(0)
-                : 0}%
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Success</p>
-          </CardContent>
-        </Card>
-      </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Pending Deliveries */}
