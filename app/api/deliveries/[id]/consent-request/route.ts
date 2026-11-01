@@ -146,10 +146,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           : requestType === 'leave_at_door'
             ? 'leave it at your door'
             : note!
+  // A per-request code lets a recipient with several pending approvals answer the right one.
+  const replyCode = String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000)
   const messageBody =
     `DOMS By Atria360: ${driverName} is at your address with your delivery from ${businessName} and could not reach you. ` +
     `May they ${ask}?${delivery.handoff_require_id ? ' The person receiving it must show photo ID.' : ''} ` +
-    `Reply YES to approve or NO to decline. Expires in ${CONSENT_REQUEST_TTL_MINUTES} min.`
+    `Reply YES ${replyCode} to approve or NO ${replyCode} to decline. Expires in ${CONSENT_REQUEST_TTL_MINUTES} min.`
 
   const phone = normalizePhone(delivery.recipient_phone)
   const expiresAt = new Date(Date.now() + CONSENT_REQUEST_TTL_MINUTES * 60_000).toISOString()
@@ -164,6 +166,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       note,
       recipient_phone: phone,
       message_body: messageBody,
+      reply_code: replyCode,
       status: 'pending',
       expires_at: expiresAt,
     })

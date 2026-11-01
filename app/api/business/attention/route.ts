@@ -11,6 +11,7 @@ export type AttentionKind =
   | 'running_late'
   | 'unclaimed'
   | 'issue_open'
+  | 'verbal_handoff'
 
 export interface AttentionItem {
   id: string
@@ -132,6 +133,30 @@ export async function GET(req: NextRequest) {
         })
       }
     }
+  }
+
+  // Handoffs allowed only on the driver's word (no text approval) stay visible for 7 days.
+  const verbalSince = new Date(now - 7 * 24 * 3600 * 1000).toISOString()
+  const { data: verbal } = await db
+    .from('delivery_consent_events')
+    .select('id, delivery_id, summary, created_at, deliveries!inner(business_id, tracking_code, recipient_name, dropoff_address)')
+    .eq('event_type', 'handed_off')
+    .eq('details->>approvedVia', 'driver_recorded_authorization')
+    .eq('deliveries.business_id', businessId)
+    .gte('created_at', verbalSince)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  for (const v of verbal ?? []) {
+    const d = (Array.isArray(v.deliveries) ? v.deliveries[0] : v.deliveries) as
+      | { tracking_code: string | null; recipient_name: string | null; dropoff_address: string | null }
+      | null
+    items.push({
+      id: `vh-${v.id}`, kind: 'verbal_handoff', severity: 'warn', deliveryId: v.delivery_id,
+      trackingCode: d?.tracking_code ?? null, recipient: d?.recipient_name ?? null, address: d?.dropoff_address ?? null,
+      title: 'Handed off on verbal authorization',
+      detail: 'The courier reported the recipient approved by phone. This was not confirmed by text.',
+      at: v.created_at,
+    })
   }
 
   const { data: issues } = await db
