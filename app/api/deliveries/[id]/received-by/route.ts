@@ -7,11 +7,38 @@ import {
   cleanText,
   isHandoffRule,
   isReceivedByType,
+  type ConsentRequestType,
+  type ReceivedByType,
 } from '@/lib/handoff'
 import { logConsentEvent, resolveActorName } from '@/lib/consent-server'
 
 const AUTHORIZATION_EVENTS = ['in_person_authorization', 'phone_authorization']
 const NEEDS_NAME = new Set(['named_person', 'other_person', 'reception', 'security'])
+/** Approvals older than this (e.g. from a previous attempt) no longer count. */
+const APPROVAL_VALID_HOURS = 3
+/** For these, the person receiving must be the person the recipient approved. */
+const NEEDS_NAME_MATCH = new Set<ReceivedByType>(['other_person', 'named_person'])
+
+/** Which "received by" choice an approved text request actually covers. */
+function approvalCovers(requestType: ConsentRequestType, receivedBy: ReceivedByType): boolean {
+  switch (requestType) {
+    case 'other_person':
+    case 'neighbour':
+    case 'other':
+      return receivedBy === 'other_person' || receivedBy === 'named_person'
+    case 'reception':
+      return receivedBy === 'reception'
+    case 'security':
+      return receivedBy === 'security'
+    case 'leave_at_door':
+      return receivedBy === 'door'
+  }
+}
+
+function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return !!a && !!b && norm(a) === norm(b)
+}
 
 /**
  * Driver records who physically received the delivery, right before completing.
@@ -54,27 +81,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const rule = isHandoffRule(delivery.handoff_rule) ? delivery.handoff_rule : 'door'
   let approvedVia: string | null = null
   if (!allowedReceiversForRule(rule).includes(type)) {
-    const [{ data: approved }, { data: authEvents }] = await Promise.all([
+    const since = new Date(Date.now() - APPROVAL_VALID_HOURS * 3_600_000).toISOString()
+    const [{ data: approvals }, { data: authEvents }] = await Promise.all([
       admin
         .from('delivery_consent_requests')
-        .select('id')
+        .select('request_type, proposed_receiver_name')
         .eq('delivery_id', id)
         .eq('status', 'approved')
-        .limit(1),
+        .gte('responded_at', since)
+        .order('responded_at', { ascending: false }),
       admin
         .from('delivery_consent_events')
-        .select('id')
+        .select('details')
         .eq('delivery_id', id)
         .in('event_type', AUTHORIZATION_EVENTS)
-        .limit(1),
+        .gte('created_at', since),
     ])
-    if (approved && approved.length > 0) approvedVia = 'text_approval'
-    else if (authEvents && authEvents.length > 0) approvedVia = 'recorded_authorization'
-    else {
+
+    const matchingTypes = (approvals ?? []).filter(a =>
+      approvalCovers(a.request_type as ConsentRequestType, type),
+    )
+    const textMatch = matchingTypes.find(a => !NEEDS_NAME_MATCH.has(type) || sameName(a.proposed_receiver_name, name))
+    const recordedMatch =
+      NEEDS_NAME_MATCH.has(type) &&
+      (authEvents ?? []).some(e => sameName((e.details as { receiverName?: string } | null)?.receiverName, name))
+
+    if (textMatch) approvedVia = 'text_approval'
+    else if (recordedMatch) approvedVia = 'driver_recorded_authorization'
+    else if (matchingTypes.length > 0 && NEEDS_NAME_MATCH.has(type)) {
+      const approvedNames = matchingTypes.map(a => a.proposed_receiver_name).filter(Boolean).join(', ')
+      return NextResponse.json(
+        { error: `The recipient approved ${approvedNames || 'a different person'}. Enter that name, or request a new approval.` },
+        { status: 403 },
+      )
+    } else {
       return NextResponse.json(
         {
           error:
-            'This handoff is not allowed by the delivery instructions. Get the recipient\u2019s approval first, or mark the attempt as failed.',
+            'This handoff is not allowed by the delivery instructions. Get the recipient\u2019s approval for this exact handoff first, or mark the attempt as failed.',
         },
         { status: 403 },
       )
@@ -117,7 +161,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     actorRole: auth.profile.role === 'admin' ? 'admin' : 'driver',
     actorId: auth.user.id,
     actorName: actor.name,
-    summary: `Received by: ${RECEIVED_BY_LABELS[type]}${who}${idNote}${approvedVia ? ` (allowed via ${approvedVia.replace('_', ' ')})` : ''}.`,
+    summary: `Received by: ${RECEIVED_BY_LABELS[type]}${who}${idNote}${
+      approvedVia === 'text_approval'
+        ? ' (allowed: recipient approved by text)'
+        : approvedVia === 'driver_recorded_authorization'
+          ? ' (allowed: driver-reported verbal authorization, not confirmed by text)'
+          : ''
+    }.`,
     details: { ...update, approvedVia },
     lat: typeof body.lat === 'number' ? body.lat : null,
     lng: typeof body.lng === 'number' ? body.lng : null,
