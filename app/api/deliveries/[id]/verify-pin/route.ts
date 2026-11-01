@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { timingSafeEqual } from 'crypto'
 import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
@@ -20,17 +19,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const pin = String(body?.pin ?? '').replace(/\D/g, '')
   if (pin.length !== 4) return NextResponse.json({ error: 'Enter the 4-digit PIN' }, { status: 400 })
 
+  // Attempts are counted in the row itself so the 5-try lockout holds across
+  // every serverless instance, not just this one.
   const db = createAdminClient()
-  const { data: d } = await db
-    .from('deliveries')
-    .select('require_pin, delivery_pin')
-    .eq('id', id)
-    .maybeSingle<{ require_pin: boolean; delivery_pin: string | null }>()
-  if (!d?.require_pin || !d.delivery_pin) return NextResponse.json({ ok: true, notRequired: true })
+  const { data: result, error } = await db.rpc('verify_delivery_pin', { p_delivery: id, p_pin: pin })
+  if (error) return NextResponse.json({ error: 'PIN could not be checked. Try again.' }, { status: 500 })
 
-  const match = d.delivery_pin.length === pin.length && timingSafeEqual(Buffer.from(d.delivery_pin), Buffer.from(pin))
-  if (!match) return NextResponse.json({ error: 'PIN does not match' }, { status: 400 })
-
-  await db.from('deliveries').update({ pin_verified_at: new Date().toISOString() }).eq('id', id)
-  return NextResponse.json({ ok: true })
+  switch (result as string) {
+    case 'ok':
+      return NextResponse.json({ ok: true })
+    case 'not_required':
+      return NextResponse.json({ ok: true, notRequired: true })
+    case 'not_found':
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    case 'locked':
+      return NextResponse.json(
+        { error: 'PIN locked after 5 wrong tries. Contact dispatch to complete this delivery.' },
+        { status: 423 },
+      )
+    default:
+      return NextResponse.json({ error: 'PIN does not match' }, { status: 400 })
+  }
 }

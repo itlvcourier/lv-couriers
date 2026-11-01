@@ -43,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const db = createAdminClient()
   const [delivery, history, custody, consentReq, consentEv, address, sms, issues] = await Promise.all([
-    db.from('deliveries').select('id, proof_photo_url, signature_url, delivered_at, received_by_name, received_by_type, pin_verified_at').eq('id', id).maybeSingle(),
+    db.from('deliveries').select('id, proof_photo_url, signature_url, delivered_at, received_by_name, received_by_type, received_by_id_type, received_by_id_last4, pin_verified_at').eq('id', id).maybeSingle(),
     db.from('status_history').select('id, status, notes, created_at').eq('delivery_id', id),
     db.from('custody_events').select('id, event_type, actor_type, from_holder, to_holder, scan_method, notes, created_at').eq('delivery_id', id),
     db.from('delivery_consent_requests').select('id, request_type, proposed_receiver_name, status, reply_body, created_at, responded_at, expires_at').eq('delivery_id', id),
@@ -128,6 +128,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       title: d.signature_url && d.proof_photo_url ? 'Photo and signature captured' : d.signature_url ? 'Signature captured' : 'Proof photo captured',
       detail: d.received_by_name ? `Received by ${d.received_by_name}` : null,
       photoUrl: d.proof_photo_url,
+    })
+  }
+  if (d?.delivered_at && d.received_by_id_type) {
+    out.push({
+      id: 'id-check', at: d.delivered_at, kind: 'proof', tone: 'good',
+      title: 'Recipient ID checked',
+      detail: `${d.received_by_id_type}${d.received_by_id_last4 ? ` ending ${d.received_by_id_last4}` : ''}`,
     })
   }
   if (d?.pin_verified_at) {

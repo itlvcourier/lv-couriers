@@ -28,6 +28,8 @@ export interface HandoffSnapshot {
   receivedByType?: string | null
   receivedByName?: string | null
   receivedByRelationship?: string | null
+  receivedByIdType?: string | null
+  receivedByIdLast4?: string | null
 }
 
 export function handoffSnapshotFromRow(row: Record<string, unknown>): HandoffSnapshot {
@@ -41,6 +43,8 @@ export function handoffSnapshotFromRow(row: Record<string, unknown>): HandoffSna
     receivedByType: str('received_by_type'),
     receivedByName: str('received_by_name'),
     receivedByRelationship: str('received_by_relationship'),
+    receivedByIdType: str('received_by_id_type'),
+    receivedByIdLast4: str('received_by_id_last4'),
   }
 }
 
@@ -164,6 +168,16 @@ export function ConsentLog({ deliveryId, status, handoff, canEdit, onRuleChanged
               {handoff.receivedByName ? ` — ${handoff.receivedByName}` : ''}
               {handoff.receivedByRelationship ? ` (${handoff.receivedByRelationship})` : ''}
             </p>
+          )}
+          {receivedType && handoff.receivedByIdType && (
+            <p className="text-foreground">
+              <span className="text-muted-foreground">{'ID checked: '}</span>
+              {handoff.receivedByIdType}
+              {handoff.receivedByIdLast4 ? ` ending ${handoff.receivedByIdLast4}` : ''}
+            </p>
+          )}
+          {receivedType && handoff.handoffRequireId && !handoff.receivedByIdType && (
+            <p className="text-warning">ID was required but not recorded</p>
           )}
         </div>
       )}

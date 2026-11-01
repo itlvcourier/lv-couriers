@@ -137,7 +137,9 @@ export function BusinessOrders({ onNavigate }: BusinessOrdersProps) {
         handoffLocationNote: d.handoffLocationNote ?? null,
         receivedByType: d.receivedByType ?? null,
         receivedByName: d.receivedByName ?? null,
-        receivedByRelationship: d.receivedByRelationship ?? null,
+                    receivedByRelationship: d.receivedByRelationship ?? null,
+                    receivedByIdType: d.receivedByIdType ?? null,
+                    receivedByIdLast4: d.receivedByIdLast4 ?? null,
       },
       rawStatus: d.status,
       }

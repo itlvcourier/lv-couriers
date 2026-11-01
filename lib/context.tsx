@@ -214,7 +214,7 @@ interface AppContextType {
     photoUrls: string[],
     recipientNote: string | null,
     signatureUrl?: string | null,
-  ) => void
+  ) => Promise<void>
   failDelivery: (deliveryId: string, reason: FailReason, notes?: string) => void
   flagDelivery: (deliveryId: string, type: DeliveryFlag['type'], note: string, photoUrl: string | null) => void
   resolveFlag: (deliveryId: string, flagId: string, action: 'proceed' | 'cancel' | 'modify') => void
@@ -924,7 +924,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [deliveries])
 
-  const completeDelivery = useCallback((
+  const completeDelivery = useCallback(async (
     deliveryId: string,
     photoUrls: string[],
     recipientNote: string | null,
@@ -939,33 +939,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Both server routes only act on rows whose status is already 'delivered',
     // so they must run after the write commits — firing them in parallel made
     // them see the old status and silently skip the texts.
-    void updateDeliveryFields(deliveryId, {
-      status: 'delivered',
-      delivered_at: now.toISOString(),
-      duration_mins: durationMins,
-      proof_photo_url: primaryPhoto,
-      proof_photo_urls: photoUrls,
-      signature_url: signatureUrl ?? null,
-      recipient_note: recipientNote,
-    })
-      .then(() => {
-        const init = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deliveryId }),
-        }
-        // Recipient + business get the proof-of-delivery tracking link now.
-        void authedFetch('/api/sms/delivered', init).catch(err =>
-          console.error('[sms] delivered failed', err),
-        )
-        // The review request is queued (not sent now) so it doesn't land a
-        // second after the "delivered" text; the cron sweep sends it later.
-        void authedFetch('/api/reviews/schedule', init).catch(err =>
-          console.error('[sms] review scheduling failed', err),
-        )
+    // Awaited so a rejected write (PIN/ID enforcement, RLS, network) surfaces to
+    // the driver instead of showing "completed" for an order that is still open.
+    try {
+      await updateDeliveryFields(deliveryId, {
+        status: 'delivered',
+        delivered_at: now.toISOString(),
+        duration_mins: durationMins,
+        proof_photo_url: primaryPhoto,
+        proof_photo_urls: photoUrls,
+        signature_url: signatureUrl ?? null,
+        recipient_note: recipientNote,
       })
-      .catch(err => console.error('[db] completeDelivery failed:', err?.message || err))
-    
+    } catch (err) {
+      const raw = (err as { message?: string })?.message ?? ''
+      const friendly = raw.includes('DELIVERY_PIN_REQUIRED')
+        ? 'Verify the recipient PIN before completing'
+        : raw.includes('DELIVERY_ID_REQUIRED')
+          ? raw.split(': ').slice(1).join(': ') || 'ID check required before completing'
+          : 'Could not save the delivery. Check your connection and try again.'
+      throw new Error(friendly)
+    }
+
+    const init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryId }),
+    }
+    // Recipient + business get the proof-of-delivery tracking link now.
+    void authedFetch('/api/sms/delivered', init).catch(err => console.error('[sms] delivered failed', err))
+    // The review request is queued (not sent now) so it doesn't land a
+    // second after the "delivered" text; the cron sweep sends it later.
+    void authedFetch('/api/reviews/schedule', init).catch(err => console.error('[sms] review scheduling failed', err))
+
     if (delivery?.driverId) {
       const drv = drivers.find(dr => dr.id === delivery.driverId)
       persist(

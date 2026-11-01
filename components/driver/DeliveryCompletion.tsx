@@ -133,11 +133,11 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
       }
 
       // Complete the delivery with the full set of proof photos.
-      completeDelivery(delivery.id, photoUrls, recipientNote || null, signatureDataUrl)
+      await completeDelivery(delivery.id, photoUrls, recipientNote || null, signatureDataUrl)
       toast.success('Delivery completed!')
       onClose()
     } catch (error) {
-      toast.error('Failed to complete delivery')
+      toast.error(error instanceof Error ? error.message : 'Failed to complete delivery')
     } finally {
       setIsUploading(false)
     }

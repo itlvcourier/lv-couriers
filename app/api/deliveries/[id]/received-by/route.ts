@@ -85,7 +85,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Enter the name of the person who received it' }, { status: 400 })
   }
   const personHandoff = type !== 'door'
-  if (delivery.handoff_require_id && personHandoff && (!idType || idLast4.length < 4)) {
+  if (delivery.handoff_require_id && !personHandoff) {
+    return NextResponse.json(
+      { error: 'This order needs an ID check, so it must be handed to a person, not left at the door' },
+      { status: 400 },
+    )
+  }
+  if (delivery.handoff_require_id && (!idType || idLast4.length < 4)) {
     return NextResponse.json(
       { error: 'ID check required: choose the ID type and enter the last 4 characters' },
       { status: 400 },

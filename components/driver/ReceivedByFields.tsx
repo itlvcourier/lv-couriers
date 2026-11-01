@@ -34,7 +34,9 @@ interface Props {
 export function ReceivedByFields({ delivery, value, onChange }: Props) {
   const rule = isHandoffRule(delivery.handoffRule) ? delivery.handoffRule : 'door'
   const allowed = new Set(allowedReceiversForRule(rule))
-  const options = RECEIVED_BY_TYPES.filter(t => t !== 'named_person' || !!delivery.handoffNamedPerson)
+  const options = RECEIVED_BY_TYPES.filter(
+    t => (t !== 'named_person' || !!delivery.handoffNamedPerson) && !(delivery.handoffRequireId && t === 'door'),
+  )
   const set = <K extends keyof ReceiverValue>(k: K, v: ReceiverValue[K]) => onChange({ ...value, [k]: v })
   const showId = !!value.type && value.type !== 'door'
 
