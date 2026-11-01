@@ -99,20 +99,19 @@ export function BusinessInvoices() {
   return (
     <div className="space-y-6">
       {/* Current Month Running Total */}
-      <Card className="relative overflow-hidden border-border">
-        <span className="absolute inset-x-0 top-0 h-px bg-primary" aria-hidden="true" />
+      <Card className="border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-[11px] font-normal uppercase tracking-[0.16em] text-muted-foreground">
-            <TrendingUp className="h-3.5 w-3.5 text-primary" />
-            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })} · Running total
+          <CardTitle className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })} — running total
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="tabular font-[family-name:var(--font-display)] text-4xl font-light">{formatCurrency(runningTotalWithGst)}</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {monthDeliveries.length} deliveries this month
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <p className="tabular text-4xl font-semibold tracking-tight">{formatCurrency(runningTotalWithGst)}</p>
+              <p className="text-sm text-muted-foreground">
+                {monthDeliveries.length} {monthDeliveries.length === 1 ? 'delivery' : 'deliveries'} this month · incl. GST
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowBreakdown(true)}>

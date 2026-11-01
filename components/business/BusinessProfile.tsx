@@ -390,52 +390,48 @@ export function BusinessProfile() {
     <div className="space-y-6 pb-8">
       {/* Profile Header */}
       <Card className="overflow-hidden">
-        <div className="h-24 border-b border-border bg-muted [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:24px_24px]" />
-        <CardContent className="relative pt-0 pb-6">
-          <div className="flex flex-col items-center -mt-12">
-            <Avatar className="w-24 h-24 border-4 border-card">
-              <AvatarFallback className="bg-foreground text-background font-[family-name:var(--font-display)] text-xl font-light">
+        <CardContent className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14 rounded-xl">
+              <AvatarFallback className="rounded-xl bg-foreground text-background text-lg font-medium">
                 {getInitials(business.name)}
               </AvatarFallback>
             </Avatar>
-            <h2 className="mt-4 text-xl font-semibold">{business.name}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={business.inviteStatus === 'active' ? 'default' : 'secondary'}>
-                {business.inviteStatus === 'active' ? 'Active' : business.inviteStatus === 'pending' ? 'Pending' : 'Deactivated'}
-              </Badge>
-              <Badge variant="outline" className="border-success text-success">
-                <Shield className="w-3 h-3 mr-1" />
-                Verified
-              </Badge>
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-xl font-semibold tracking-tight">{business.name}</h2>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${business.inviteStatus === 'active' ? 'bg-success' : 'bg-muted-foreground'}`}
+                    aria-hidden="true"
+                  />
+                  {business.inviteStatus === 'active' ? 'Active' : business.inviteStatus === 'pending' ? 'Pending' : 'Deactivated'}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Shield className="h-3 w-3" />
+                  Verified business
+                </span>
+              </div>
             </div>
           </div>
+
+          <dl className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border">
+            <div className="flex flex-col gap-1 px-4 py-3">
+              <dt className="text-xs text-muted-foreground">Orders</dt>
+              <dd className="tabular text-lg font-semibold">{businessDeliveries.length}</dd>
+            </div>
+            <div className="flex flex-col gap-1 px-4 py-3">
+              <dt className="text-xs text-muted-foreground">Delivered</dt>
+              <dd className="tabular text-lg font-semibold">{completedDeliveries.length}</dd>
+            </div>
+            <div className="flex flex-col gap-1 px-4 py-3">
+              <dt className="text-xs text-muted-foreground">Spent</dt>
+              <dd className="tabular text-lg font-semibold">${totalSpent.toFixed(2)}</dd>
+            </div>
+          </dl>
         </CardContent>
       </Card>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-2">
-        <Card>
-          <CardContent className="p-3 text-center">
-            <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary mx-auto mb-1" />
-            <p className="text-lg sm:text-2xl font-bold">{businessDeliveries.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Total Orders</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <Star className="w-4 h-4 sm:w-5 sm:h-5 text-success mx-auto mb-1" />
-            <p className="text-lg sm:text-2xl font-bold">{completedDeliveries.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Completed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-warning mx-auto mb-1" />
-            <p className="text-lg sm:text-2xl font-bold">${totalSpent.toFixed(0)}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Total Spent</p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Contact Info */}
       <Card>
