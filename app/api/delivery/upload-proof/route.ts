@@ -1,27 +1,32 @@
 import { put } from '@vercel/blob'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireDeliveryParty, isAuthError } from '@/lib/auth-guard'
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const formData = await request.formData()
-    const imageData = formData.get('image') as string
     const deliveryId = formData.get('deliveryId') as string
+    const auth = await requireDeliveryParty(request, deliveryId)
+    if (isAuthError(auth)) return auth
+
+    const imageData = formData.get('image') as string
     const photoType = formData.get('photoType') as string // 'pickup' | 'delivery' | 'signature'
 
     if (!imageData || !deliveryId || !photoType) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    if (!/^data:image\/(jpeg|png|webp);base64,/i.test(imageData) || !['pickup', 'delivery', 'signature'].includes(photoType)) {
+      return NextResponse.json({ error: 'Invalid proof format' }, { status: 400 })
+    }
+    if (imageData.length > 14 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Proof image is too large' }, { status: 413 })
+    }
+
     // Convert base64 to blob
-    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
+    const base64Data = imageData.replace(/^data:image\/(jpeg|png|webp);base64,/i, '')
     const buffer = Buffer.from(base64Data, 'base64')
     
     // Determine content type
