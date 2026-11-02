@@ -243,6 +243,7 @@ export function DeliveryCompletion({ delivery, onClose }: DeliveryCompletionProp
               onCapture={handlePhotoCapture}
               label={photoCount === 0 ? 'Take Proof Photo' : 'Add Another Photo'}
               required={photoCount === 0}
+              autoConfirm
             />
 
             {!hasEnoughPhotos && (

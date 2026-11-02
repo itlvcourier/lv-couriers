@@ -81,7 +81,7 @@ export function OrderActivity({ deliveryId, canReport }: { deliveryId: string; c
     }
   }
 
-  const entries = data?.entries ?? []
+  const entries = [...(data?.entries ?? [])].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
 
   return (
     <section aria-labelledby={`activity-${deliveryId}`} className="flex flex-col gap-3">

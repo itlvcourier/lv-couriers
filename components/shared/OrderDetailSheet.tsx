@@ -91,6 +91,7 @@ export function OrderDetailSheet({
         ...baseOrder,
         proofPhotoUrl: baseOrder.proofPhotoUrl || media.proofPhotoUrl,
         proofPhotoUrls: baseOrder.proofPhotoUrls?.length ? baseOrder.proofPhotoUrls : media.proofPhotoUrls,
+        pickupPhotoUrl: baseOrder.pickupPhotoUrl || media.pickupPhotoUrl,
         signatureUrl: baseOrder.signatureUrl || media.signatureUrl,
       }
     : baseOrder

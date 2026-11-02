@@ -14,6 +14,7 @@ interface CameraCaptureProps {
   label?: string
   required?: boolean
   existingImage?: string | null
+  autoConfirm?: boolean
 }
 
 export function CameraCapture({ 
@@ -21,7 +22,8 @@ export function CameraCapture({
   onCancel,
   label = 'Take Photo',
   required = false,
-  existingImage = null 
+  existingImage = null,
+  autoConfirm = false,
 }: CameraCaptureProps) {
   const [preview, setPreview] = useState<string | null>(existingImage)
   const [isCapturing, setIsCapturing] = useState(false)
@@ -38,7 +40,9 @@ export function CameraCapture({
       try {
         const dataUrl = await takeNativePhoto('camera', { quality: 80 })
         if (isUsableImageDataUrl(dataUrl)) {
-          setPreview(await normalizeImageDataUrl(dataUrl))
+          const normalized = await normalizeImageDataUrl(dataUrl)
+          if (autoConfirm) onCapture(normalized)
+          else setPreview(normalized)
         } else if (dataUrl) {
           toast.error('Could not capture the photo. Please try again.')
         }
@@ -119,11 +123,13 @@ export function CameraCapture({
       toast.error('Could not capture the photo. Please try again.')
       return
     }
-    setPreview(await normalizeImageDataUrl(dataUrl))
-    
+    const normalized = await normalizeImageDataUrl(dataUrl)
+    if (autoConfirm) onCapture(normalized)
+    else setPreview(normalized)
+
     // Stop camera
     stopCamera()
-  }, [stopCamera])
+  }, [autoConfirm, onCapture, stopCamera])
 
   // Switch camera (front/back)
   const switchCamera = useCallback(() => {
@@ -159,7 +165,9 @@ export function CameraCapture({
         toast.error('That image could not be read. Please try another file.')
         return
       }
-      setPreview(await normalizeImageDataUrl(dataUrl))
+      const normalized = await normalizeImageDataUrl(dataUrl)
+      if (autoConfirm) onCapture(normalized)
+      else setPreview(normalized)
     }
     reader.readAsDataURL(file)
   }
@@ -205,7 +213,7 @@ export function CameraCapture({
       return
     }
     fileInputRef.current?.click()
-  }, [])
+  }, [autoConfirm, onCapture])
 
   return (
     <div className="space-y-3">
@@ -317,7 +325,7 @@ export function CameraCapture({
       )}
 
       {/* Confirm/Cancel buttons when preview exists and not yet confirmed */}
-      {preview && !existingImage && (
+      {preview && !existingImage && !autoConfirm && (
         <div className="flex gap-3">
           {onCancel && (
             <Button

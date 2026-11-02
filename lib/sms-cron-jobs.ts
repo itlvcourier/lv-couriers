@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendSms } from '@/lib/twilio'
 import { renderSms } from '@/lib/sms-templates-server'
 import { createFeedbackToken } from '@/lib/db-extended'
-import { feedbackLink } from '@/lib/app-url'
+import { shortFeedbackLink } from '@/lib/app-url'
 
 /**
  * Reusable SMS cron jobs.
@@ -122,7 +122,7 @@ export async function runReviewRequests(): Promise<ReviewRequestsResult> {
         // customer_feedback insert policy only allows the authenticated role.
         supabase,
       )
-  const feedbackUrl = feedbackLink(token)
+  const feedbackUrl = shortFeedbackLink(token)
       const businessName = delivery.businesses?.name || 'DOMS By Atria360'
       const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
 

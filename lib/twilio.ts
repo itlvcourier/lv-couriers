@@ -1,7 +1,7 @@
 import 'server-only'
 import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { trackingLink } from '@/lib/app-url'
+import { shortTrackingLink } from '@/lib/app-url'
 
 /**
  * SMS adapter wrapping Twilio.
@@ -345,5 +345,5 @@ export async function setOptOut(phone: string, optedOut: boolean): Promise<void>
  * Build a public tracking URL for a delivery.
  */
 export function buildTrackingUrl(deliveryId: string): string {
-  return trackingLink(deliveryId)
+  return shortTrackingLink(deliveryId)
 }

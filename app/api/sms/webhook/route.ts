@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   const supabase = createAdminClient()
 
   // Handoff approval replies take priority over opt-in keywords (YES).
-  const consentReply = parseConsentReply(rawMsg)
+  const consentReply = parseConsentReply(params.get('Body') || '')
   if (consentReply) {
     const handled = await handleConsentReply(supabase, from, consentReply, params.get('Body') || '')
     if (handled) {
@@ -105,10 +105,11 @@ export async function POST(req: Request) {
 type ConsentReply = { decision: 'approved' | 'declined'; code: string | null }
 
 function parseConsentReply(msg: string): ConsentReply | null {
-  const word = msg.replace(/[^A-Z]/g, '')
-  const code = msg.match(/\b(\d{4})\b/)?.[1] ?? null
-  if (['YES', 'Y', 'APPROVE', 'APPROVED', 'OK', 'OKAY'].includes(word)) return { decision: 'approved', code }
-  if (['NO', 'N', 'DECLINE', 'DECLINED', 'DENY'].includes(word)) return { decision: 'declined', code }
+  const normalized = msg.trim().toUpperCase()
+  const code = normalized.match(/\b(\d{4})\b/)?.[1] ?? null
+  const firstWord = normalized.match(/^[^A-Z]*(YES|Y|APPROVE|APPROVED|OK|OKAY|NO|N|DECLINE|DECLINED|DENY)\b/)?.[1]
+  if (firstWord && ['YES', 'Y', 'APPROVE', 'APPROVED', 'OK', 'OKAY'].includes(firstWord)) return { decision: 'approved', code }
+  if (firstWord && ['NO', 'N', 'DECLINE', 'DECLINED', 'DENY'].includes(firstWord)) return { decision: 'declined', code }
   return null
 }
 
@@ -135,15 +136,23 @@ async function handleConsentReply(
   const decision = reply.decision
   const phone = normalizePhone(from)
   const now = new Date().toISOString()
-  const { data: pending } = await supabase
+  const selectPending = () => supabase
     .from('delivery_consent_requests')
     .select('id, delivery_id, proposed_receiver_name, proposed_relationship, request_type, reply_code')
-    .eq('recipient_phone', phone)
     .eq('status', 'pending')
     .gt('expires_at', now)
     .order('created_at', { ascending: false })
     .limit(10)
-    .returns<PendingConsent[]>()
+
+  let { data: pending } = await selectPending().eq('recipient_phone', phone).returns<PendingConsent[]>()
+  // SMS providers can format the same Canadian number differently (+1, 1, or local).
+  // Retry by the last ten digits so a valid reply is not silently ignored.
+  if (!pending?.length) {
+    const lastTen = phone.replace(/\D/g, '').slice(-10)
+    if (lastTen.length === 10) {
+      pending = (await selectPending().ilike('recipient_phone', `%${lastTen}`).returns<PendingConsent[]>()).data
+    }
+  }
   if (!pending || pending.length === 0) return false
 
   let request: PendingConsent | undefined
@@ -172,6 +181,8 @@ async function handleConsentReply(
     })
     return true
   }
+
+  if (!request) return true
 
   // Guard against a double reply racing: only flip if still pending.
   const { data: updated } = await supabase

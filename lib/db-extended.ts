@@ -459,6 +459,7 @@ const DELIVERY_SELECT = `${DELIVERY_COLUMNS_WITHOUT_MEDIA}, business:businesses(
 export type DeliveryMedia = {
   proofPhotoUrl: string | null
   proofPhotoUrls: string[]
+  pickupPhotoUrl: string | null
   signatureUrl: string | null
 }
 
@@ -467,7 +468,7 @@ export async function loadDeliveryMedia(deliveryId: string): Promise<DeliveryMed
   const supabase = createClient()
   const { data, error } = await supabase
     .from('deliveries')
-    .select('proof_photo_url, proof_photo_urls, signature_url')
+    .select('proof_photo_url, proof_photo_urls, pickup_photo_url, signature_url')
     .eq('id', deliveryId)
     .maybeSingle()
   if (error) throw error
@@ -476,6 +477,7 @@ export async function loadDeliveryMedia(deliveryId: string): Promise<DeliveryMed
   return {
     proofPhotoUrl: primary,
     proofPhotoUrls: all.length ? all : primary ? [primary] : [],
+    pickupPhotoUrl: (data?.pickup_photo_url as string | null) ?? null,
     signatureUrl: (data?.signature_url as string | null) ?? null,
   }
 }
