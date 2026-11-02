@@ -19,9 +19,17 @@ export function appLink(path: string): string {
 }
 
 export function trackingLink(deliveryOrCode: string): string {
-  return appLink(`/track/${deliveryOrCode}`)
+  return appLink(`/track/${encodeURIComponent(deliveryOrCode)}`)
+}
+
+export function shortTrackingLink(code: string): string {
+  return appLink(`/t/${encodeURIComponent(code)}`)
 }
 
 export function feedbackLink(token: string): string {
-  return appLink(`/feedback/${token}`)
+  return appLink(`/feedback/${encodeURIComponent(token)}`)
+}
+
+export function shortFeedbackLink(token: string): string {
+  return appLink(`/r/${encodeURIComponent(token)}`)
 }

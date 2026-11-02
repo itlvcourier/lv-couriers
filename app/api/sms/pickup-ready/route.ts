@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const { data: delivery, error } = await supabase
     .from('deliveries')
     .select(
-      'id, status, recipient_name, recipient_phone, dropoff_address, businesses(name, phone)',
+      'id, tracking_code, status, recipient_name, recipient_phone, dropoff_address, businesses(name, phone)',
     )
     .eq('id', deliveryId)
     .maybeSingle<{

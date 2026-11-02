@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   const { data: delivery, error: dErr } = await supabase
     .from('deliveries')
-    .select('id, status, recipient_phone, recipient_name, business_id')
+    .select('id, tracking_code, status, recipient_phone, recipient_name, business_id')
     .eq('id', deliveryId)
     .maybeSingle()
 
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: 'No recipient or business phone' })
   }
 
-  const trackingUrl = buildTrackingUrl(deliveryId)
+  const trackingUrl = buildTrackingUrl(delivery.tracking_code || deliveryId)
   const greeting = delivery.recipient_name ? `Hi ${delivery.recipient_name}` : 'Hi'
 
   // Send to recipient + business in parallel. Both get the same tracking link
