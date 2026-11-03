@@ -37,7 +37,7 @@ import type {
   LocationReport,
   BusinessReport,
 } from './types'
-import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES, calculateBreakdown } from './billing'
+import { calculateInvoiceLines, calculateGST, generateInvoiceNumber, DEFAULT_RATE_CARD_VALUES, calculateBreakdown, estimateDeliveryPrice } from './billing'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 import { unregisterDevicePush } from '@/lib/native/push'
 import { isPageHidden } from '@/lib/visibility'
@@ -2016,6 +2016,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ).reduce((sum, inv) => sum + inv.total, 0)
     const paidInvoices = locationInvoices.filter(inv => inv.status === 'paid')
       .reduce((sum, inv) => sum + inv.total, 0)
+
+    // Reports must show delivery spend even before an invoice is generated.
+    // Prefer the locked delivery total, then the locked rate, then the current
+    // location rate card so new deliveries do not incorrectly report $0.
+    const rateCard = rateCards.find(rc => rc.locationId === locationId) || null
+    const deliverySpend = periodDeliveries.reduce((sum, delivery) => {
+      const amount = delivery.totalAmount ?? delivery.calculatedRate ?? estimateDeliveryPrice(delivery, rateCard)
+      return sum + (amount || 0)
+    }, 0)
+    const reportSpend = deliverySpend > 0 ? deliverySpend : paidInvoices + pendingInvoices
     
     // Aggregate feedback (from delivery flags)
     const feedbackFlags = periodDeliveries.flatMap(d => d.flags || [])
@@ -2035,7 +2045,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       failedDeliveries: failedDeliveries.length,
       cancelledDeliveries: cancelledDeliveries.length,
       avgDeliveryMins,
-      totalSpend: paidInvoices + pendingInvoices,
+      totalSpend: reportSpend,
       pendingInvoices,
       paidInvoices,
       avgRating: null, // TODO: Implement when ratings are added
@@ -2044,7 +2054,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       negativeCount: feedbackFlags.length,
       issues: Array.from(issueTypes.entries()).map(([type, count]) => ({ type, count })),
     }
-  }, [businesses, deliveries, invoices])
+  }, [businesses, deliveries, invoices, rateCards])
   
   // Generate a consolidated report for a business (all locations)
   const getBusinessReport = useCallback((
