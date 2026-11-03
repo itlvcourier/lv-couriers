@@ -749,7 +749,7 @@ export function AdminSettings() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-foreground">
             <Clock className="w-5 h-5" />
-            Invoice Settings
+                    Company & Invoice Settings
           </CardTitle>
           <CardDescription>Configure billing automation, reminders, and escalation</CardDescription>
         </CardHeader>
@@ -920,7 +920,7 @@ export function AdminSettings() {
           </Button>
         </CardContent>
       </Card>
-      {/* Invoice Template Settings */}
+      {/*                 Company Contact & Invoice Information */}
       <Card className="bg-[var(--bg-card)] border-[var(--border-color)]">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-foreground">

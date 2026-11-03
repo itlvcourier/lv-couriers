@@ -83,6 +83,19 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [expired, setExpired] = useState(false)
+  const [companyPhone, setCompanyPhone] = useState('5875869139')
+
+  useEffect(() => {
+    const supabase = createClient()
+    void supabase
+      .from('system_settings')
+      .select('invoice_company_phone')
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }: { data: { invoice_company_phone?: string | null } | null }) => {
+        if (data?.invoice_company_phone) setCompanyPhone(data.invoice_company_phone)
+      })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -277,7 +290,7 @@ export default function TrackingPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <TrackingHeader />
+        <TrackingHeader companyPhone={companyPhone} />
         <main className="flex-1 flex items-center justify-center p-4">
           <Spinner className="size-6 text-primary" />
         </main>
@@ -288,7 +301,7 @@ export default function TrackingPage() {
   if (expired) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <TrackingHeader />
+        <TrackingHeader companyPhone={companyPhone} />
         <main className="flex-1 flex items-center justify-center p-4">
           <Card className="max-w-md w-full p-8 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
@@ -302,8 +315,8 @@ export default function TrackingPage() {
             </p>
             <p className="text-sm text-muted-foreground">
               Contact DOMS By Atria360:{' '}
-              <a href="tel:5875759699" className="text-primary font-medium">
-                587-575-9699
+              <a href={`tel:${companyPhone}`} className="text-primary font-medium">
+                {companyPhone}
               </a>
             </p>
           </Card>
@@ -315,7 +328,7 @@ export default function TrackingPage() {
   if (notFound || !delivery) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <TrackingHeader />
+        <TrackingHeader companyPhone={companyPhone} />
         <main className="flex-1 flex items-center justify-center p-4">
           <Card className="max-w-md w-full p-8 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
@@ -327,8 +340,8 @@ export default function TrackingPage() {
             </p>
             <p className="text-sm text-muted-foreground">
               Contact DOMS By Atria360:{' '}
-              <a href="tel:5875759699" className="text-primary font-medium">
-                587-575-9699
+              <a href={`tel:${companyPhone}`} className="text-primary font-medium">
+                {companyPhone}
               </a>
             </p>
           </Card>
@@ -345,7 +358,7 @@ export default function TrackingPage() {
   ) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <TrackingHeader />
+        <TrackingHeader companyPhone={companyPhone} />
         <main className="flex-1 flex items-center justify-center p-4">
           <Card className="max-w-md w-full p-8 text-center">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -357,8 +370,8 @@ export default function TrackingPage() {
             </p>
             <p className="text-sm text-muted-foreground mb-4">
               Please contact us:{' '}
-              <a href="tel:5875759699" className="text-primary font-medium">
-                587-575-9699
+              <a href={`tel:${companyPhone}`} className="text-primary font-medium">
+                {companyPhone}
               </a>
             </p>
           </Card>
@@ -402,7 +415,7 @@ export default function TrackingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <TrackingHeader business={delivery.business} />
+      <TrackingHeader business={delivery.business} companyPhone={companyPhone} />
 
       <main className="flex-1 p-4 max-w-2xl mx-auto w-full">
         {(delivery.delivery_pin || delivery.business?.tracking_message) && (
@@ -664,11 +677,11 @@ export default function TrackingPage() {
         <div className="text-center py-6">
           <p className="text-muted-foreground mb-2">Questions?</p>
           <a
-            href="tel:5875759699"
+            href={`tel:${companyPhone}`}
             className="inline-flex items-center gap-2 text-primary font-medium"
           >
             <Phone className="w-4 h-4" />
-            Call 587-575-9699
+            Call {companyPhone}
           </a>
         </div>
       </main>
@@ -680,7 +693,7 @@ function safeColor(c?: string | null) {
   return c && /^#[0-9a-fA-F]{6}$/.test(c) ? c : undefined
 }
 
-function TrackingHeader({ business }: { business?: TrackedDelivery['business'] }) {
+function TrackingHeader({ business, companyPhone }: { business?: TrackedDelivery['business']; companyPhone: string }) {
   const color = safeColor(business?.brand_color)
   const logo = business?.brand_logo_url?.startsWith('https://') ? business.brand_logo_url : null
   return (
@@ -704,11 +717,11 @@ function TrackingHeader({ business }: { business?: TrackedDelivery['business'] }
           </div>
         )}
         <a
-          href="tel:5875759699"
+          href={`tel:${companyPhone}`}
           className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5"
         >
           <Phone className="w-4 h-4" />
-          587-575-9699
+          {companyPhone}
         </a>
       </div>
     </header>
